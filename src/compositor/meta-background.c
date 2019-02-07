@@ -489,6 +489,121 @@ get_texture_area (MetaBackground *self,
 }
 
 static gboolean
+get_image_area_by_rect (MetaBackground        *self,
+                        CoglTexture           *texture,
+                        cairo_rectangle_int_t *monitor_area,
+                        float                  monitor_scale,
+                        cairo_rectangle_int_t *rect,
+                        cairo_rectangle_int_t *image_area)
+{
+  int screen_width, screen_height;
+  float texture_width, texture_height, texture_x_scale, texture_y_scale;
+  cairo_rectangle_int_t visible_area, texture_area;
+
+  if (monitor_area->x + rect->x + rect->width > monitor_area->x + monitor_area->width ||
+      monitor_area->y + rect->y + rect->height > monitor_area->y + monitor_area->height)
+    return FALSE;
+
+  meta_display_get_size (self->display, &screen_width, &screen_height);
+
+  texture_width = cogl_texture_get_width (texture);
+  texture_height = cogl_texture_get_height (texture);
+
+  get_texture_area (self, monitor_area, monitor_scale, texture, &texture_area);
+
+  texture_x_scale = texture_width / texture_area.width;
+  texture_y_scale = texture_height / texture_area.height;
+
+  visible_area.x = (float) (rect->x - texture_area.x) * texture_x_scale;
+  visible_area.y = (float) (rect->y - texture_area.y) * texture_y_scale;
+  visible_area.width = (float) rect->width * texture_x_scale;
+  visible_area.height = (float) rect->height * texture_y_scale;
+
+  *image_area = visible_area;
+  return TRUE;
+}
+
+/**
+ * meta_background_get_color_info:
+ * @self: A #MetaBackground
+ * @monitor_index: Index of the monitor to use as #int
+ * @area_x: X-Axis starting point of the area as #uint
+ * @area_y: Y-Axis starting point of the area as #uint
+ * @area_width: Width of the area as #uint
+ * @area_height: Height of the area as #uint
+ * @mean_luminance: (out): The mean luminance as #float
+ * @luminance_variance: (out): Variance of the luminance as #float
+ * @mean_acutance: (out): The mean acutance as #float
+ * @acutance_variance: (out): Variance of the acutance as #float
+ *
+ * Gets color information for a given monitor-area and the background image
+ * that is shown in this area.
+ * Calculates the mean luminance, variance of the luminance, the mean acutance
+ * and the variance of the acutance of the requested area. The returned values
+ * may not be perfectly acurate because the pixel data is stored in tiles and
+ * the image area the calculations are done for might be slightly bigger than
+ * the reqested area.
+ *
+ * Return value: %TRUE if the calculation was successful, %FALSE if the area
+ *  is not inside the monitor or is not fully covered by a background image, if
+ *  the image has an alpha channel or is not fully visible, or if the required
+ *  color information is not completely present in the cache.
+ **/
+gboolean
+meta_background_get_color_info (MetaBackground *self,
+                                int             monitor_index,
+                                uint            area_x,
+                                uint            area_y,
+                                uint            area_width,
+                                uint            area_height,
+                                float          *mean_luminance,
+                                float          *luminance_variance,
+                                float          *mean_acutance,
+                                float          *acutance_variance)
+{
+  CoglTexture *texture;
+  MtkRectangle geometry;
+  cairo_rectangle_int_t monitor_area, rect, image_area;
+  float monitor_scale;
+
+  g_return_val_if_fail (META_IS_BACKGROUND (self), FALSE);
+  g_return_val_if_fail (monitor_index >= 0 && monitor_index < self->n_monitors, FALSE);
+
+  texture = self->background_image1 ? meta_background_image_get_texture (self->background_image1) : NULL;
+  if (texture == NULL)
+    return FALSE;
+
+  meta_display_get_monitor_geometry (self->display, monitor_index, &geometry);
+  monitor_scale = meta_display_get_monitor_scale (self->display, monitor_index);
+
+  monitor_area.x = geometry.x;
+  monitor_area.y = geometry.y;
+  monitor_area.width = geometry.width;
+  monitor_area.height = geometry.height;
+
+  rect.x = area_x;
+  rect.y = area_y;
+  rect.width = area_width;
+  rect.height = area_height;
+
+  monitor_area.x *= monitor_scale;
+  monitor_area.y *= monitor_scale;
+  monitor_area.width *= monitor_scale;
+  monitor_area.height *= monitor_scale;
+
+  rect.x *= monitor_scale;
+  rect.y *= monitor_scale;
+  rect.width *= monitor_scale;
+  rect.height *= monitor_scale;
+
+  if (!get_image_area_by_rect (self, texture, &monitor_area, monitor_scale, &rect, &image_area))
+    return FALSE;
+
+  return meta_background_image_get_color_info (self->background_image1, &image_area,
+                                               mean_luminance, luminance_variance, mean_acutance, acutance_variance);
+}
+
+static gboolean
 draw_texture (MetaBackground  *self,
               CoglFramebuffer *framebuffer,
               CoglPipeline    *pipeline,
