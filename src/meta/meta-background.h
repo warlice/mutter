@@ -53,4 +53,16 @@ META_EXPORT
 void meta_background_set_file           (MetaBackground            *self,
                                          GFile                     *file);
 
+META_EXPORT
+gboolean meta_background_get_color_info (MetaBackground            *self,
+                                         int                        monitor_index,
+                                         uint                       area_x,
+                                         uint                       area_y,
+                                         uint                       area_width,
+                                         uint                       area_height,
+                                         float                     *mean_luminance,
+                                         float                     *luminance_variance,
+                                         float                     *mean_acutance,
+                                         float                     *acutance_variance);
+
 #endif /* META_BACKGROUND_H */
