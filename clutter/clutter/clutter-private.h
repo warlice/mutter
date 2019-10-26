@@ -165,7 +165,6 @@ struct _ClutterMainContext
   guint is_initialized          : 1;
   guint defer_display_setup     : 1;
   guint options_parsed          : 1;
-  guint show_fps                : 1;
 };
 
 /* shared between clutter-main.c and clutter-frame-source.c */
@@ -189,7 +188,6 @@ void                    _clutter_context_lock                           (void);
 void                    _clutter_context_unlock                         (void);
 gboolean                _clutter_context_is_initialized                 (void);
 ClutterPickMode         _clutter_context_get_pick_mode                  (void);
-gboolean                _clutter_context_get_show_fps                   (void);
 
 gboolean      _clutter_feature_init (GError **error);
 

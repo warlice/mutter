@@ -80,7 +80,7 @@ main (int argc, char **argv)
 
   g_setenv ("CLUTTER_VBLANK", "none", FALSE);
   g_setenv ("CLUTTER_DEFAULT_FPS", "1000", FALSE);
-  g_setenv ("CLUTTER_SHOW_FPS", "1", FALSE);
+  g_setenv ("CLUTTER_DEBUG", "frame-time", FALSE);
 
   if (clutter_init_with_args (&argc, &argv,
                               NULL,

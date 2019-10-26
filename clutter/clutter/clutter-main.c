@@ -90,7 +90,6 @@ static GMutex clutter_threads_mutex;
 
 /* command line options */
 static gboolean clutter_is_initialized       = FALSE;
-static gboolean clutter_show_fps             = FALSE;
 static gboolean clutter_fatal_warnings       = FALSE;
 static gboolean clutter_disable_mipmap_text  = FALSE;
 static gboolean clutter_use_fuzzy_picking    = FALSE;
@@ -126,6 +125,7 @@ static const GDebugKey clutter_debug_keys[] = {
   { "layout", CLUTTER_DEBUG_LAYOUT },
   { "clipping", CLUTTER_DEBUG_CLIPPING },
   { "oob-transforms", CLUTTER_DEBUG_OOB_TRANSFORMS },
+  { "frame-time", CLUTTER_DEBUG_FRAME_TIME },
 };
 #endif /* CLUTTER_ENABLE_DEBUG */
 
@@ -175,16 +175,6 @@ clutter_config_read_from_key_file (GKeyFile *keyfile)
     clutter_set_allowed_drivers (str_value);
 
   g_free (str_value);
-
-  bool_value =
-    g_key_file_get_boolean (keyfile, ENVIRONMENT_GROUP,
-                            "ShowFps",
-                            &key_error);
-
-  if (key_error != NULL)
-    g_clear_error (&key_error);
-  else
-    clutter_show_fps = bool_value;
 
   bool_value =
     g_key_file_get_boolean (keyfile, ENVIRONMENT_GROUP,
@@ -352,14 +342,6 @@ clutter_config_read (void)
     clutter_config_read_from_file (config_path);
 
   g_free (config_path);
-}
-
-gboolean
-_clutter_context_get_show_fps (void)
-{
-  ClutterMainContext *context = _clutter_context_get_default ();
-
-  return context->show_fps;
 }
 
 /**
@@ -978,8 +960,6 @@ clutter_init_real (GError **error)
 }
 
 static GOptionEntry clutter_args[] = {
-  { "clutter-show-fps", 0, 0, G_OPTION_ARG_NONE, &clutter_show_fps,
-    N_("Show frames per second"), NULL },
   { "clutter-default-fps", 0, 0, G_OPTION_ARG_INT, &clutter_default_fps,
     N_("Default frame rate"), "FPS" },
   { "g-fatal-warnings", 0, 0, G_OPTION_ARG_NONE, &clutter_fatal_warnings,
@@ -1058,10 +1038,6 @@ pre_parse_hook (GOptionContext  *context,
       env_string = NULL;
     }
 
-  env_string = g_getenv ("CLUTTER_SHOW_FPS");
-  if (env_string)
-    clutter_show_fps = TRUE;
-
   env_string = g_getenv ("CLUTTER_DEFAULT_FPS");
   if (env_string)
     {
@@ -1110,7 +1086,6 @@ post_parse_hook (GOptionContext  *context,
     }
 
   clutter_context->frame_rate = clutter_default_fps;
-  clutter_context->show_fps = clutter_show_fps;
   clutter_context->options_parsed = TRUE;
 
   /* If not asked to defer display setup, call clutter_init_real(),

@@ -1466,12 +1466,12 @@ clutter_stage_do_redraw (ClutterStage *stage)
                 _clutter_actor_get_debug_name (actor),
                 stage);
 
-  if (_clutter_context_get_show_fps ())
+  if (CLUTTER_HAS_DEBUG (FRAME_TIME))
     clutter_stage_begin_perf_measurement (stage);
 
   _clutter_stage_window_redraw (priv->impl);
 
-  if (_clutter_context_get_show_fps ())
+  if (CLUTTER_HAS_DEBUG (FRAME_TIME))
     clutter_stage_end_perf_measurement (stage);
 
   CLUTTER_NOTE (PAINT, "Redraw finished for stage '%s'[%p]",
