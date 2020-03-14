@@ -965,14 +965,6 @@ meta_wayland_surface_commit (MetaWaylandSurface *surface)
       !meta_wayland_buffer_is_realized (pending->buffer))
     meta_wayland_buffer_realize (pending->buffer);
 
-  /*
-   * If this is a sub-surface and it is in effective synchronous mode, only
-   * cache the pending surface state until either one of the following two
-   * scenarios happens:
-   *  1) Its parent surface gets its state applied.
-   *  2) Its mode changes from synchronized to desynchronized and its parent
-   *     surface is in effective desynchronized mode.
-   */
   if (meta_wayland_surface_should_cache_state (surface))
     {
       MetaWaylandSurfaceState *cached_state;
@@ -1467,9 +1459,6 @@ wl_surface_destructor (struct wl_resource *resource)
 
   if (surface->resource)
     wl_resource_set_user_data (surface->resource, NULL);
-
-  if (surface->wl_subsurface)
-    wl_resource_destroy (surface->wl_subsurface);
 
   if (surface->subsurface_branch_node)
     {

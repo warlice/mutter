@@ -191,30 +191,6 @@ struct _MetaWaylandSurface
   MetaWaylandSurfaceState *cached_state;
 
   /* Extension resources. */
-  struct wl_resource *wl_subsurface;
-
-  /* wl_subsurface stuff. */
-  struct {
-    MetaWaylandSurface *parent;
-    struct wl_listener parent_destroy_listener;
-
-    int x;
-    int y;
-
-    /* When the surface is synchronous, its state will be applied
-     * when the parent is committed. This is done by moving the
-     * "real" pending state below to here when this surface is
-     * committed and in synchronous mode.
-     *
-     * When the parent surface is committed, we apply the pending
-     * state here.
-     */
-    gboolean synchronous;
-
-    int32_t pending_x;
-    int32_t pending_y;
-    gboolean pending_pos;
-  } sub;
 
   /* wp_viewport */
   struct {
