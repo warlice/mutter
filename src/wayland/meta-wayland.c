@@ -45,6 +45,7 @@
 #include "wayland/meta-wayland-seat.h"
 #include "wayland/meta-wayland-subsurface.h"
 #include "wayland/meta-wayland-tablet-manager.h"
+#include "wayland/meta-wayland-viewporter.h"
 #include "wayland/meta-wayland-xdg-foreign.h"
 #include "wayland/meta-xwayland-grab-keyboard.h"
 #include "wayland/meta-xwayland-private.h"
@@ -529,6 +530,7 @@ meta_wayland_compositor_setup (MetaWaylandCompositor *compositor)
   meta_wayland_data_device_primary_manager_init (compositor);
   meta_wayland_data_device_primary_legacy_manager_init (compositor);
   meta_wayland_subsurfaces_init (compositor);
+  meta_wayland_init_viewporter (compositor);
   meta_wayland_shell_init (compositor);
   meta_wayland_pointer_gestures_init (compositor);
   meta_wayland_tablet_manager_init (compositor);
