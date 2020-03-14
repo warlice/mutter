@@ -1150,10 +1150,6 @@ wl_surface_commit (struct wl_client *client,
 {
   MetaWaylandSurface *surface = wl_resource_get_user_data (resource);
 
-  /* X11 unmanaged window */
-  if (!surface)
-    return;
-
   meta_wayland_surface_commit (surface);
 }
 
