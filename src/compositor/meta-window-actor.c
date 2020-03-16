@@ -34,11 +34,17 @@
 #include "compositor/meta-window-actor-private.h"
 #include "core/boxes-private.h"
 #include "core/window-private.h"
+#include "core/workspace-private.h"
 #include "meta/window.h"
 
 #ifdef HAVE_WAYLAND
 #include "compositor/meta-surface-actor-wayland.h"
 #include "wayland/meta-wayland-surface.h"
+#endif
+
+#ifdef HAVE_NATIVE_BACKEND
+#include "backends/native/meta-backend-native.h"
+#include "compositor/meta-compositor-native.h"
 #endif
 
 typedef enum
@@ -1053,6 +1059,81 @@ meta_window_actor_sync_visibility (MetaWindowActor *self)
     }
 }
 
+#ifdef HAVE_NATIVE_BACKEND
+static MetaSurfaceActor *
+meta_window_actor_get_topmost_surface (MetaWindowActor *actor)
+{
+  ClutterActor *topmost_actor;
+
+  topmost_actor = clutter_actor_get_last_child (CLUTTER_ACTOR (actor));
+  if (!topmost_actor || !META_IS_SURFACE_ACTOR (topmost_actor))
+    return NULL;
+
+  return META_SURFACE_ACTOR (topmost_actor);
+}
+
+static void
+meta_window_actor_maybe_request_frame_sync (MetaWindowActor  *window_actor,
+                                            ClutterStageView *stage_view)
+{
+  MetaWindowActorPrivate *priv =
+    meta_window_actor_get_instance_private (window_actor);
+  MetaCompositor *compositor = priv->compositor;
+  MetaCompositorNative *compositor_native =
+    META_COMPOSITOR_NATIVE (compositor);
+  MetaWindow *window;
+  MetaRectangle view_layout;
+  MetaWorkspace *workspace;
+  MetaSurfaceActor *surface_actor;
+
+  if (meta_compositor_is_unredirect_inhibited (compositor))
+    return;
+
+  if (meta_window_actor_is_frozen (window_actor))
+    return;
+
+  if (meta_window_actor_effect_in_progress (window_actor))
+    return;
+
+  if (clutter_actor_has_transitions (CLUTTER_ACTOR (window_actor)))
+    return;
+
+  window = meta_window_actor_get_meta_window (window_actor);
+  if (!window)
+    return;
+
+  if (!meta_window_get_vrr_supported (window))
+    return;
+
+  if (!meta_window_should_be_showing (window))
+    return;
+
+  clutter_stage_view_get_layout (stage_view, &view_layout);
+
+  if (!meta_window_contains_rect (window, &view_layout))
+    return;
+
+  workspace = meta_window_get_workspace (window);
+  if (workspace == NULL)
+    return;
+
+  if (window != meta_workspace_topmost_window_on_rect (workspace,
+                                                       &view_layout))
+    return;
+
+  surface_actor = meta_window_actor_get_topmost_surface (window_actor);
+  if (!surface_actor)
+    return;
+
+  if (!meta_surface_actor_contains_rect (surface_actor,
+                                         &view_layout))
+    return;
+
+  meta_compositor_native_request_frame_sync (compositor_native,
+                                             surface_actor);
+}
+#endif /* HAVE_NATIVE_BACKEND */
+
 void
 meta_window_actor_before_paint (MetaWindowActor  *self,
                                 ClutterStageView *stage_view)
@@ -1061,6 +1142,11 @@ meta_window_actor_before_paint (MetaWindowActor  *self,
     return;
 
   META_WINDOW_ACTOR_GET_CLASS (self)->before_paint (self, stage_view);
+
+#ifdef HAVE_NATIVE_BACKEND
+  if (META_IS_BACKEND_NATIVE (meta_get_backend ()))
+    meta_window_actor_maybe_request_frame_sync (self, stage_view);
+#endif
 }
 
 void
