@@ -64,6 +64,8 @@ struct _MetaWaylandSubsurface
   int32_t pending_x;
   int32_t pending_y;
   gboolean pending_pos;
+
+  MetaWaylandSurfaceState *cached_state;
 };
 
 G_DEFINE_TYPE (MetaWaylandSubsurface,
@@ -74,6 +76,14 @@ static MetaWaylandSubsurface *
 subsurface_from_surface (MetaWaylandSurface *surface)
 {
   return META_WAYLAND_SUBSURFACE (surface->role);
+}
+
+static MetaWaylandSurface *
+surface_from_subsurface (MetaWaylandSubsurface *subsurface)
+{
+  MetaWaylandSurfaceRole *surface_role = META_WAYLAND_SURFACE_ROLE (subsurface);
+
+  return meta_wayland_surface_role_get_surface (surface_role);
 }
 
 static void
@@ -171,20 +181,68 @@ is_sibling (MetaWaylandSurface *surface,
     return FALSE;
 }
 
-static gboolean
-is_surface_effectively_synchronized (MetaWaylandSurface *surface)
+static MetaWaylandSurfaceState *
+ensure_cached_state (MetaWaylandSubsurface *subsurface)
 {
-  return meta_wayland_surface_should_cache_state (surface);
+  if (!subsurface->cached_state)
+    subsurface->cached_state = g_object_new (META_TYPE_WAYLAND_SURFACE_STATE,
+                                             NULL);
+  return subsurface->cached_state;
+}
+
+static void
+apply_cached_state (MetaWaylandSubsurface *subsurface)
+{
+  MetaWaylandSurface *surface;
+  MetaWaylandStateFencePriority fence_priority;
+
+  if (!subsurface->cached_state)
+    return;
+
+  surface = surface_from_subsurface (subsurface);
+  fence_priority = META_WAYLAND_STATE_FENCE_PRIORITY_SUBSURFACE;
+  meta_wayland_surface_commit_past_fence (surface, subsurface->cached_state,
+                                          fence_priority);
+}
+
+static gboolean
+should_cache_state (MetaWaylandSubsurface *subsurface)
+{
+  MetaWaylandSurface *parent;
+
+  if (subsurface->synchronous)
+    return TRUE;
+
+  parent = subsurface->parent_surface;
+  if (parent)
+    {
+      if (META_IS_WAYLAND_SUBSURFACE (parent->role))
+        {
+          MetaWaylandSubsurface *parent_subsurface =
+            META_WAYLAND_SUBSURFACE (parent->role);
+
+          return should_cache_state (parent_subsurface);
+        }
+      else
+        {
+          return FALSE;
+        }
+    }
+
+  return TRUE;
+}
+
+static gboolean
+is_effectively_synchronized (MetaWaylandSubsurface *subsurface)
+{
+  return should_cache_state (subsurface);
 }
 
 void
 meta_wayland_subsurface_parent_state_applied (MetaWaylandSubsurface *subsurface)
 {
-  MetaWaylandSurfaceRole *surface_role = META_WAYLAND_SURFACE_ROLE (subsurface);
   MetaWaylandActorSurface *actor_surface =
     META_WAYLAND_ACTOR_SURFACE (subsurface);
-  MetaWaylandSurface *surface =
-    meta_wayland_surface_role_get_surface (surface_role);
 
   if (subsurface->pending_pos)
     {
@@ -193,10 +251,27 @@ meta_wayland_subsurface_parent_state_applied (MetaWaylandSubsurface *subsurface)
       subsurface->pending_pos = FALSE;
     }
 
-  if (is_surface_effectively_synchronized (surface))
-    meta_wayland_surface_apply_cached_state (surface);
+  if (is_effectively_synchronized (subsurface))
+    apply_cached_state (subsurface);
 
   meta_wayland_actor_surface_sync_actor_state (actor_surface);
+}
+
+static gboolean
+meta_wayland_subsurface_state_fence (MetaWaylandSurface      *surface,
+                                     MetaWaylandSurfaceState *pending,
+                                     gpointer                 user_data)
+{
+  MetaWaylandSubsurface *subsurface = user_data;
+  MetaWaylandSurfaceState *cached_state;
+
+  if (!should_cache_state (subsurface))
+    return FALSE;
+
+  cached_state = ensure_cached_state (subsurface);
+  meta_wayland_surface_state_discard_presentation_feedback (cached_state);
+  meta_wayland_surface_state_merge_into (pending, cached_state);
+  return TRUE;
 }
 
 void
@@ -240,8 +315,15 @@ meta_wayland_subsurface_assigned (MetaWaylandSurfaceRole *surface_role)
     meta_wayland_surface_role_get_surface (surface_role);
   MetaWaylandSurfaceRoleClass *surface_role_class =
     META_WAYLAND_SURFACE_ROLE_CLASS (meta_wayland_subsurface_parent_class);
+  MetaWaylandStateFencePriority fence_priority;
 
   surface->dnd.funcs = meta_wayland_data_device_get_drag_dest_funcs ();
+
+  fence_priority = META_WAYLAND_STATE_FENCE_PRIORITY_SUBSURFACE;
+  meta_wayland_surface_add_state_fence (surface,
+                                        fence_priority,
+                                        meta_wayland_subsurface_state_fence,
+                                        surface_role);
 
   surface_role_class->assigned (surface_role);
 }
@@ -256,22 +338,6 @@ meta_wayland_subsurface_get_toplevel (MetaWaylandSurfaceRole *surface_role)
     return meta_wayland_surface_get_toplevel (parent);
   else
     return NULL;
-}
-
-static gboolean
-meta_wayland_subsurface_should_cache_state (MetaWaylandSurfaceRole *surface_role)
-{
-  MetaWaylandSubsurface *subsurface = META_WAYLAND_SUBSURFACE (surface_role);
-  MetaWaylandSurface *parent;
-
-  if (subsurface->synchronous)
-    return TRUE;
-
-  parent = subsurface->parent_surface;
-  if (parent)
-    return meta_wayland_surface_should_cache_state (parent);
-
-  return TRUE;
 }
 
 static void
@@ -326,6 +392,7 @@ meta_wayland_subsurface_finalize (GObject *object)
 {
   MetaWaylandSubsurface *subsurface = META_WAYLAND_SUBSURFACE (object);
 
+  g_clear_object (&subsurface->cached_state);
   g_clear_pointer (&subsurface->resource, wl_resource_destroy);
 
   G_OBJECT_CLASS (meta_wayland_subsurface_parent_class)->finalize (object);
@@ -349,7 +416,6 @@ meta_wayland_subsurface_class_init (MetaWaylandSubsurfaceClass *klass)
 
   surface_role_class->assigned = meta_wayland_subsurface_assigned;
   surface_role_class->get_toplevel = meta_wayland_subsurface_get_toplevel;
-  surface_role_class->should_cache_state = meta_wayland_subsurface_should_cache_state;
   surface_role_class->notify_subsurface_state_changed =
     meta_wayland_subsurface_notify_subsurface_state_changed;
 
@@ -389,6 +455,9 @@ wl_subsurface_destructor (struct wl_resource *resource)
       wl_list_remove (&subsurface->parent_destroy_listener.link);
       subsurface->parent_surface = NULL;
     }
+
+  meta_wayland_surface_remove_state_fence (surface,
+                                           meta_wayland_subsurface_state_fence);
 
   subsurface->resource = NULL;
 }
@@ -544,17 +613,13 @@ wl_subsurface_set_desync (struct wl_client   *client,
                           struct wl_resource *resource)
 {
   MetaWaylandSubsurface *subsurface = wl_resource_get_user_data (resource);
-  MetaWaylandSurfaceRole *surface_role = META_WAYLAND_SURFACE_ROLE (subsurface);
-  MetaWaylandSurface *surface =
-    meta_wayland_surface_role_get_surface (surface_role);
   gboolean was_effectively_synchronized;
 
-  was_effectively_synchronized = is_surface_effectively_synchronized (surface);
+  was_effectively_synchronized = is_effectively_synchronized (subsurface);
   subsurface->synchronous = FALSE;
 
-  if (was_effectively_synchronized &&
-      !is_surface_effectively_synchronized (surface))
-    meta_wayland_surface_apply_cached_state (surface);
+  if (was_effectively_synchronized && !is_effectively_synchronized (subsurface))
+    apply_cached_state (subsurface);
 }
 
 static const struct wl_subsurface_interface meta_wayland_wl_subsurface_interface = {
