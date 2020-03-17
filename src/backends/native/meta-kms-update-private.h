@@ -84,6 +84,12 @@ typedef struct _MetaKmsConnectorUpdate
   } privacy_screen;
 } MetaKmsConnectorUpdate;
 
+typedef struct _MetaKmsCrtcUpdate
+{
+  MetaKmsCrtc *crtc;
+
+} MetaKmsCrtcUpdate;
+
 typedef struct _MetaKmsPageFlipListener
 {
   MetaKmsCrtc *crtc;
@@ -156,6 +162,9 @@ void meta_kms_update_drop_defunct_page_flip_listeners (MetaKmsUpdate *update);
 
 META_EXPORT_TEST
 GList * meta_kms_update_get_connector_updates (MetaKmsUpdate *update);
+
+META_EXPORT_TEST
+GList * meta_kms_update_get_crtc_updates (MetaKmsUpdate *update);
 
 META_EXPORT_TEST
 GList * meta_kms_update_get_crtc_gammas (MetaKmsUpdate *update);
