@@ -298,6 +298,9 @@ state_set_properties (MetaKmsConnectorState *state,
                 META_KMS_CONNECTOR_PROP_PRIVACY_SCREEN_HW_STATE))
         set_privacy_screen (state, connector, prop,
                             drm_connector->prop_values[i]);
+      else if ((prop->flags & DRM_MODE_PROP_RANGE) &&
+               strcmp (prop->name, "vrr_capable") == 0)
+        state->vrr_capable = drm_connector->prop_values[i];
 
       drmModeFreeProperty (prop);
     }
@@ -541,6 +544,7 @@ meta_kms_connector_state_new (void)
   state = g_new0 (MetaKmsConnectorState, 1);
   state->suggested_x = -1;
   state->suggested_y = -1;
+  state->vrr_capable = FALSE;
 
   return state;
 }
@@ -634,6 +638,9 @@ meta_kms_connector_state_changes (MetaKmsConnectorState *state,
     return META_KMS_UPDATE_CHANGE_FULL;
 
   if (!kms_modes_equal (state->modes, new_state->modes))
+    return META_KMS_UPDATE_CHANGE_FULL;
+
+  if (state->vrr_capable != new_state->vrr_capable)
     return META_KMS_UPDATE_CHANGE_FULL;
 
   if (state->privacy_screen_state != new_state->privacy_screen_state)
