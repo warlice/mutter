@@ -562,6 +562,8 @@ struct _MetaWindow
   GFile *cgroup_path;
 
   unsigned int events_during_ping;
+
+  gboolean vrr_supported;
 };
 
 struct _MetaWindowClass
@@ -825,6 +827,11 @@ void meta_window_set_transient_for        (MetaWindow *window,
 
 void meta_window_set_opacity              (MetaWindow *window,
                                            guint8      opacity);
+
+void meta_window_set_vrr_supported (MetaWindow *window,
+                                    gboolean    vrr_supported);
+
+gboolean meta_window_get_vrr_supported (MetaWindow *window);
 
 void meta_window_handle_enter (MetaWindow  *window,
                                guint32      timestamp,
