@@ -31,6 +31,7 @@
 #include "backends/x11/meta-backend-x11.h"
 #include "backends/x11/meta-seat-x11.h"
 #include "backends/x11/meta-stage-x11.h"
+#include "backends/x11/nested/meta-stage-x11-nested.h"
 #include "clutter/clutter-mutter.h"
 #include "clutter/x11/clutter-x11.h"
 #include "clutter/x11/clutter-backend-x11.h"
@@ -118,7 +119,9 @@ meta_stage_x11_set_wm_protocols (MetaStageX11 *stage_x11)
   Atom protocols[2];
   int n = 0;
   
-  protocols[n++] = backend_x11->atom_WM_DELETE_WINDOW;
+  if (META_IS_STAGE_X11_NESTED (stage_x11))
+    protocols[n++] = backend_x11->atom_WM_DELETE_WINDOW;
+
   protocols[n++] = backend_x11->atom_NET_WM_PING;
 
   XSetWMProtocols (xdisplay, stage_x11->xwin, protocols, n);
@@ -786,9 +789,16 @@ meta_stage_x11_translate_event (MetaStageX11 *stage_x11,
 
       if (handle_wm_protocols_event (backend_x11, stage_x11, xevent))
         {
-          event->any.type = CLUTTER_DELETE;
-          event->any.stage = stage;
-          res = TRUE;
+          if (META_IS_STAGE_X11_NESTED (stage_x11))
+            {
+              event->any.type = CLUTTER_DELETE;
+              event->any.stage = stage;
+              res = TRUE;
+            }
+          else
+            {
+              res = FALSE;
+            }
         }
       break;
 
