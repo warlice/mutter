@@ -32,6 +32,7 @@
 
 #include "core/meta-accel-parse.h"
 #include "meta/keybindings.h"
+#include "meta-dbus-key-bindings.h"
 
 typedef struct _MetaKeyHandler MetaKeyHandler;
 struct _MetaKeyHandler

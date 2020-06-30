@@ -1,0 +1,17 @@
+<!DOCTYPE node PUBLIC
+'-//freedesktop//DTD D-BUS Object Introspection 1.0//EN'
+'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd'>
+<node>
+  <!--
+      org.gnome.Mutter.KeyBindings:
+      @short_description: key bindings interface
+
+      This interface exposes all key bindings registed with Mutter.
+  -->
+
+  <interface name="org.gnome.Mutter.KeyBindings">
+    <method name="GetKeyBindings">
+      <arg name="bindings" direction="out" type="a(ss)"/>
+    </method>
+  </interface>
+</node>

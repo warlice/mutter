@@ -38,6 +38,7 @@
 #include "core/meta-accel-parse.h"
 #include "core/util-private.h"
 #include "meta/prefs.h"
+#include "meta/main.h"
 #include "x11/meta-x11-display-private.h"
 
 /* If you add a key, it needs updating in init() and in the gsettings
@@ -154,6 +155,8 @@ static gboolean locate_pointer_key_handler (GVariant*, gpointer*, gpointer);
 static gboolean iso_next_group_handler (GVariant*, gpointer*, gpointer);
 
 static void     init_bindings             (void);
+static void meta_key_bindings_init_dbus (void);
+
 
 typedef struct
 {
@@ -1045,6 +1048,8 @@ meta_prefs_init (void)
   handle_preference_init_uint ();
 
   init_bindings ();
+
+  meta_key_bindings_init_dbus();
 }
 
 static gboolean
@@ -2224,4 +2229,86 @@ void
 meta_prefs_set_force_fullscreen (gboolean whether)
 {
   force_fullscreen = whether;
+}
+
+static gboolean
+handle_get_key_bindings (MetaDBusKeyBindings   *skeleton,
+                         GDBusMethodInvocation *invocation,
+                         void                  *data)
+{
+  GVariant *bindings;
+  GVariantBuilder builder;
+  GHashTableIter iter;
+  gchar *key, *schema_id;
+  MetaKeyPref *value;
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ss)"));
+  g_hash_table_iter_init (&iter, key_bindings);
+  while (g_hash_table_iter_next (&iter, (void**)&key, (void**)&value)) {
+    g_object_get(G_OBJECT (value->settings),
+                           "schema-id", &schema_id,
+                           NULL);
+    g_variant_builder_add (&builder, "(ss)", value->name, schema_id);
+  }
+  bindings = g_variant_builder_end (&builder);
+
+  meta_dbus_key_bindings_complete_get_key_bindings (skeleton, invocation, bindings);
+
+  g_object_unref(bindings);
+
+  return TRUE;
+}
+
+static void
+on_bus_acquired (GDBusConnection *connection,
+                 const char      *name,
+                 gpointer         user_data)
+{
+  MetaDBusKeyBindings *skeleton;
+
+  skeleton = meta_dbus_key_bindings_skeleton_new ();
+  g_signal_connect (skeleton,
+                    "handle-get-key-bindings", G_CALLBACK (handle_get_key_bindings),
+                    NULL);
+
+  g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (skeleton),
+                                    connection,
+                                    "/org/gnome/Mutter/KeyBindings",
+                                    NULL);
+
+}
+
+static void
+on_name_acquired (GDBusConnection *connection,
+                  const char      *name,
+                  gpointer         user_data)
+{
+  meta_verbose ("Acquired name %s\n", name);
+}
+
+static void
+on_name_lost (GDBusConnection *connection,
+              const char      *name,
+              gpointer         user_data)
+{
+  meta_verbose ("Lost or failed to acquire name %s\n", name);
+}
+
+static void
+meta_key_bindings_init_dbus (void)
+{
+  static int dbus_name_id;
+
+  if (dbus_name_id > 0)
+    return;
+
+  dbus_name_id = g_bus_own_name (G_BUS_TYPE_SESSION,
+                                 "org.gnome.Mutter.KeyBindings",
+                                 G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT |
+                                 (meta_get_replace_current_wm () ?
+                                  G_BUS_NAME_OWNER_FLAGS_REPLACE : 0),
+                                 on_bus_acquired,
+                                 on_name_acquired,
+                                 on_name_lost,
+                                 NULL, NULL);
 }

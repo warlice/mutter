@@ -734,6 +734,13 @@ dbus_idle_monitor_built_sources = gnome.gdbus_codegen('meta-dbus-idle-monitor',
   )
 mutter_built_sources += dbus_idle_monitor_built_sources
 
+dbus_key_bindings_built_sources = gnome.gdbus_codegen('meta-dbus-key-bindings',
+    'org.gnome.Mutter.KeyBindings.xml',
+    interface_prefix: 'org.gnome.Mutter.',
+    namespace: 'MetaDBus',
+  )
+mutter_built_sources += dbus_key_bindings_built_sources
+
 mutter_marshal = gnome.genmarshal('meta-marshal',
     sources: ['meta-marshal.list'],
     prefix: 'meta_marshal',
