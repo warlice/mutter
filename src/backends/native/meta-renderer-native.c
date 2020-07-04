@@ -1454,6 +1454,7 @@ meta_renderer_native_prepare_frame (MetaRendererNative *renderer_native,
   kms_device = meta_kms_crtc_get_device (kms_crtc);
 
   meta_crtc_kms_maybe_set_gamma (crtc_kms, kms_device);
+  meta_renderer_view_native_maybe_set_frame_sync (META_RENDERER_VIEW_NATIVE (view));
 }
 
 void

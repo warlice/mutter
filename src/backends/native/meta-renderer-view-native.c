@@ -24,20 +24,178 @@
 
 #include "backends/native/meta-renderer-view-native.h"
 
+#include "clutter/clutter.h"
+
+typedef enum _MetaFrameSyncMode
+{
+  META_FRAME_SYNC_MODE_INIT,
+  META_FRAME_SYNC_MODE_ENABLED,
+  META_FRAME_SYNC_MODE_DISABLED
+} MetaFrameSyncMode;
+
 struct _MetaRendererViewNative
 {
   MetaRendererView parent;
+
+  gboolean frame_sync_mode_update_queued;
+
+  MetaFrameSyncMode frame_sync_mode;
+  ClutterActor *frame_sync_actor;
+
+  gulong frame_sync_actor_frozen_id;
+  gulong frame_sync_actor_destroy_id;
 };
 
 G_DEFINE_TYPE (MetaRendererViewNative, meta_renderer_view_native,
                META_TYPE_RENDERER_VIEW);
 
 static void
+on_frame_sync_actor_frozen (ClutterActor           *actor,
+                            MetaRendererViewNative *view_native)
+{
+  meta_renderer_view_native_set_frame_sync_actor (view_native, NULL);
+}
+
+static void
+on_frame_sync_actor_destroyed (ClutterActor           *actor,
+                               MetaRendererViewNative *view_native)
+{
+  meta_renderer_view_native_set_frame_sync_actor (view_native, NULL);
+}
+
+static void
+meta_renderer_view_native_schedule_actor_update (ClutterStageView *stage_view,
+                                                 ClutterActor     *actor)
+{
+  MetaRendererViewNative *view_native = META_RENDERER_VIEW_NATIVE (stage_view);
+  ClutterFrameClock *frame_clock;
+
+  g_return_if_fail (actor != NULL);
+
+  frame_clock = clutter_stage_view_get_frame_clock (stage_view);
+
+  if (view_native->frame_sync_mode == META_FRAME_SYNC_MODE_ENABLED &&
+      actor == view_native->frame_sync_actor)
+    clutter_frame_clock_schedule_update_now (frame_clock);
+  else
+    clutter_frame_clock_schedule_update (frame_clock);
+}
+
+void
+meta_renderer_view_native_set_frame_sync_actor (MetaRendererViewNative *view_native,
+                                                ClutterActor           *actor)
+{
+  if (G_LIKELY (actor == view_native->frame_sync_actor))
+    return;
+
+  if (view_native->frame_sync_actor)
+    {
+      g_clear_signal_handler (&view_native->frame_sync_actor_frozen_id,
+                              view_native->frame_sync_actor);
+      g_clear_signal_handler (&view_native->frame_sync_actor_destroy_id,
+                              view_native->frame_sync_actor);
+    }
+
+  if (actor)
+    {
+      view_native->frame_sync_actor_frozen_id =
+      g_signal_connect (actor, "frozen",
+                        G_CALLBACK (on_frame_sync_actor_frozen),
+                        view_native);
+      view_native->frame_sync_actor_destroy_id =
+      g_signal_connect (actor, "destroy",
+                        G_CALLBACK (on_frame_sync_actor_destroyed),
+                        view_native);
+    }
+
+  view_native->frame_sync_actor = actor;
+
+  view_native->frame_sync_mode_update_queued = TRUE;
+}
+
+static void
+meta_renderer_view_native_set_frame_sync (MetaRendererViewNative *view_native,
+                                          MetaFrameSyncMode       sync_mode)
+{
+  ClutterFrameClock *frame_clock =
+    clutter_stage_view_get_frame_clock (CLUTTER_STAGE_VIEW (view_native));
+
+  switch (sync_mode)
+    {
+    case META_FRAME_SYNC_MODE_ENABLED:
+      clutter_frame_clock_set_mode (frame_clock,
+                                    CLUTTER_FRAME_CLOCK_MODE_VARIABLE);
+      break;
+    case META_FRAME_SYNC_MODE_DISABLED:
+      clutter_frame_clock_set_mode (frame_clock,
+                                    CLUTTER_FRAME_CLOCK_MODE_FIXED);
+      break;
+    case META_FRAME_SYNC_MODE_INIT:
+      g_assert_not_reached ();
+    }
+
+  view_native->frame_sync_mode = sync_mode;
+}
+
+static MetaFrameSyncMode
+meta_renderer_view_native_get_applicable_sync_mode (MetaRendererViewNative *view_native)
+{
+  return META_FRAME_SYNC_MODE_DISABLED;
+}
+
+void
+meta_renderer_view_native_maybe_set_frame_sync (MetaRendererViewNative *view_native)
+{
+  MetaFrameSyncMode applicable_sync_mode;
+
+  if (G_LIKELY (!view_native->frame_sync_mode_update_queued))
+    return;
+
+  view_native->frame_sync_mode_update_queued = FALSE;
+
+  applicable_sync_mode =
+    meta_renderer_view_native_get_applicable_sync_mode (view_native);
+
+  if (applicable_sync_mode != view_native->frame_sync_mode)
+    {
+      meta_renderer_view_native_set_frame_sync (view_native,
+                                                applicable_sync_mode);
+    }
+}
+
+static void
+meta_renderer_view_native_dispose (GObject *object)
+{
+  MetaRendererViewNative *view_native = META_RENDERER_VIEW_NATIVE (object);
+
+  if (view_native->frame_sync_actor)
+    {
+      g_clear_signal_handler (&view_native->frame_sync_actor_destroy_id,
+                              view_native->frame_sync_actor);
+      g_clear_signal_handler (&view_native->frame_sync_actor_frozen_id,
+                              view_native->frame_sync_actor);
+    }
+
+  G_OBJECT_CLASS (meta_renderer_view_native_parent_class)->dispose (object);
+}
+
+static void
 meta_renderer_view_native_init (MetaRendererViewNative *view_native)
 {
+  view_native->frame_sync_mode_update_queued = TRUE;
+  view_native->frame_sync_mode = META_FRAME_SYNC_MODE_INIT;
+  view_native->frame_sync_actor = NULL;
+  view_native->frame_sync_actor_frozen_id = 0;
+  view_native->frame_sync_actor_destroy_id = 0;
 }
 
 static void
 meta_renderer_view_native_class_init (MetaRendererViewNativeClass *klass)
 {
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  ClutterStageViewClass *clutter_stage_view_class = CLUTTER_STAGE_VIEW_CLASS (klass);
+
+  object_class->dispose = meta_renderer_view_native_dispose;
+
+  clutter_stage_view_class->schedule_actor_update = meta_renderer_view_native_schedule_actor_update;
 }
