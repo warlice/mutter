@@ -61,6 +61,7 @@
 #include "backends/native/meta-output-kms.h"
 #include "backends/native/meta-render-device-gbm.h"
 #include "backends/native/meta-render-device-surfaceless.h"
+#include "backends/native/meta-renderer-view-native.h"
 #include "backends/native/meta-renderer-native-private.h"
 #include "cogl/cogl.h"
 #include "core/boxes-private.h"
@@ -1240,7 +1241,7 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
   int onscreen_width;
   int onscreen_height;
   MetaRectangle view_layout;
-  MetaRendererView *view;
+  MetaRendererViewNative *view_native;
   EGLSurface egl_surface;
   GError *error = NULL;
 
@@ -1352,27 +1353,28 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
   meta_rectangle_from_graphene_rect (&crtc_config->layout,
                                      META_ROUNDING_STRATEGY_ROUND,
                                      &view_layout);
-  view = g_object_new (META_TYPE_RENDERER_VIEW,
-                       "name", meta_output_get_name (output),
-                       "stage", meta_backend_get_stage (backend),
-                       "layout", &view_layout,
-                       "crtc", crtc,
-                       "output", output,
-                       "scale", scale,
-                       "framebuffer", framebuffer,
-                       "offscreen", offscreen,
-                       "use-shadowfb", use_shadowfb,
-                       "transform", view_transform,
-                       "refresh-rate", crtc_mode_info->refresh_rate,
-                       "vblank-duration-us", crtc_mode_info->vblank_duration_us,
-                       NULL);
+  view_native = g_object_new (META_TYPE_RENDERER_VIEW_NATIVE,
+                              "name", meta_output_get_name (output),
+                              "stage", meta_backend_get_stage (backend),
+                              "layout", &view_layout,
+                              "crtc", crtc,
+                              "output", output,
+                              "scale", scale,
+                              "framebuffer", framebuffer,
+                              "offscreen", offscreen,
+                              "use-shadowfb", use_shadowfb,
+                              "transform", view_transform,
+                              "refresh-rate", crtc_mode_info->refresh_rate,
+                              "vblank-duration-us", crtc_mode_info->vblank_duration_us,
+                              NULL);
 
   if (META_IS_ONSCREEN_NATIVE (framebuffer))
     {
       CoglDisplayEGL *cogl_display_egl;
       CoglOnscreenEgl *onscreen_egl;
 
-      meta_onscreen_native_set_view (COGL_ONSCREEN (framebuffer), view);
+      meta_onscreen_native_set_view (COGL_ONSCREEN (framebuffer),
+                                     META_RENDERER_VIEW (view_native));
 
       /* Ensure we don't point to stale surfaces when creating the offscreen */
       cogl_display_egl = cogl_display->winsys;
@@ -1384,7 +1386,7 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
                                      cogl_display_egl->egl_context);
     }
 
-  return view;
+  return META_RENDERER_VIEW (view_native);
 }
 
 static void
