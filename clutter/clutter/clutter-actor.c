@@ -3858,6 +3858,7 @@ clutter_actor_paint (ClutterActor        *self,
       /* annoyingly gcc warns if uninitialized even though
        * the initialization is redundant :-( */
       ClutterCullResult result = CLUTTER_CULL_RESULT_IN;
+      const cairo_region_t *redraw_clip;
 
       success = should_cull_out
         ? cull_actor (self, paint_context, &result)
@@ -3867,6 +3868,55 @@ clutter_actor_paint (ClutterActor        *self,
         _clutter_actor_paint_cull_result (self, success, result, actor_node);
       else if (result == CLUTTER_CULL_RESULT_OUT && success)
         return;
+
+      redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
+
+      if (!clutter_paint_context_is_drawing_off_stage (paint_context) &&
+          priv->unobscured_without_children &&
+          redraw_clip)
+        {
+          /* The intersection checks here are implementing z-level culling for
+           * this actor and everything painted underneath it in the z-plane.
+           * The z-level culling for actors above us happens before the paint stage
+           * in add_actor_to_redraw_clip().
+           */
+
+          cairo_region_t *intersection = cairo_region_copy (redraw_clip);
+          gboolean culled_out;
+
+          if (priv->visible_paint_volume_valid)
+            {
+              ClutterActorBox stage_paint_rect;
+              graphene_rect_t tmp_rect;
+              cairo_rectangle_int_t stage_paint_rect_int;
+
+              _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                                         _clutter_actor_get_stage_internal (self),
+                                                         &stage_paint_rect);
+              tmp_rect = (graphene_rect_t) {
+                .origin.x = stage_paint_rect.x1,
+                .origin.y = stage_paint_rect.y1,
+                .size.width = stage_paint_rect.x2 - stage_paint_rect.x1,
+                .size.height = stage_paint_rect.y2 - stage_paint_rect.y1
+              };
+              _clutter_util_rectangle_int_extents (&tmp_rect, &stage_paint_rect_int);
+              cairo_region_intersect_rectangle (intersection, &stage_paint_rect_int);
+            }
+
+          cairo_region_intersect (intersection, priv->unobscured_without_children);
+
+          culled_out = cairo_region_is_empty (intersection);
+          cairo_region_destroy (intersection);
+
+          if (culled_out)
+            return;
+
+// FIXME: use a fast check for this that doesn't heap allocate
+//          if (!cairo_region_check_intersects (priv->unobscured_without_children,
+//                                              redraw_clip,
+//                                              &stage_paint_rect))
+//            return;
+        }
     }
 
   if (priv->effects == NULL)
@@ -3921,6 +3971,52 @@ clutter_actor_continue_paint (ClutterActor        *self,
     {
       CoglFramebuffer *framebuffer;
       ClutterPaintNode *dummy;
+      const cairo_region_t *redraw_clip;
+
+      redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
+
+      if (priv->inhibit_culling_counter == 0 &&
+          !in_clone_paint () &&
+          !clutter_paint_context_is_drawing_off_stage (paint_context) &&
+          priv->unobscured_including_children &&
+          redraw_clip)
+        {
+          cairo_region_t *intersection = cairo_region_copy (redraw_clip);
+          gboolean culled_out;
+
+          if (priv->visible_paint_volume_valid)
+            {
+              ClutterActorBox stage_paint_rect;
+              graphene_rect_t tmp_rect;
+              cairo_rectangle_int_t stage_paint_rect_int;
+
+              _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                                         _clutter_actor_get_stage_internal (self),
+                                                         &stage_paint_rect);
+              tmp_rect = (graphene_rect_t) {
+                .origin.x = stage_paint_rect.x1,
+                .origin.y = stage_paint_rect.y1,
+                .size.width = stage_paint_rect.x2 - stage_paint_rect.x1,
+                .size.height = stage_paint_rect.y2 - stage_paint_rect.y1
+              };
+              _clutter_util_rectangle_int_extents (&tmp_rect, &stage_paint_rect_int);
+              cairo_region_intersect_rectangle (intersection, &stage_paint_rect_int);
+            }
+
+          cairo_region_intersect (intersection, priv->unobscured_including_children);
+
+          culled_out = cairo_region_is_empty (intersection);
+          cairo_region_destroy (intersection);
+
+          if (culled_out)
+            goto paint_children;
+
+// FIXME: use a fast check for this that doesn't heap allocate
+//          if (!cairo_region_check_intersects (priv->unobscured_including_children,
+//                                              redraw_clip,
+//                                              &stage_paint_rect))
+//            goto paint_children;
+        }
 
       /* XXX - this will go away in 2.0, when we can get rid of this
        * stuff and switch to a pure retained render tree of PaintNodes
@@ -3937,6 +4033,7 @@ clutter_actor_continue_paint (ClutterActor        *self,
       clutter_actor_paint_node (self, dummy, paint_context);
       clutter_paint_node_unref (dummy);
 
+paint_children:
       CLUTTER_ACTOR_GET_CLASS (self)->paint (self, paint_context);
     }
   else
