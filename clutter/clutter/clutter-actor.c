@@ -15865,6 +15865,27 @@ get_content_opaque_region (ClutterActor *self)
       opaque_region = cairo_region_create_rectangle (&rect);
     }
 
+  if (priv->content)
+    {
+      cairo_region_t *content_opaque_region;
+
+      // FIXME: make sure to scale the region in case the content is painted with a different size
+      content_opaque_region = clutter_content_get_opaque_region (priv->content);
+
+      if (content_opaque_region)
+        {
+          if (opaque_region)
+            {
+              cairo_region_union (opaque_region, content_opaque_region);
+              cairo_region_destroy (content_opaque_region);
+            }
+          else
+            {
+              opaque_region = g_steal_pointer (&content_opaque_region);
+            }
+        }
+    }
+
   return opaque_region;
 }
 

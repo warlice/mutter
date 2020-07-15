@@ -50,6 +50,9 @@ G_DECLARE_INTERFACE (ClutterContent, clutter_content, CLUTTER, CONTENT, GObject)
  *   from a #ClutterActor.
  * @invalidate: virtual function; called each time a #ClutterContent state
  *   is changed.
+ * @get_opaque_region: virtual function; called each time a #ClutterContent
+ *   needs to get the opaque region of the texture. Ownership of the returned
+ *   cairo_region_t* is taken over by Clutter.
  *
  * The #ClutterContentInterface structure contains only
  * private data.
@@ -76,6 +79,8 @@ struct _ClutterContentInterface
   void          (* invalidate)          (ClutterContent   *content);
 
   void          (* invalidate_size)     (ClutterContent   *content);
+
+  cairo_region_t * (* get_opaque_region) (ClutterContent *content);
 };
 
 CLUTTER_EXPORT
@@ -87,6 +92,9 @@ void            clutter_content_invalidate              (ClutterContent *content
 
 CLUTTER_EXPORT
 void            clutter_content_invalidate_size         (ClutterContent *content);
+
+CLUTTER_EXPORT
+void clutter_content_invalidate_opaque_region (ClutterContent *content);
 
 G_END_DECLS
 
