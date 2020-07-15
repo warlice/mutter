@@ -937,6 +937,11 @@ CLUTTER_EXPORT
 cairo_region_t * clutter_actor_get_region_to_repaint (ClutterActor         *self,
                                                       const cairo_region_t *redraw_clip);
 
+CLUTTER_EXPORT
+void clutter_actor_get_unobscured_region (ClutterActor    *self,
+                                          cairo_region_t **stage_unobscured_region,
+                                          cairo_region_t **local_unobscured_region);
+
 G_END_DECLS
 
 #endif /* __CLUTTER_ACTOR_H__ */

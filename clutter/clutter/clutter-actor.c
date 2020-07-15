@@ -19858,6 +19858,104 @@ stage_region_to_actor_region (ClutterActor         *actor,
 
   return cairo_region_create_rectangles (rects, n_rects);
 }
+#if 0
+gboolean
+clutter_actor_is_obscured (ClutterActor *self)
+{
+  ClutterActorPrivate *priv;
+  cairo_region_t *stage_unobscured, *unobscured;
+  cairo_rectangle_int_t stage_paint_rect_int;
+
+  g_return_val_if_fail (CLUTTER_IS_ACTOR (self), NULL);
+
+  priv = self->priv;
+
+  if (priv->visible_paint_volume_valid)
+    {
+      ClutterStage *stage = _clutter_actor_get_stage_internal (self);
+      ClutterActorBox stage_paint_rect;
+      graphene_rect_t tmp_rect;
+
+      _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                                 stage,
+                                                 &stage_paint_rect);
+      tmp_rect = (graphene_rect_t) {
+        .origin.x = stage_paint_rect.x1,
+        .origin.y = stage_paint_rect.y1,
+        .size.width = stage_paint_rect.x2 - stage_paint_rect.x1,
+        .size.height = stage_paint_rect.y2 - stage_paint_rect.y1
+      };
+      _clutter_util_rectangle_int_extents (&tmp_rect, &stage_paint_rect_int);
+    }
+
+    return !cairo_region_check_intersects (priv->unobscured_without_children,
+                                           NULL,
+                                           &stage_paint_rect);
+}
+#endif
+/**
+ * clutter_actor_get_unobscured_region:
+ * @self: A #ClutterActor
+ * @stage_unobscured_region: (out) (optional): region in stage coordinates
+ * @local_unobscured_region: (out) (optional): region in actor coordinates
+ *
+ * Gets the unobscured region of the actor. The region is set to %NULL if
+ * the actor is fully obscured by opaque actors on top of it.
+ */
+void
+clutter_actor_get_unobscured_region (ClutterActor    *self,
+                                     cairo_region_t **stage_unobscured_region,
+                                     cairo_region_t **local_unobscured_region)
+{
+  ClutterActorPrivate *priv;
+  cairo_region_t *stage_unobscured;
+
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+
+  priv = self->priv;
+  stage_unobscured = cairo_region_copy (priv->unobscured_without_children);
+
+  /* First intersect the clip with our visible paint volume to avoid extra work */
+  if (priv->visible_paint_volume_valid)
+    {
+      ClutterStage *stage =
+        CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
+      ClutterActorBox stage_paint_rect;
+      graphene_rect_t tmp_rect;
+      cairo_rectangle_int_t stage_paint_rect_int;
+
+      _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                                 stage,
+                                                 &stage_paint_rect);
+      tmp_rect = (graphene_rect_t) {
+        .origin.x = stage_paint_rect.x1,
+        .origin.y = stage_paint_rect.y1,
+        .size.width = stage_paint_rect.x2 - stage_paint_rect.x1,
+        .size.height = stage_paint_rect.y2 - stage_paint_rect.y1
+      };
+      _clutter_util_rectangle_int_extents (&tmp_rect, &stage_paint_rect_int);
+      cairo_region_intersect_rectangle (stage_unobscured, &stage_paint_rect_int);
+    }
+
+  if (cairo_region_is_empty (stage_unobscured))
+    {
+      if (local_unobscured_region != NULL)
+        *local_unobscured_region = NULL;
+      if (stage_unobscured_region != NULL)
+        *stage_unobscured_region = NULL;
+
+      cairo_region_destroy (stage_unobscured);
+      return;
+    }
+
+  if (local_unobscured_region != NULL)
+    *local_unobscured_region = stage_region_to_actor_region (self, stage_unobscured);
+
+  if (stage_unobscured_region != NULL)
+    *stage_unobscured_region = stage_unobscured;
+  else
+    cairo_region_destroy (stage_unobscured);
+}
 
 cairo_region_t *
 clutter_actor_get_region_to_repaint (ClutterActor         *self,
