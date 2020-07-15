@@ -136,6 +136,20 @@ _clutter_util_rect_from_rectangle (const cairo_rectangle_int_t *src,
 }
 
 void
+clutter_util_rectangle_int_contained (const graphene_rect_t *src,
+                                      cairo_rectangle_int_t *dest)
+{
+  dest->x = G_APPROX_VALUE (roundf (src->origin.x), src->origin.x, 0.001)
+    ? roundf (src->origin.x) : ceilf (src->origin.x);
+  dest->y = G_APPROX_VALUE (roundf (src->origin.y), src->origin.y, 0.001)
+    ? roundf (src->origin.y) : ceilf (src->origin.y);
+  dest->width = G_APPROX_VALUE (roundf (src->size.width), src->size.width, 0.001)
+    ? roundf (src->size.width) : floorf (src->size.width);
+  dest->height = G_APPROX_VALUE (roundf (src->size.height), src->size.height, 0.001)
+    ? roundf (src->size.height) : floorf (src->size.height);
+}
+
+void
 _clutter_util_rectangle_int_extents (const graphene_rect_t *src,
                                      cairo_rectangle_int_t *dest)
 {
