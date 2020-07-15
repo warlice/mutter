@@ -263,7 +263,8 @@ ClutterPaintNode *              clutter_actor_create_texture_paint_node         
                                                                                          CoglTexture  *texture);
 
 void clutter_actor_finish_layout (ClutterActor *self,
-                                  int           phase);
+                                  int           phase,
+                        cairo_region_t **unobscured_region);
 
 void clutter_actor_queue_immediate_relayout (ClutterActor *self);
 

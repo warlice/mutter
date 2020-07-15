@@ -161,6 +161,7 @@ void clutter_stage_maybe_invalidate_focus (ClutterStage *self,
 void clutter_stage_add_to_redraw_clip (ClutterStage       *self,
                                        ClutterPaintVolume *clip);
 
+
 G_END_DECLS
 
 #endif /* __CLUTTER_STAGE_PRIVATE_H__ */

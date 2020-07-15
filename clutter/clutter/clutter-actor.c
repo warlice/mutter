@@ -809,6 +809,32 @@ struct _ClutterActorPrivate
   gboolean has_next_redraw_clip;
   ClutterPaintVolume next_redraw_clip;
 
+  /* The cached opaque region of the actor in stage coordinate space */
+  cairo_region_t *opaque_region;
+
+  /* The region that's not obscured by actors painted on top of this one
+   * (not including our own children). If this region doesn't intersect
+   * with our paint volume (ie. the region/rect painted to by us and our
+   * children), we can cull out the whole subtree.
+   */
+  cairo_region_t *unobscured_without_children;
+
+  /* The region that's not obscured by actors painted on top of this one
+   * (including our own children). If this region doesn't intersect with
+   * our allocation, we can skip painting our own texture.
+   */
+  cairo_region_t *unobscured_including_children;
+
+  /* The unobscured_including_children region including not only our own
+   * children, but also this actor (this region is equivalent to the
+   * unobscured_without_children region of the actor painted directly
+   * underneath this one).
+   * This region is the only region we actually store, the other two regions
+   * (unobscured_without_children and unobscured_including_children) are
+   * only references to unobscured_region of a different actor.
+   */
+  cairo_region_t *unobscured_region;
+
   /* bitfields: KEEP AT THE END */
 
   /* fixed position and sizes */
@@ -855,6 +881,7 @@ struct _ClutterActorPrivate
   guint needs_redraw : 1;
   guint has_inverse_transform       : 1;
   guint absolute_modelview_valid : 1;
+  guint needs_opaque_region_update  : 1;
 };
 
 enum
@@ -1540,25 +1567,22 @@ clutter_actor_real_map (ClutterActor *self)
 
   if (priv->unmapped_paint_branch_counter == 0)
     {
-      /* Invariant that needs_finish_layout is set all the way up to the stage
-       * needs to be met.
-       */
-      if (priv->needs_finish_layout)
-        {
-          iter = priv->parent;
-          while (iter && !iter->priv->needs_finish_layout)
-            {
-              iter->priv->needs_finish_layout = TRUE;
-              iter = iter->priv->parent;
-            }
-        }
-
       /* Avoid the early return in clutter_actor_queue_relayout() */
       priv->needs_width_request = FALSE;
       priv->needs_height_request = FALSE;
       priv->needs_allocation = FALSE;
 
       clutter_actor_queue_relayout (self);
+
+      /* Set needs_finish_layout to ensure unobscured regions get updated */
+      priv->needs_finish_layout = TRUE;
+
+      iter = priv->parent;
+      while (iter && !iter->priv->needs_finish_layout)
+        {
+          iter->priv->needs_finish_layout = TRUE;
+          iter = iter->priv->parent;
+        }
     }
 
   /* notify on parent mapped before potentially mapping
@@ -1682,6 +1706,14 @@ clutter_actor_real_unmap (ClutterActor *self)
             clutter_actor_queue_redraw (priv->parent);
           else
             clutter_actor_queue_relayout (priv->parent);
+
+          /* Set needs_finish_layout to ensure unobscured regions get updated */
+          iter = priv->parent;
+          while (iter && !iter->priv->needs_finish_layout)
+            {
+              iter->priv->needs_finish_layout = TRUE;
+              iter = iter->priv->parent;
+            }
         }
     }
 
@@ -2498,6 +2530,7 @@ absolute_geometry_changed (ClutterActor *actor)
   actor->priv->needs_update_stage_views = TRUE;
   actor->priv->needs_visible_paint_volume_update = TRUE;
   actor->priv->absolute_modelview_valid = FALSE;
+  actor->priv->needs_opaque_region_update = TRUE;
 
   actor->priv->needs_finish_layout = TRUE;
   /* needs_finish_layout is already TRUE on the whole parent tree thanks
@@ -5605,6 +5638,10 @@ clutter_actor_dispose (GObject *object)
 
   g_clear_pointer (&priv->stage_views, g_list_free);
 
+  g_clear_pointer (&priv->unobscured_without_children, cairo_region_destroy);
+  g_clear_pointer (&priv->unobscured_including_children, cairo_region_destroy);
+  g_clear_pointer (&priv->unobscured_region, cairo_region_destroy);
+
   G_OBJECT_CLASS (clutter_actor_parent_class)->dispose (object);
 }
 
@@ -7674,6 +7711,8 @@ clutter_actor_init (ClutterActor *self)
 
   priv->transform_valid = FALSE;
   priv->absolute_modelview_valid = FALSE;
+
+  priv->needs_opaque_region_update = TRUE;
 
   /* the default is to stretch the content, to match the
    * current behaviour of basically all actors. also, it's
@@ -10391,6 +10430,16 @@ clutter_actor_get_scale_z (ClutterActor *self)
   return _clutter_actor_get_transform_info_or_defaults (self)->scale_z;
 }
 
+static ClutterActorTraverseVisitFlags
+invalidate_opaque_region_cb (ClutterActor *actor,
+                             int           depth,
+                             gpointer      user_data)
+{
+  clutter_actor_invalidate_opaque_region (actor);
+
+  return CLUTTER_ACTOR_TRAVERSE_VISIT_CONTINUE;
+}
+
 static inline void
 clutter_actor_set_opacity_internal (ClutterActor *self,
                                     guint8        opacity)
@@ -10400,6 +10449,12 @@ clutter_actor_set_opacity_internal (ClutterActor *self,
   if (priv->opacity != opacity)
     {
       priv->opacity = opacity;
+
+      _clutter_actor_traverse (self,
+                               CLUTTER_ACTOR_TRAVERSE_DEPTH_FIRST,
+                               invalidate_opaque_region_cb,
+                               NULL,
+                               NULL);
 
       /* Queue a redraw from the flatten effect so that it can use
          its cached image if available instead of having to redraw the
@@ -15713,23 +15768,209 @@ update_resource_scale (ClutterActor *self,
     g_signal_emit (self, actor_signals[RESOURCE_SCALE_CHANGED], 0);
 }
 
+static cairo_region_t *
+actor_region_to_stage_region (ClutterActor         *self,
+                              const cairo_region_t *region)
+{
+  int n_rects, i;
+  graphene_point3d_t *points;
+  g_autofree graphene_point3d_t *points_freeme = NULL;
+  cairo_rectangle_int_t *rects;
+  g_autofree cairo_rectangle_int_t *rects_freeme = NULL;
+
+  if (region == NULL)
+    return NULL;
+
+  n_rects = cairo_region_num_rectangles (region);
+
+  if (n_rects == 0)
+    return NULL;
+
+  if (n_rects < 64)
+    {
+      points = g_newa (graphene_point3d_t, n_rects * 2);
+      rects = g_newa (cairo_rectangle_int_t, n_rects);
+    }
+  else
+    {
+      points = points_freeme = g_new (graphene_point3d_t, n_rects * 2);
+      rects = rects_freeme = g_new (cairo_rectangle_int_t, n_rects);
+    }
+
+  for (i = 0; i < n_rects; i++)
+    {
+      graphene_point3d_t *point_top_left, *point_bottom_right;
+      cairo_rectangle_int_t rect;
+
+      point_top_left = &points[i * 2];
+      point_bottom_right = &points[i * 2 + 1];
+      cairo_region_get_rectangle (region, i, &rect);
+
+      point_top_left->x = rect.x;
+      point_top_left->y = rect.y;
+      point_top_left->z = 0;
+      point_bottom_right->x = rect.x + rect.width;
+      point_bottom_right->y = rect.y + rect.height;
+      point_bottom_right->z = 0;
+    }
+
+  _clutter_actor_fully_transform_vertices (self, points, points, n_rects * 2);
+
+  for (i = 0; i < n_rects; i++)
+    {
+      cairo_rectangle_int_t *rect = &rects[i];
+      graphene_point3d_t *point_top_left, *point_bottom_right;
+
+      point_top_left = &points[i * 2];
+      point_bottom_right = &points[i * 2 + 1];
+
+      /* Get the extending int rectangle that contains the whole transformed one. */
+      rect->x = floorf (point_top_left->x);
+      rect->y = floorf (point_top_left->y);
+      rect->width = ceilf (point_bottom_right->x) - rect->x;
+      rect->height = ceilf (point_bottom_right->y) - rect->y;
+    }
+
+  return cairo_region_create_rectangles (rects, n_rects);
+}
+
+static cairo_region_t *
+get_content_opaque_region (ClutterActor *self)
+{
+  ClutterActorPrivate *priv = self->priv;
+  cairo_region_t *opaque_region = NULL;
+
+  if (clutter_actor_get_paint_opacity_internal (self) < 255)
+    return NULL;
+
+  if (priv->bg_color_set &&
+      priv->bg_color.alpha == 255)
+    {
+      ClutterActorBox box;
+      graphene_rect_t tmp;
+      cairo_rectangle_int_t rect;
+
+      ensure_paint_volume (self);
+
+      _clutter_paint_volume_get_bounding_box (&priv->paint_volume, &box);
+
+      tmp = (graphene_rect_t) {
+        .origin.x = box.x1,
+        .origin.y = box.y1,
+        .size.width = box.x2 - box.x1,
+        .size.height = box.y2 - box.y1,
+      };
+      clutter_util_rectangle_int_contained (&tmp, &rect);
+
+      opaque_region = cairo_region_create_rectangle (&rect);
+    }
+
+  return opaque_region;
+}
+
+static void
+update_unobscured_region (ClutterActor *self,
+                          cairo_region_t *unobscured_region)
+{
+  ClutterActorPrivate *priv = self->priv;
+  cairo_region_t *new_unobscured_region;
+
+  if (priv->needs_opaque_region_update)
+    {
+      cairo_region_t *opaque_region =
+        get_content_opaque_region (self);
+
+      priv->opaque_region = actor_region_to_stage_region (self, opaque_region);
+      priv->needs_opaque_region_update = FALSE;
+
+      g_clear_pointer (&opaque_region, cairo_region_destroy);
+    }
+
+  if (!priv->opaque_region || cairo_region_is_empty (priv->opaque_region))
+    {
+      g_clear_pointer (&priv->unobscured_region, cairo_region_destroy);
+      return;
+    }
+
+  /* Clips are not supported yet */
+  if (priv->has_clip || priv->clip_to_allocation)
+    {
+      g_clear_pointer (&priv->unobscured_region, cairo_region_destroy);
+      return;
+    }
+
+  new_unobscured_region = cairo_region_copy (unobscured_region);
+
+  cairo_region_subtract (new_unobscured_region, priv->opaque_region);
+
+  /* Small optimization, if the unobscured_region we pass to the next
+   * actor didn't change after all, keep the old one so the next actors
+   * won't have to update their regions.
+   */
+  if (cairo_region_equal (priv->unobscured_region, new_unobscured_region))
+    {
+      g_clear_pointer (&new_unobscured_region, cairo_region_destroy);
+      return;
+    }
+
+  cairo_region_destroy (priv->unobscured_region);
+  priv->unobscured_region = g_steal_pointer (&new_unobscured_region);
+}
+
 void
 clutter_actor_finish_layout (ClutterActor *self,
-                             gboolean      use_max_scale)
+                             gboolean      use_max_scale,
+                             cairo_region_t **unobscured_region)
 {
   ClutterActorPrivate *priv = self->priv;
   ClutterActor *child;
+  gboolean unobscured_without_children_changed;
+  gboolean unobscured_including_children_changed;
   gboolean actor_moved = FALSE;
   gboolean old_visible_paint_volume_valid = FALSE;
   ClutterPaintVolume old_visible_paint_volume;
-
-  if (!priv->needs_finish_layout)
-    return;
 
   if ((!CLUTTER_ACTOR_IS_MAPPED (self) &&
        !clutter_actor_has_mapped_clones (self)) ||
       CLUTTER_ACTOR_IN_DESTRUCTION (self))
     return;
+
+  unobscured_without_children_changed =
+    priv->unobscured_without_children != *unobscured_region;
+
+  if (!priv->needs_finish_layout &&
+      !unobscured_without_children_changed)
+    {
+      if (priv->unobscured_region)
+        *unobscured_region = priv->unobscured_region;
+      else
+        *unobscured_region = priv->unobscured_including_children;
+
+      return;
+    }
+
+//g_warning("ACTOR %p doing a finish layout because opaque %d, unobscured %d, visible pv %d, stage views %d, redraw %d", self, priv->needs_opaque_region_update,  unobscured_without_children_changed, priv->needs_visible_paint_volume_update, priv->needs_update_stage_views, priv->needs_redraw);
+
+  if (unobscured_without_children_changed)
+    {
+      cairo_region_destroy (priv->unobscured_without_children);
+      priv->unobscured_without_children = cairo_region_reference (*unobscured_region);
+    }
+
+  for (child = priv->last_child; child; child = child->priv->prev_sibling)
+    clutter_actor_finish_layout (child, use_max_scale, unobscured_region);
+
+  unobscured_including_children_changed =
+    priv->unobscured_including_children != *unobscured_region;
+
+  if (unobscured_including_children_changed)
+    {
+      cairo_region_destroy (priv->unobscured_including_children);
+      priv->unobscured_including_children = cairo_region_reference (*unobscured_region);
+    }
+
+  if (unobscured_including_children_changed || priv->needs_opaque_region_update)
+    update_unobscured_region (self, *unobscured_region);
 
   if (priv->needs_visible_paint_volume_update)
     {
@@ -15769,8 +16010,8 @@ clutter_actor_finish_layout (ClutterActor *self,
 
   priv->needs_finish_layout = FALSE;
 
-  for (child = priv->first_child; child; child = child->priv->next_sibling)
-    clutter_actor_finish_layout (child, use_max_scale);
+  if (priv->unobscured_region)
+    *unobscured_region = priv->unobscured_region;
 }
 
 /**
@@ -16744,6 +16985,7 @@ clutter_actor_set_background_color_internal (ClutterActor *self,
   priv->bg_color = *color;
   priv->bg_color_set = TRUE;
 
+  clutter_actor_invalidate_opaque_region (self);
   clutter_actor_queue_redraw (self);
 
   g_object_notify_by_pspec (obj, obj_props[PROP_BACKGROUND_COLOR_SET]);
@@ -16782,6 +17024,7 @@ clutter_actor_set_background_color (ClutterActor       *self,
 
       priv->bg_color_set = FALSE;
 
+      clutter_actor_invalidate_opaque_region (self);
       clutter_actor_queue_redraw (self);
 
       g_object_notify_by_pspec (obj, obj_props[PROP_BACKGROUND_COLOR_SET]);
@@ -17992,6 +18235,7 @@ clutter_actor_set_content (ClutterActor   *self,
   if (priv->request_mode == CLUTTER_REQUEST_CONTENT_SIZE)
     _clutter_actor_queue_only_relayout (self);
 
+  clutter_actor_invalidate_opaque_region (self);
   clutter_actor_queue_redraw (self);
 
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_CONTENT]);
@@ -19401,4 +19645,19 @@ clutter_actor_detach_grab (ClutterActor *self,
   ClutterActorPrivate *priv = self->priv;
 
   priv->grabs = g_list_remove (priv->grabs, grab);
+}
+
+void
+clutter_actor_invalidate_opaque_region (ClutterActor *self)
+{
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+
+  self->priv->needs_opaque_region_update = TRUE;
+
+  ClutterActor *iter = self;
+  while (iter && !iter->priv->needs_finish_layout)
+    {
+      iter->priv->needs_finish_layout = TRUE;
+      iter = iter->priv->parent;
+    }
 }

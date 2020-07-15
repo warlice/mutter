@@ -121,6 +121,8 @@ struct _ClutterStagePrivate
 
   int update_freeze_count;
 
+  cairo_region_t *stage_region;
+
   gboolean pending_finish_queue_redraws;
 
   GHashTable *pointer_devices;
@@ -898,7 +900,8 @@ clutter_stage_finish_layout (ClutterStage *stage)
    */
   for (phase = 0; phase < 2; phase++)
     {
-      clutter_actor_finish_layout (actor, phase);
+  cairo_region_t *region_p = priv->stage_region;
+      clutter_actor_finish_layout (actor, phase, &region_p);
 
       if (!priv->actor_needs_immediate_relayout)
         break;
@@ -1226,6 +1229,8 @@ clutter_stage_finalize (GObject *object)
 
   g_array_free (priv->paint_volume_stack, TRUE);
 
+  g_clear_pointer (&priv->stage_region, cairo_region_destroy);
+
   G_OBJECT_CLASS (clutter_stage_parent_class)->finalize (object);
 }
 
@@ -1521,6 +1526,27 @@ clutter_stage_class_init (ClutterStageClass *klass)
 }
 
 static void
+clutter_stage_notify_allocation (ClutterStage *self)
+{
+  ClutterActorBox allocation_box;
+  graphene_rect_t allocation;
+  cairo_rectangle_int_t stage_rect;
+
+  clutter_actor_get_allocation_box (CLUTTER_ACTOR (self), &allocation_box);
+
+  allocation = (graphene_rect_t) {
+    .origin.x = allocation_box.x1,
+    .origin.y = allocation_box.y1,
+    .size.width = allocation_box.x2 - allocation_box.x1,
+    .size.height = allocation_box.y2 - allocation_box.y1
+  };
+  clutter_util_rectangle_int_contained (&allocation, &stage_rect);
+
+  g_clear_pointer (&self->priv->stage_region, cairo_region_destroy);
+  self->priv->stage_region = cairo_region_create_rectangle (&stage_rect);
+}
+
+static void
 clutter_stage_init (ClutterStage *self)
 {
   cairo_rectangle_int_t geom = { 0, };
@@ -1574,6 +1600,10 @@ clutter_stage_init (ClutterStage *self)
   clutter_actor_set_reactive (CLUTTER_ACTOR (self), TRUE);
   clutter_stage_set_title (self, g_get_prgname ());
   clutter_stage_set_key_focus (self, NULL);
+
+  g_signal_connect (self, "notify::allocation",
+                    G_CALLBACK (clutter_stage_notify_allocation), NULL);
+
   clutter_stage_set_viewport (self, geom.width, geom.height);
 
   priv->paint_volume_stack =
