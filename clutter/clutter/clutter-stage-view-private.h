@@ -73,6 +73,10 @@ CLUTTER_EXPORT
 void clutter_stage_view_schedule_update (ClutterStageView *view);
 
 CLUTTER_EXPORT
+void clutter_stage_view_schedule_actor_update (ClutterStageView *view,
+                                               ClutterActor     *actor);
+
+CLUTTER_EXPORT
 void clutter_stage_view_notify_presented (ClutterStageView *view,
                                           ClutterFrameInfo *frame_info);
 
