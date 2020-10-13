@@ -887,11 +887,18 @@ meta_shaped_texture_get_preferred_size (ClutterContent *content,
   return TRUE;
 }
 
+static cairo_region_t *
+get_texture_opaque_region (ClutterContent *stex)
+{
+  return cairo_region_reference (META_SHAPED_TEXTURE (stex)->opaque_region);
+}
+
 static void
 clutter_content_iface_init (ClutterContentInterface *iface)
 {
   iface->paint_content = meta_shaped_texture_paint_content;
   iface->get_preferred_size = meta_shaped_texture_get_preferred_size;
+  iface->get_opaque_region = get_texture_opaque_region;
 }
 
 void
@@ -1118,9 +1125,14 @@ void
 meta_shaped_texture_set_opaque_region (MetaShapedTexture *stex,
                                        cairo_region_t    *opaque_region)
 {
+  if (cairo_region_equal (stex->opaque_region, opaque_region))
+    return;
+
   g_clear_pointer (&stex->opaque_region, cairo_region_destroy);
   if (opaque_region)
     stex->opaque_region = cairo_region_reference (opaque_region);
+
+  clutter_content_invalidate_opaque_region (CLUTTER_CONTENT (stex));
 }
 
 cairo_region_t *
