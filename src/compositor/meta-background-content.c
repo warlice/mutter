@@ -439,6 +439,8 @@ setup_pipeline (MetaBackgroundContent *self,
       cogl_pipeline_set_layer_texture (self->pipeline, 0, texture);
       cogl_pipeline_set_layer_wrap_mode (self->pipeline, 0, wrap_mode);
 
+      clutter_content_invalidate_opaque_region (CLUTTER_CONTENT (self));
+
       self->changed &= ~CHANGED_BACKGROUND;
     }
 
@@ -791,11 +793,20 @@ meta_background_content_get_preferred_size (ClutterContent *content,
   return TRUE;
 }
 
+static cairo_region_t *
+meta_background_content_get_opaque_region (ClutterContent *content)
+{
+  MetaBackgroundContent *self = META_BACKGROUND_CONTENT (content);
+
+  return cairo_region_create_rectangle (&self->texture_area);
+}
+
 static void
 clutter_content_iface_init (ClutterContentInterface *iface)
 {
   iface->paint_content = meta_background_content_paint_content;
   iface->get_preferred_size = meta_background_content_get_preferred_size;
+  iface->get_opaque_region = meta_background_content_get_opaque_region;
 }
 
 static void
