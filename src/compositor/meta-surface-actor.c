@@ -84,11 +84,12 @@ get_scaled_region (MetaSurfaceActor     *surface_actor,
 {
   MetaWindowActor *window_actor;
   cairo_region_t *scaled_region = NULL;
-  int geometry_scale;
+  int geometry_scale = 1;
   float x, y;
 
   window_actor = meta_window_actor_from_actor (CLUTTER_ACTOR (surface_actor));
-  geometry_scale = meta_window_actor_get_geometry_scale (window_actor);
+  if (window_actor)
+    geometry_scale = meta_window_actor_get_geometry_scale (window_actor);
 
   clutter_actor_get_position (CLUTTER_ACTOR (surface_actor), &x, &y);
   cairo_region_translate (region, x, y);
@@ -175,6 +176,94 @@ set_clip_region (MetaSurfaceActor *surface_actor,
     }
 }
 
+static gboolean
+transform_stage_rect_to_actor (ClutterActor          *to_actor,
+                               cairo_rectangle_int_t *rect)
+{
+  float x1 = rect->x;
+  float y1 = rect->y;
+  float x2 = x1 + rect->width;
+  float y2 = y1 + rect->height;
+
+  if (!clutter_actor_transform_stage_point (to_actor, x1, y1, &x1, &y1))
+    return FALSE;
+
+  if (!clutter_actor_transform_stage_point (to_actor, x2, y2, &x2, &y2))
+    return FALSE;
+
+  rect->x = G_APPROX_VALUE (roundf (x1), x1, 0.001) ? roundf (x1) : ceilf (x1);
+  rect->y = G_APPROX_VALUE (roundf (y1), y1, 0.001)
+    ? roundf (y1) : ceilf (y1);
+  rect->width = G_APPROX_VALUE (roundf (x2 - x1), x2 - x1, 0.001)
+    ? roundf (x2 - x1) : floorf (x2 - x1);
+  rect->height = G_APPROX_VALUE (roundf (y2 - y1), y2 - y1, 0.001)
+    ? roundf (y2 - y1) : floorf (y2 - y1);
+
+  return TRUE;
+}
+
+static cairo_region_t *
+stage_region_to_actor_region (ClutterActor         *actor,
+                              const cairo_region_t *region)
+{
+  int n_rects, i;
+  cairo_rectangle_int_t *rects;
+  g_autofree cairo_rectangle_int_t *freeme = NULL;
+
+  if (region == NULL)
+    return NULL;
+
+  n_rects = cairo_region_num_rectangles (region);
+
+  if (n_rects == 0)
+    return NULL;
+
+  if (n_rects < 64)
+    rects = g_newa (cairo_rectangle_int_t, n_rects);
+  else
+    rects = freeme = g_new (cairo_rectangle_int_t, n_rects);
+
+  for (i = 0; i < n_rects; i++)
+    {
+      cairo_rectangle_int_t *rect;
+
+      rect = &rects[i];
+      cairo_region_get_rectangle (region, i, rect);
+
+      if (!transform_stage_rect_to_actor (actor, rect))
+        return NULL;
+    }
+
+  return cairo_region_create_rectangles (rects, n_rects);
+}
+
+static void
+meta_surface_actor_paint (ClutterActor        *actor,
+                          ClutterPaintContext *paint_context)
+{
+  MetaSurfaceActor *self = META_SURFACE_ACTOR (actor);
+  const cairo_region_t *redraw_clip;
+  cairo_region_t *repaint_region;
+  ClutterActorClass *parent_actor_class =
+    CLUTTER_ACTOR_CLASS (meta_surface_actor_parent_class);
+
+  redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
+  if (!redraw_clip)
+    goto paint_actor;
+
+  repaint_region = clutter_actor_get_region_to_repaint (actor, redraw_clip);
+  if (!repaint_region)
+    goto paint_actor;
+
+  set_clip_region (self, repaint_region);
+  cairo_region_destroy (repaint_region);
+
+paint_actor:
+  parent_actor_class->paint (actor, paint_context);
+
+  set_clip_region (self, NULL);
+}
+
 static void
 meta_surface_actor_pick (ClutterActor       *actor,
                          ClutterPickContext *pick_context)
@@ -253,6 +342,7 @@ meta_surface_actor_class_init (MetaSurfaceActorClass *klass)
   ClutterActorClass *actor_class = CLUTTER_ACTOR_CLASS (klass);
 
   object_class->dispose = meta_surface_actor_dispose;
+  actor_class->paint = meta_surface_actor_paint;
   actor_class->pick = meta_surface_actor_pick;
   actor_class->get_paint_volume = meta_surface_actor_get_paint_volume;
 
@@ -288,7 +378,6 @@ meta_surface_actor_cull_out (MetaCullable   *cullable,
   uint8_t opacity = clutter_actor_get_opacity (CLUTTER_ACTOR (cullable));
 
   set_unobscured_region (surface_actor, unobscured_region);
-  set_clip_region (surface_actor, clip_region);
 
   if (opacity == 0xff)
     {
@@ -337,9 +426,6 @@ meta_surface_actor_is_untransformed (MetaCullable *cullable)
 static void
 meta_surface_actor_reset_culling (MetaCullable *cullable)
 {
-  MetaSurfaceActor *surface_actor = META_SURFACE_ACTOR (cullable);
-
-  set_clip_region (surface_actor, NULL);
 }
 
 static void
