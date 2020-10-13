@@ -4900,6 +4900,7 @@ clutter_actor_set_clip_rect (ClutterActor          *self,
     priv->has_clip = FALSE;
 
   queue_update_paint_volume (self);
+  clutter_actor_invalidate_opaque_region (self);
   clutter_actor_queue_redraw (self);
 
   g_object_notify_by_pspec (obj, obj_props[PROP_CLIP_RECT]);
@@ -11013,6 +11014,7 @@ clutter_actor_set_clip (ClutterActor *self,
   priv->has_clip = TRUE;
 
   queue_update_paint_volume (self);
+  clutter_actor_invalidate_opaque_region (self);
   clutter_actor_queue_redraw (self);
 
   g_object_notify_by_pspec (obj, obj_props[PROP_CLIP_RECT]);
@@ -11036,6 +11038,7 @@ clutter_actor_remove_clip (ClutterActor *self)
   self->priv->has_clip = FALSE;
 
   queue_update_paint_volume (self);
+  clutter_actor_invalidate_opaque_region (self);
   clutter_actor_queue_redraw (self);
 
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_HAS_CLIP]);
@@ -15058,6 +15061,7 @@ clutter_actor_set_clip_to_allocation (ClutterActor *self,
       priv->clip_to_allocation = clip_set;
 
       queue_update_paint_volume (self);
+      clutter_actor_invalidate_opaque_region (self);
       clutter_actor_queue_redraw (self);
 
       g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_CLIP_TO_ALLOCATION]);
@@ -16000,11 +16004,82 @@ get_content_opaque_region (ClutterActor *self)
   return opaque_region;
 }
 
+static gboolean
+needs_modify_opaque_region (ClutterActor *self)
+{
+  ClutterActorPrivate *priv = self->priv;
+
+  if (priv->has_clip)
+    return TRUE;
+
+  if (priv->clip_to_allocation)
+    return TRUE;
+
+  return FALSE;
+}
+
+static void
+transform_rect_to_stage (ClutterActor    *actor,
+                         graphene_rect_t *rect)
+{
+  graphene_point3d_t vertices[2];
+
+  vertices[0].x = rect->origin.x;
+  vertices[0].y = rect->origin.y;
+  vertices[0].z = 0;
+  vertices[1].x = rect->origin.x + rect->size.width;
+  vertices[1].y = rect->origin.y + rect->size.height;
+  vertices[1].z = 0;
+
+  _clutter_actor_fully_transform_vertices (actor, vertices, vertices, 2);
+
+  rect->origin.x = vertices[0].x;
+  rect->origin.y = vertices[0].y;
+  rect->size.width = vertices[1].x - rect->origin.x;
+  rect->size.height = vertices[1].y - rect->origin.y;
+}
+
+static cairo_region_t *
+modify_opaque_region (ClutterActor   *self,
+                      cairo_region_t *opaque_region)
+{
+  ClutterActorPrivate *priv = self->priv;
+
+  if (priv->has_clip)
+    {
+      graphene_rect_t clip = priv->clip;
+      cairo_rectangle_int_t clip_rect;
+
+      transform_rect_to_stage (self, &clip);
+      clutter_util_rectangle_int_contained (&clip, &clip_rect);
+
+      cairo_region_intersect_rectangle (opaque_region, &clip_rect);
+    }
+  else if (priv->clip_to_allocation)
+    {
+      graphene_rect_t clip = { 0, };
+      cairo_rectangle_int_t clip_rect;
+
+      clip.size.width = clutter_actor_box_get_width (&priv->allocation);
+      clip.size.height = clutter_actor_box_get_height (&priv->allocation);
+
+      transform_rect_to_stage (self, &clip);
+      clutter_util_rectangle_int_contained (&clip, &clip_rect);
+
+      cairo_region_intersect_rectangle (opaque_region, &clip_rect);
+    }
+
+  return opaque_region;
+}
+
 static void
 update_unobscured_region (ClutterActor *self,
                           cairo_region_t *unobscured_region)
 {
   ClutterActorPrivate *priv = self->priv;
+  gboolean has_opaque_region;
+  gboolean modify_region_including_children_needed;
+  gboolean has_effect_on_unobscured_region;
   cairo_region_t *new_unobscured_region;
 
   if (priv->needs_opaque_region_update)
@@ -16018,14 +16093,14 @@ update_unobscured_region (ClutterActor *self,
       g_clear_pointer (&opaque_region, cairo_region_destroy);
     }
 
-  if (!priv->opaque_region || cairo_region_is_empty (priv->opaque_region))
-    {
-      g_clear_pointer (&priv->unobscured_region, cairo_region_destroy);
-      return;
-    }
+  has_opaque_region =
+    priv->opaque_region && !cairo_region_is_empty (priv->opaque_region);
+  modify_region_including_children_needed = needs_modify_opaque_region (self);
 
-  /* Clips are not supported yet */
-  if (priv->has_clip || priv->clip_to_allocation)
+  has_effect_on_unobscured_region =
+    has_opaque_region || modify_region_including_children_needed;
+
+  if (!has_effect_on_unobscured_region)
     {
       g_clear_pointer (&priv->unobscured_region, cairo_region_destroy);
       return;
@@ -16033,7 +16108,36 @@ update_unobscured_region (ClutterActor *self,
 
   new_unobscured_region = cairo_region_copy (unobscured_region);
 
-  cairo_region_subtract (new_unobscured_region, priv->opaque_region);
+  if (has_opaque_region)
+    cairo_region_subtract (new_unobscured_region, priv->opaque_region);
+
+  if (modify_region_including_children_needed)
+    {
+      cairo_region_t *opaque_region_including_children;
+
+      /* We use a small trick to get the opaque region including our
+       * children: Subtract our unobscured_region from the unobscured
+       * region of the previous actor.
+       */
+      opaque_region_including_children = cairo_region_copy (priv->unobscured_without_children);
+      cairo_region_subtract (opaque_region_including_children, new_unobscured_region);
+
+      cairo_region_union (new_unobscured_region, opaque_region_including_children);
+
+      opaque_region_including_children =
+        modify_opaque_region (self, opaque_region_including_children);
+
+      if (cairo_region_is_empty (opaque_region_including_children))
+        {
+          g_clear_pointer (&opaque_region_including_children, cairo_region_destroy);
+          g_clear_pointer (&new_unobscured_region, cairo_region_destroy);
+          g_clear_pointer (&priv->unobscured_region, cairo_region_destroy);
+          return;
+        }
+
+      cairo_region_subtract (new_unobscured_region, opaque_region_including_children);
+      g_clear_pointer (&opaque_region_including_children, cairo_region_destroy);
+    }
 
   /* Small optimization, if the unobscured_region we pass to the next
    * actor didn't change after all, keep the old one so the next actors
