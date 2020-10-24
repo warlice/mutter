@@ -9177,6 +9177,31 @@ clutter_actor_allocate_internal (ClutterActor           *self,
 
   CLUTTER_UNSET_PRIVATE_FLAGS (self, CLUTTER_IN_RELAYOUT);
 
+#ifdef CLUTTER_ENABLE_DEBUG
+  /* Make sure the allocate() vfunc implementation called
+   * clutter_actor_allocate() on all mapped children.
+   */
+  if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_LAYOUT))
+    {
+      ClutterActorPrivate *priv = self->priv;
+      ClutterActor *child;
+
+      for (child = priv->first_child; child; child = child->priv->next_sibling)
+        {
+          if (!CLUTTER_ACTOR_IS_MAPPED (child))
+            continue;
+
+          if (!clutter_actor_has_allocation (child))
+            {
+              g_warning ("Actor %s didn't allocate mapped child %s "
+                         "inside allocate() vfunc implementation",
+                         _clutter_actor_get_debug_name (self),
+                         _clutter_actor_get_debug_name (child));
+            }
+        }
+    }
+#endif
+
   /* Caller should call clutter_actor_queue_redraw() if needed
    * for that particular case.
    */
