@@ -8180,6 +8180,9 @@ _clutter_actor_queue_only_relayout (ClutterActor *self)
     }
 #endif /* CLUTTER_ENABLE_DEBUG */
 
+  CLUTTER_NOTE (LAYOUT, "Queueing relayout on '%s'",
+                _clutter_actor_get_debug_name (self));
+
   _clutter_actor_queue_relayout_on_clones (self);
 
   g_signal_emit (self, actor_signals[QUEUE_RELAYOUT], 0);
