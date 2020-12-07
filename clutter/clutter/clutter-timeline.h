@@ -63,7 +63,6 @@ typedef gdouble (* ClutterTimelineProgressFunc) (ClutterTimeline *timeline,
  * @completed: class handler for the #ClutterTimeline::completed signal
  * @paused: class handler for the #ClutterTimeline::paused signal
  * @new_frame: class handler for the #ClutterTimeline::new-frame signal
- * @marker_reached: class handler for the #ClutterTimeline::marker-reached signal
  * @stopped: class handler for the #ClutterTimeline::stopped signal
  *
  * The #ClutterTimelineClass structure contains only private data
@@ -81,9 +80,6 @@ struct _ClutterTimelineClass
   void (*new_frame)      (ClutterTimeline *timeline,
 		          gint             msecs);
 
-  void (*marker_reached) (ClutterTimeline *timeline,
-                          const gchar     *marker_name,
-                          gint             msecs);
   void (*stopped)        (ClutterTimeline *timeline,
                           gboolean         is_finished);
 };
@@ -150,27 +146,6 @@ CLUTTER_EXPORT
 guint                           clutter_timeline_get_delay                      (ClutterTimeline          *timeline);
 CLUTTER_EXPORT
 guint                           clutter_timeline_get_delta                      (ClutterTimeline          *timeline);
-CLUTTER_EXPORT
-void                            clutter_timeline_add_marker                     (ClutterTimeline          *timeline,
-                                                                                 const gchar              *marker_name,
-                                                                                 gdouble                   progress);
-CLUTTER_EXPORT
-void                            clutter_timeline_add_marker_at_time             (ClutterTimeline          *timeline,
-                                                                                 const gchar              *marker_name,
-                                                                                 guint                     msecs);
-CLUTTER_EXPORT
-void                            clutter_timeline_remove_marker                  (ClutterTimeline          *timeline,
-                                                                                 const gchar              *marker_name);
-CLUTTER_EXPORT
-gchar **                        clutter_timeline_list_markers                   (ClutterTimeline          *timeline,
-                                                                                 gint                      msecs,
-                                                                                 gsize                    *n_markers) G_GNUC_MALLOC;
-CLUTTER_EXPORT
-gboolean                        clutter_timeline_has_marker                     (ClutterTimeline          *timeline,
-                                                                                 const gchar              *marker_name);
-CLUTTER_EXPORT
-void                            clutter_timeline_advance_to_marker              (ClutterTimeline          *timeline,
-                                                                                 const gchar              *marker_name);
 CLUTTER_EXPORT
 void                            clutter_timeline_set_progress_func              (ClutterTimeline          *timeline,
                                                                                  ClutterTimelineProgressFunc func,
