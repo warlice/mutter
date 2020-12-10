@@ -86,11 +86,11 @@ struct _ClutterTimelineClass
 
 CLUTTER_EXPORT
 ClutterTimeline *               clutter_timeline_new_for_actor                  (ClutterActor             *actor,
-                                                                                 unsigned int              duration_ms);
+                                                                                 uint32_t                  duration_ms);
 
 CLUTTER_EXPORT
 ClutterTimeline *               clutter_timeline_new_for_frame_clock            (ClutterFrameClock        *frame_clock,
-                                                                                 unsigned int              duration_ms);
+                                                                                 uint32_t                  duration_ms);
 
 CLUTTER_EXPORT
 ClutterActor *                  clutter_timeline_get_actor                      (ClutterTimeline          *timeline);
@@ -100,10 +100,10 @@ void                            clutter_timeline_set_actor                      
                                                                                  ClutterActor             *actor);
 
 CLUTTER_EXPORT
-guint                           clutter_timeline_get_duration                   (ClutterTimeline          *timeline);
+uint32_t                        clutter_timeline_get_duration                   (ClutterTimeline          *timeline);
 CLUTTER_EXPORT
 void                            clutter_timeline_set_duration                   (ClutterTimeline          *timeline,
-                                                                                 guint                     msecs);
+                                                                                 uint32_t                  msecs);
 CLUTTER_EXPORT
 ClutterTimelineDirection        clutter_timeline_get_direction                  (ClutterTimeline          *timeline);
 CLUTTER_EXPORT
@@ -129,7 +129,7 @@ CLUTTER_EXPORT
 void                            clutter_timeline_rewind                         (ClutterTimeline          *timeline);
 CLUTTER_EXPORT
 void                            clutter_timeline_seek                           (ClutterTimeline          *timeline,
-                                                                                 guint                     msecs);
+                                                                                 uint32_t                  msecs);
 CLUTTER_EXPORT
 guint                           clutter_timeline_get_elapsed_time               (ClutterTimeline          *timeline);
 CLUTTER_EXPORT
