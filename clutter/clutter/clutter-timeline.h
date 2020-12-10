@@ -169,8 +169,6 @@ gboolean                        clutter_timeline_get_cubic_bezier_progress      
                                                                                  graphene_point_t *c_2);
 
 CLUTTER_EXPORT
-gint64                          clutter_timeline_get_duration_hint              (ClutterTimeline          *timeline);
-CLUTTER_EXPORT
 gint                            clutter_timeline_get_current_repeat             (ClutterTimeline          *timeline);
 
 CLUTTER_EXPORT
