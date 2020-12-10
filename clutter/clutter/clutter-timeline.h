@@ -131,7 +131,7 @@ CLUTTER_EXPORT
 void                            clutter_timeline_skip                           (ClutterTimeline          *timeline,
                                                                                  guint                     msecs);
 CLUTTER_EXPORT
-void                            clutter_timeline_advance                        (ClutterTimeline          *timeline,
+void                            clutter_timeline_seek                           (ClutterTimeline          *timeline,
                                                                                  guint                     msecs);
 CLUTTER_EXPORT
 guint                           clutter_timeline_get_elapsed_time               (ClutterTimeline          *timeline);
