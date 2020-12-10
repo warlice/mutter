@@ -52,9 +52,8 @@ timeline_new_frame_cb (ClutterTimeline *timeline,
   int frame_no = ((msec * FRAME_COUNT + (FRAME_COUNT * 1000 / FPS) / 2)
                   / (FRAME_COUNT * 1000 / FPS));
 
-  g_printerr ("%i: Doing frame %d, delta = %i\n",
-              data->timeline_num, frame_no,
-              clutter_timeline_get_delta (timeline));
+  g_printerr ("%i: Doing frame %d\n",
+              data->timeline_num, frame_no);
 
   g_assert (frame_no >= 0 && frame_no <= FRAME_COUNT);
 

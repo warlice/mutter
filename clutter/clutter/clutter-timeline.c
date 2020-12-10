@@ -42,10 +42,7 @@
  * signal, which is emitted each time a timeline is advanced during the maste
  * clock iteration. The [signal@Timeline::new-frame] signal provides the time
  * elapsed since the beginning of the timeline, in milliseconds. A normalized
- * progress value can be obtained by calling [method@Timeline.get_progress].
- * By using [method@Timeline.get_delta] it is possible to obtain the wallclock
- * time elapsed since the last emission of the [signal@Timeline::new-frame]
- * signal.
+ * progress value can be obtained by calling [method@Clutter.Timeline.get_progress].
  *
  * Initial state can be set up by using the [signal@Timeline::started] signal,
  * while final state can be set up by using the [signal@Timeline::stopped]
@@ -108,9 +105,6 @@ typedef struct _ClutterTimelinePrivate
 
   /* The current amount of elapsed time */
   gint64 elapsed_time;
-
-  /* The elapsed time since the last frame was fired */
-  gint64 msecs_delta;
 
   /* Time we last advanced the elapsed time and showed a frame */
   gint64 last_frame_time;
@@ -817,7 +811,8 @@ set_is_playing (ClutterTimeline *timeline,
 }
 
 static gboolean
-clutter_timeline_do_frame (ClutterTimeline *timeline)
+clutter_timeline_do_frame (ClutterTimeline *timeline,
+                           unsigned int     delta_ms)
 {
   ClutterTimelinePrivate *priv;
 
@@ -826,17 +821,17 @@ clutter_timeline_do_frame (ClutterTimeline *timeline)
   g_object_ref (timeline);
 
   CLUTTER_NOTE (SCHEDULER, "Timeline [%p] activated (elapsed time: %ld, "
-                "duration: %ld, msecs_delta: %ld)\n",
+                "duration: %ld, delta_ms: %ld)\n",
                 timeline,
                 (long) priv->elapsed_time,
                 (long) priv->duration,
-                (long) priv->msecs_delta);
+                (long) delta_ms);
 
   /* Advance time */
   if (priv->direction == CLUTTER_TIMELINE_FORWARD)
-    priv->elapsed_time += priv->msecs_delta;
+    priv->elapsed_time += delta_ms;
   else
-    priv->elapsed_time -= priv->msecs_delta;
+    priv->elapsed_time -= delta_ms;
 
   /* If we have not reached the end of the timeline: */
   if (!is_complete (timeline))
@@ -852,7 +847,7 @@ clutter_timeline_do_frame (ClutterTimeline *timeline)
     {
       /* Handle loop or stop */
       ClutterTimelineDirection saved_direction = priv->direction;
-      gint elapsed_time_delta = priv->msecs_delta;
+      gint elapsed_time_delta = delta_ms;
       guint overflow_msecs = priv->elapsed_time;
       gint end_msecs;
 
@@ -890,7 +885,7 @@ clutter_timeline_do_frame (ClutterTimeline *timeline)
                     "Timeline [%p] completed (cur: %ld, tot: %ld)",
                     timeline,
                     (long) priv->elapsed_time,
-                    (long) priv->msecs_delta);
+                    (long) delta_ms);
 
       if (priv->is_playing &&
           (priv->repeat_count == 0 ||
@@ -972,7 +967,6 @@ delay_timeout_func (gpointer data)
     clutter_timeline_get_instance_private (timeline);
 
   priv->delay_id = 0;
-  priv->msecs_delta = 0;
   set_is_playing (timeline, TRUE);
 
   g_signal_emit (timeline, timeline_signals[STARTED], 0);
@@ -1010,7 +1004,6 @@ clutter_timeline_start (ClutterTimeline *timeline)
                                                   timeline);
   else
     {
-      priv->msecs_delta = 0;
       set_is_playing (timeline, TRUE);
 
       g_signal_emit (timeline, timeline_signals[STARTED], 0);
@@ -1037,7 +1030,6 @@ clutter_timeline_pause (ClutterTimeline *timeline)
   if (!priv->is_playing)
     return;
 
-  priv->msecs_delta = 0;
   set_is_playing (timeline, FALSE);
 
   g_signal_emit (timeline, timeline_signals[PAUSED], 0);
@@ -1374,34 +1366,6 @@ clutter_timeline_set_direction (ClutterTimeline          *timeline,
     }
 }
 
-/**
- * clutter_timeline_get_delta:
- * @timeline: a #ClutterTimeline
- *
- * Retrieves the amount of time elapsed since the last
- * [signal@Timeline::new-frame] signal.
- *
- * This function is only useful inside handlers for the ::new-frame
- * signal, and its behaviour is undefined if the timeline is not
- * playing.
- *
- * Return value: the amount of time in milliseconds elapsed since the
- * last frame
- */
-guint
-clutter_timeline_get_delta (ClutterTimeline *timeline)
-{
-  ClutterTimelinePrivate *priv;
-
-  g_return_val_if_fail (CLUTTER_IS_TIMELINE (timeline), 0);
-
-  priv = clutter_timeline_get_instance_private (timeline);
-  if (!clutter_timeline_is_playing (timeline))
-    return 0;
-
-  return priv->msecs_delta;
-}
-
 void
 _clutter_timeline_advance (ClutterTimeline *timeline,
                            gint64           tick_time)
@@ -1412,17 +1376,14 @@ _clutter_timeline_advance (ClutterTimeline *timeline,
   g_object_ref (timeline);
 
   CLUTTER_NOTE (SCHEDULER,
-                "Timeline [%p] advancing (cur: %ld, tot: %ld, "
-                "tick_time: %lu)",
+                "Timeline [%p] advancing (cur: %ld, tick_time: %lu)",
                 timeline,
                 (long) priv->elapsed_time,
-                (long) priv->msecs_delta,
                 (long) tick_time);
 
-  priv->msecs_delta = tick_time;
   priv->is_playing = TRUE;
 
-  clutter_timeline_do_frame (timeline);
+  clutter_timeline_do_frame (timeline, tick_time);
 
   priv->is_playing = FALSE;
 
@@ -1452,11 +1413,10 @@ _clutter_timeline_do_tick (ClutterTimeline *timeline,
   priv = clutter_timeline_get_instance_private (timeline);
 
   CLUTTER_NOTE (SCHEDULER,
-                "Timeline [%p] ticked (elapsed_time: %ld, msecs_delta: %ld, "
+                "Timeline [%p] ticked (elapsed_time: %ld, "
                 "last_frame_time: %ld, tick_time: %ld)",
                 timeline,
                 (long) priv->elapsed_time,
-                (long) priv->msecs_delta,
                 (long) priv->last_frame_time,
                 (long) tick_time);
 
@@ -1471,9 +1431,8 @@ _clutter_timeline_do_tick (ClutterTimeline *timeline,
   if (priv->waiting_first_tick)
     {
       priv->last_frame_time = tick_time;
-      priv->msecs_delta = 0;
       priv->waiting_first_tick = FALSE;
-      clutter_timeline_do_frame (timeline);
+      clutter_timeline_do_frame (timeline, 0);
     }
   else
     {
@@ -1496,8 +1455,7 @@ _clutter_timeline_do_tick (ClutterTimeline *timeline,
         {
           /* Avoid accumulating error */
           priv->last_frame_time += msecs;
-          priv->msecs_delta = msecs;
-          clutter_timeline_do_frame (timeline);
+          clutter_timeline_do_frame (timeline, msecs);
         }
     }
 }

@@ -142,8 +142,6 @@ void                            clutter_timeline_set_delay                      
 CLUTTER_EXPORT
 guint                           clutter_timeline_get_delay                      (ClutterTimeline          *timeline);
 CLUTTER_EXPORT
-guint                           clutter_timeline_get_delta                      (ClutterTimeline          *timeline);
-CLUTTER_EXPORT
 void                            clutter_timeline_set_progress_func              (ClutterTimeline          *timeline,
                                                                                  ClutterTimelineProgressFunc func,
                                                                                  gpointer                  data,
