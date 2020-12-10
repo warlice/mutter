@@ -1097,41 +1097,6 @@ clutter_timeline_rewind (ClutterTimeline *timeline)
 }
 
 /**
- * clutter_timeline_skip:
- * @timeline: A #ClutterTimeline
- * @msecs: Amount of time to skip
- *
- * Advance timeline by the requested time in milliseconds
- */
-void
-clutter_timeline_skip (ClutterTimeline *timeline,
-                       guint            msecs)
-{
-  ClutterTimelinePrivate *priv;
-
-  g_return_if_fail (CLUTTER_IS_TIMELINE (timeline));
-
-  priv = clutter_timeline_get_instance_private (timeline);
-
-  if (priv->direction == CLUTTER_TIMELINE_FORWARD)
-    {
-      priv->elapsed_time += msecs;
-
-      if (priv->elapsed_time > priv->duration)
-        priv->elapsed_time = 1;
-    }
-  else if (priv->direction == CLUTTER_TIMELINE_BACKWARD)
-    {
-      priv->elapsed_time -= msecs;
-
-      if (priv->elapsed_time < 1)
-        priv->elapsed_time = priv->duration - 1;
-    }
-
-  priv->msecs_delta = 0;
-}
-
-/**
  * clutter_timeline_seek:
  * @timeline: A #ClutterTimeline
  * @msecs: Time to seek to

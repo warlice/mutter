@@ -128,9 +128,6 @@ gint                            clutter_timeline_get_repeat_count               
 CLUTTER_EXPORT
 void                            clutter_timeline_rewind                         (ClutterTimeline          *timeline);
 CLUTTER_EXPORT
-void                            clutter_timeline_skip                           (ClutterTimeline          *timeline,
-                                                                                 guint                     msecs);
-CLUTTER_EXPORT
 void                            clutter_timeline_seek                           (ClutterTimeline          *timeline,
                                                                                  guint                     msecs);
 CLUTTER_EXPORT
