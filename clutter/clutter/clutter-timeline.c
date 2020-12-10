@@ -1262,8 +1262,7 @@ clutter_timeline_get_duration (ClutterTimeline *timeline)
  * @timeline: a #ClutterTimeline
  * @msecs: duration of the timeline in milliseconds
  *
- * Sets the duration of the timeline, in milliseconds. The speed
- * of the timeline depends on the [property@Timeline:frame-clock] setting.
+ * Sets the duration of the timeline, in milliseconds.
  */
 void
 clutter_timeline_set_duration (ClutterTimeline *timeline,
