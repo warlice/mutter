@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Mutter SDK
+Comment=Mutter Software Development Kit
+Exec=mutter-viewer
+Icon=org.gnome.Mutter.Sdk
+Terminal=false
+Type=Application
+Categories=GNOME
+X-GNOME-Bugzilla-Bugzilla=GNOME
+X-GNOME-Bugzilla-Product=mutter
+Keywords=Mutter;SDK

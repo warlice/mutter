@@ -78,6 +78,11 @@ pkgincludedir = join_paths(includedir, pkgname)
 
 pcdir = join_paths(libdir, 'pkgconfig')
 
+desktopdir = join_paths(datadir, 'applications')
+icondir = join_paths(datadir, 'icons')
+
+po_path = join_paths(meson.current_source_dir(), 'po')
+
 gettext_package = meson.project_name()
 localedir = join_paths(datadir, 'locale')
 
@@ -93,6 +98,7 @@ m_dep = cc.find_library('m', required: true)
 x11_dep = dependency('x11')
 graphene_dep = dependency('graphene-gobject-1.0', version: graphene_req)
 gtk3_dep = dependency('gtk+-3.0', version: gtk3_req)
+gtk4_dep = dependency('gtk4')
 gdk_pixbuf_dep = dependency('gdk-pixbuf-2.0')
 pango_dep = dependency('pango', version: pango_req)
 cairo_dep = dependency('cairo', version: cairo_req)
@@ -534,6 +540,9 @@ subdir('cogl')
 subdir('clutter')
 subdir('data')
 subdir('src')
+if have_native_backend and have_remote_desktop
+  subdir('sdk')
+endif
 subdir('po')
 subdir('doc/man')
 
