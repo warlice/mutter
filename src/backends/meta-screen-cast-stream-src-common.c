@@ -25,6 +25,8 @@
 #include "backends/meta-screen-cast-stream-src-common.h"
 
 #include "backends/meta-cursor-tracker-private.h"
+#include "backends/meta-logical-monitor.h"
+#include "backends/meta-screen-cast-session.h"
 #include "core/boxes-private.h"
 
 gboolean
@@ -108,13 +110,13 @@ meta_screen_cast_stream_src_common_set_cursor_metadata (MetaScreenCastStreamSrc 
     }
 }
 
-void
-meta_screen_cast_stream_src_common_maybe_paint_cursor_sprite (MetaScreenCastStreamSrc *src,
-                                                              MetaRectangle           *stream_area,
-                                                              int                      width,
-                                                              int                      height,
-                                                              int                      stride,
-                                                              uint8_t                 *data)
+static void
+maybe_paint_cursor_sprite_to_buffer (MetaScreenCastStreamSrc *src,
+                                     MetaRectangle           *stream_area,
+                                     int                      width,
+                                     int                      height,
+                                     int                      stride,
+                                     uint8_t                 *data)
 {
   MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorRenderer *cursor_renderer =
@@ -171,4 +173,39 @@ meta_screen_cast_stream_src_common_maybe_paint_cursor_sprite (MetaScreenCastStre
   cairo_surface_destroy (sprite_surface);
   cairo_surface_destroy (surface);
   g_free (sprite_data);
+}
+
+gboolean
+meta_screen_cast_stream_src_common_record_monitor_to_buffer (MetaScreenCastStreamSrc  *src,
+                                                             MetaLogicalMonitor       *logical_monitor,
+                                                             ClutterStage             *stage,
+                                                             int                       width,
+                                                             int                       height,
+                                                             int                       stride,
+                                                             uint8_t                  *data,
+                                                             GError                  **error)
+{
+  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
+  MetaRectangle logical_monitor_layout;
+
+  logical_monitor_layout = meta_logical_monitor_get_layout (logical_monitor);
+
+  clutter_stage_capture_into (stage, &logical_monitor_layout, data);
+
+  switch (meta_screen_cast_stream_get_cursor_mode (stream))
+    {
+    case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
+      maybe_paint_cursor_sprite_to_buffer (src,
+                                           &logical_monitor_layout,
+                                           width,
+                                           height,
+                                           stride,
+                                           data);
+      break;
+    case META_SCREEN_CAST_CURSOR_MODE_METADATA:
+    case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
+      break;
+    }
+
+  return TRUE;
 }

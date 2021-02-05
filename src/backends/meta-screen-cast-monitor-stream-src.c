@@ -410,35 +410,23 @@ meta_screen_cast_monitor_stream_src_record_to_buffer (MetaScreenCastStreamSrc  *
 {
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (src);
-  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   ClutterStage *stage;
   MetaMonitor *monitor;
   MetaLogicalMonitor *logical_monitor;
-  MetaRectangle logical_monitor_layout;
 
   monitor = get_monitor (monitor_src);
   logical_monitor = meta_monitor_get_logical_monitor (monitor);
-  logical_monitor_layout = meta_logical_monitor_get_layout (logical_monitor);
 
   stage = get_stage (monitor_src);
-  clutter_stage_capture_into (stage, &logical_monitor->rect, data);
 
-  switch (meta_screen_cast_stream_get_cursor_mode (stream))
-    {
-    case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
-      meta_screen_cast_stream_src_common_maybe_paint_cursor_sprite (src,
-                                                                    &logical_monitor_layout,
-                                                                    width,
-                                                                    height,
-                                                                    stride,
-                                                                    data);
-      break;
-    case META_SCREEN_CAST_CURSOR_MODE_METADATA:
-    case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
-      break;
-    }
-
-  return TRUE;
+  return meta_screen_cast_stream_src_common_record_monitor_to_buffer (src,
+                                                                      logical_monitor,
+                                                                      stage,
+                                                                      width,
+                                                                      height,
+                                                                      stride,
+                                                                      data,
+                                                                      error);
 }
 
 static gboolean
