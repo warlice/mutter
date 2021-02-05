@@ -41,4 +41,9 @@ gboolean meta_screen_cast_stream_src_common_record_monitor_to_buffer (MetaScreen
                                                                       uint8_t                  *data,
                                                                       GError                  **error);
 
+gboolean meta_screen_cast_stream_src_common_record_monitor_to_framebuffer (MetaScreenCastStreamSrc  *src,
+                                                                           MetaLogicalMonitor       *logical_monitor,
+                                                                           CoglFramebuffer          *framebuffer,
+                                                                           GError                  **error);
+
 #endif /* META_SCREEN_CAST_STREAM_SRC_COMMON_H */

@@ -209,3 +209,66 @@ meta_screen_cast_stream_src_common_record_monitor_to_buffer (MetaScreenCastStrea
 
   return TRUE;
 }
+
+gboolean
+meta_screen_cast_stream_src_common_record_monitor_to_framebuffer (MetaScreenCastStreamSrc  *src,
+                                                                  MetaLogicalMonitor       *logical_monitor,
+                                                                  CoglFramebuffer          *framebuffer,
+                                                                  GError                  **error)
+{
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
+  MetaRenderer *renderer = meta_backend_get_renderer (backend);
+  MetaRectangle logical_monitor_layout;
+  GList *l;
+  float view_scale;
+
+  logical_monitor_layout = meta_logical_monitor_get_layout (logical_monitor);
+
+  if (meta_is_stage_views_scaled ())
+    view_scale = meta_logical_monitor_get_scale (logical_monitor);
+  else
+    view_scale = 1.0;
+
+  for (l = meta_renderer_get_views (renderer); l; l = l->next)
+    {
+      ClutterStageView *view = CLUTTER_STAGE_VIEW (l->data);
+      CoglFramebuffer *view_framebuffer;
+      CoglScanout *scanout;
+      MetaRectangle view_layout;
+      int x, y;
+
+      clutter_stage_view_get_layout (view, &view_layout);
+
+      if (!meta_rectangle_overlap (&logical_monitor_layout, &view_layout))
+        continue;
+
+      x = (int) roundf ((view_layout.x - logical_monitor_layout.x) * view_scale);
+      y = (int) roundf ((view_layout.y - logical_monitor_layout.y) * view_scale);
+
+      scanout = clutter_stage_view_peek_scanout (view);
+      if (scanout)
+        {
+          if (!cogl_scanout_blit_to_framebuffer (scanout,
+                                                 framebuffer,
+                                                 x, y,
+                                                 error))
+            return FALSE;
+        }
+      else
+        {
+          view_framebuffer = clutter_stage_view_get_framebuffer (view);
+          if (!cogl_blit_framebuffer (view_framebuffer,
+                                      framebuffer,
+                                      0, 0,
+                                      x, y,
+                                      cogl_framebuffer_get_width (view_framebuffer),
+                                      cogl_framebuffer_get_height (view_framebuffer),
+                                      error))
+            return FALSE;
+        }
+    }
+
+  cogl_framebuffer_flush (framebuffer);
+
+  return TRUE;
+}
