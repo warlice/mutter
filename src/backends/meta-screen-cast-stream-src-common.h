@@ -26,4 +26,10 @@
 gboolean meta_screen_cast_stream_src_common_is_cursor_in_stream (MetaScreenCastStreamSrc *src,
                                                                  MetaRectangle           *stream_area);
 
+void meta_screen_cast_stream_src_common_set_cursor_metadata (MetaScreenCastStreamSrc *src,
+                                                             struct spa_meta_cursor  *spa_meta_cursor,
+                                                             graphene_point_t        *cursor_position,
+                                                             float                    scale,
+                                                             gboolean                *cursor_bitmap_invalid);
+
 #endif /* META_SCREEN_CAST_STREAM_SRC_COMMON_H */

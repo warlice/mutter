@@ -521,7 +521,6 @@ meta_screen_cast_window_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc 
   graphene_point_t cursor_position;
   float scale;
   graphene_point_t relative_cursor_position;
-  int x, y;
 
   cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
   meta_cursor_tracker_get_pointer (cursor_tracker, &cursor_position, NULL);
@@ -538,33 +537,11 @@ meta_screen_cast_window_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc 
       return;
     }
 
-  x = (int) roundf (relative_cursor_position.x);
-  y = (int) roundf (relative_cursor_position.y);
-
-  if (window_src->cursor_bitmap_invalid)
-    {
-      if (cursor_sprite)
-        {
-          meta_screen_cast_stream_src_set_cursor_sprite_metadata (src,
-                                                                  spa_meta_cursor,
-                                                                  cursor_sprite,
-                                                                  x, y,
-                                                                  scale);
-        }
-      else
-        {
-          meta_screen_cast_stream_src_set_empty_cursor_sprite_metadata (src,
-                                                                        spa_meta_cursor,
-                                                                        x, y);
-        }
-      window_src->cursor_bitmap_invalid = FALSE;
-    }
-  else
-    {
-      meta_screen_cast_stream_src_set_cursor_position_metadata (src,
-                                                                spa_meta_cursor,
-                                                                x, y);
-    }
+  meta_screen_cast_stream_src_common_set_cursor_metadata (src,
+                                                          spa_meta_cursor,
+                                                          &relative_cursor_position,
+                                                          scale,
+                                                          &window_src->cursor_bitmap_invalid);
 }
 
 MetaScreenCastWindowStreamSrc *

@@ -465,18 +465,13 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
   MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
-  MetaCursorRenderer *cursor_renderer =
-    meta_backend_get_cursor_renderer (backend);
   MetaCursorTracker *cursor_tracker =
     meta_backend_get_cursor_tracker (backend);
-  MetaCursorSprite *cursor_sprite;
   MetaRectangle *area;
   float scale;
   graphene_point_t cursor_position;
-  int x, y;
 
   area = meta_screen_cast_area_stream_get_area (area_stream);
-  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
 
   if (!meta_cursor_tracker_get_pointer_visible (cursor_tracker) ||
       !meta_screen_cast_stream_src_common_is_cursor_in_stream (src, area))
@@ -494,39 +489,11 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
   cursor_position.x *= scale;
   cursor_position.y *= scale;
 
-  x = (int) roundf (cursor_position.x);
-  y = (int) roundf (cursor_position.y);
-
-  if (area_src->cursor_bitmap_invalid)
-    {
-      if (cursor_sprite)
-        {
-          float cursor_scale;
-          float metadata_scale;
-
-          cursor_scale = meta_cursor_sprite_get_texture_scale (cursor_sprite);
-          metadata_scale = scale * cursor_scale;
-          meta_screen_cast_stream_src_set_cursor_sprite_metadata (src,
-                                                                  spa_meta_cursor,
-                                                                  cursor_sprite,
-                                                                  x, y,
-                                                                  metadata_scale);
-        }
-      else
-        {
-          meta_screen_cast_stream_src_set_empty_cursor_sprite_metadata (src,
-                                                                        spa_meta_cursor,
-                                                                        x, y);
-        }
-
-      area_src->cursor_bitmap_invalid = FALSE;
-    }
-  else
-    {
-      meta_screen_cast_stream_src_set_cursor_position_metadata (src,
-                                                                spa_meta_cursor,
-                                                                x, y);
-    }
+  meta_screen_cast_stream_src_common_set_cursor_metadata (src,
+                                                          spa_meta_cursor,
+                                                          &cursor_position,
+                                                          scale,
+                                                          &area_src->cursor_bitmap_invalid);
 }
 
 static gboolean
