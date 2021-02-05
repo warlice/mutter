@@ -28,6 +28,7 @@
 #include "backends/meta-cursor-tracker-private.h"
 #include "backends/meta-screen-cast-area-stream.h"
 #include "backends/meta-screen-cast-session.h"
+#include "backends/meta-screen-cast-stream-src-common.h"
 #include "backends/meta-stage-private.h"
 #include "clutter/clutter.h"
 #include "clutter/clutter-mutter.h"
@@ -88,42 +89,6 @@ meta_screen_cast_area_stream_src_get_specs (MetaScreenCastStreamSrc *src,
   *width = (int) roundf (area->width * scale);
   *height = (int) roundf (area->height * scale);
   *frame_rate = 60.0;
-}
-
-static gboolean
-is_cursor_in_stream (MetaScreenCastAreaStreamSrc *area_src)
-{
-  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (area_src);
-  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
-  MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
-  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
-  MetaCursorRenderer *cursor_renderer =
-    meta_backend_get_cursor_renderer (backend);
-  MetaRectangle *area;
-  graphene_rect_t area_rect;
-  MetaCursorSprite *cursor_sprite;
-
-  area = meta_screen_cast_area_stream_get_area (area_stream);
-  area_rect = meta_rectangle_to_graphene_rect (area);
-
-  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
-  if (cursor_sprite)
-    {
-      graphene_rect_t cursor_rect;
-
-      cursor_rect = meta_cursor_renderer_calculate_rect (cursor_renderer,
-                                                         cursor_sprite);
-      return graphene_rect_intersection (&cursor_rect, &area_rect, NULL);
-    }
-  else
-    {
-      MetaCursorTracker *cursor_tracker =
-        meta_backend_get_cursor_tracker (backend);
-      graphene_point_t cursor_position;
-
-      meta_cursor_tracker_get_pointer (cursor_tracker, &cursor_position, NULL);
-      return graphene_rect_contains_point (&area_rect, &cursor_position);
-    }
 }
 
 static gboolean
@@ -447,8 +412,6 @@ meta_screen_cast_area_stream_src_record_to_framebuffer (MetaScreenCastStreamSrc 
                                                         CoglFramebuffer          *framebuffer,
                                                         GError                  **error)
 {
-  MetaScreenCastAreaStreamSrc *area_src =
-    META_SCREEN_CAST_AREA_STREAM_SRC (src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
   MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
@@ -512,17 +475,17 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
   graphene_point_t cursor_position;
   int x, y;
 
+  area = meta_screen_cast_area_stream_get_area (area_stream);
   cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
 
   if (!meta_cursor_tracker_get_pointer_visible (cursor_tracker) ||
-      !is_cursor_in_stream (area_src))
+      !meta_screen_cast_stream_src_common_is_cursor_in_stream (src, area))
     {
       meta_screen_cast_stream_src_unset_cursor_metadata (src,
                                                          spa_meta_cursor);
       return;
     }
 
-  area = meta_screen_cast_area_stream_get_area (area_stream);
   scale = meta_screen_cast_area_stream_get_scale (area_stream);
 
   meta_cursor_tracker_get_pointer (cursor_tracker, &cursor_position, NULL);
@@ -569,10 +532,16 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
 static gboolean
 meta_screen_cast_area_stream_src_is_cursor_inhibited (MetaHwCursorInhibitor *inhibitor)
 {
-  MetaScreenCastAreaStreamSrc *area_src =
-    META_SCREEN_CAST_AREA_STREAM_SRC (inhibitor);
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (inhibitor);
+  MetaScreenCastStream *stream;
+  MetaScreenCastAreaStream *area_stream;
+  MetaRectangle *area;
 
-  return is_cursor_in_stream (area_src);
+  stream = meta_screen_cast_stream_src_get_stream (src);
+  area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
+  area = meta_screen_cast_area_stream_get_area (area_stream);
+
+  return meta_screen_cast_stream_src_common_is_cursor_in_stream (src, area);
 }
 
 static void

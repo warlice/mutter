@@ -32,6 +32,7 @@
 #include "backends/meta-monitor.h"
 #include "backends/meta-screen-cast-monitor-stream.h"
 #include "backends/meta-screen-cast-session.h"
+#include "backends/meta-screen-cast-stream-src-common.h"
 #include "backends/meta-stage-private.h"
 #include "clutter/clutter.h"
 #include "clutter/clutter-mutter.h"
@@ -143,48 +144,6 @@ before_stage_painted (MetaStage           *stage,
 
       flags = META_SCREEN_CAST_RECORD_FLAG_NONE;
       meta_screen_cast_stream_src_maybe_record_frame (src, flags);
-    }
-}
-
-static gboolean
-is_cursor_in_stream (MetaScreenCastMonitorStreamSrc *monitor_src)
-{
-  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
-  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
-  MetaCursorRenderer *cursor_renderer =
-    meta_backend_get_cursor_renderer (backend);
-  MetaMonitor *monitor;
-  MetaLogicalMonitor *logical_monitor;
-  MetaRectangle logical_monitor_layout;
-  graphene_rect_t logical_monitor_rect;
-  MetaCursorSprite *cursor_sprite;
-
-  monitor = get_monitor (monitor_src);
-  logical_monitor = meta_monitor_get_logical_monitor (monitor);
-  logical_monitor_layout = meta_logical_monitor_get_layout (logical_monitor);
-  logical_monitor_rect =
-    meta_rectangle_to_graphene_rect (&logical_monitor_layout);
-
-  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
-  if (cursor_sprite)
-    {
-      graphene_rect_t cursor_rect;
-
-      cursor_rect = meta_cursor_renderer_calculate_rect (cursor_renderer,
-                                                         cursor_sprite);
-      return graphene_rect_intersection (&cursor_rect,
-                                         &logical_monitor_rect,
-                                         NULL);
-    }
-  else
-    {
-      MetaCursorTracker *cursor_tracker =
-        meta_backend_get_cursor_tracker (backend);
-      graphene_point_t cursor_position;
-
-      meta_cursor_tracker_get_pointer (cursor_tracker, &cursor_position, NULL);
-      return graphene_rect_contains_point (&logical_monitor_rect,
-                                           &cursor_position);
     }
 }
 
@@ -450,6 +409,9 @@ maybe_paint_cursor_sprite (MetaScreenCastMonitorStreamSrc *monitor_src,
 {
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
   MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
+  MetaMonitor *monitor;
+  MetaLogicalMonitor *logical_monitor;
+  MetaRectangle logical_monitor_layout;
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
   MetaCursorSprite *cursor_sprite;
@@ -462,7 +424,11 @@ maybe_paint_cursor_sprite (MetaScreenCastMonitorStreamSrc *monitor_src,
   cairo_surface_t *surface;
   cairo_t *cr;
 
-  if (!is_cursor_in_stream (monitor_src))
+  monitor = get_monitor (monitor_src);
+  logical_monitor = meta_monitor_get_logical_monitor (monitor);
+  logical_monitor_layout = meta_logical_monitor_get_layout (logical_monitor);
+
+  if (!meta_screen_cast_stream_src_common_is_cursor_in_stream (src, &logical_monitor_layout))
     return;
 
   cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
@@ -666,18 +632,18 @@ meta_screen_cast_monitor_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc
   int x, y;
 
   cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
+  monitor = get_monitor (monitor_src);
+  logical_monitor = meta_monitor_get_logical_monitor (monitor);
+  logical_monitor_layout = meta_logical_monitor_get_layout (logical_monitor);
 
   if (!meta_cursor_tracker_get_pointer_visible (cursor_tracker) ||
-      !is_cursor_in_stream (monitor_src))
+      !meta_screen_cast_stream_src_common_is_cursor_in_stream (src, &logical_monitor_layout))
     {
       meta_screen_cast_stream_src_unset_cursor_metadata (src,
                                                          spa_meta_cursor);
       return;
     }
 
-  monitor = get_monitor (monitor_src);
-  logical_monitor = meta_monitor_get_logical_monitor (monitor);
-  logical_monitor_layout = meta_logical_monitor_get_layout (logical_monitor);
   logical_monitor_rect =
     meta_rectangle_to_graphene_rect (&logical_monitor_layout);
 
@@ -732,8 +698,16 @@ meta_screen_cast_monitor_stream_src_is_cursor_inhibited (MetaHwCursorInhibitor *
 {
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (inhibitor);
+  MetaMonitor *monitor;
+  MetaLogicalMonitor *logical_monitor;
+  MetaRectangle logical_monitor_layout;
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
 
-  return is_cursor_in_stream (monitor_src);
+  monitor = get_monitor (monitor_src);
+  logical_monitor = meta_monitor_get_logical_monitor (monitor);
+  logical_monitor_layout = meta_logical_monitor_get_layout (logical_monitor);
+
+  return meta_screen_cast_stream_src_common_is_cursor_in_stream (src, &logical_monitor_layout);
 }
 
 static void

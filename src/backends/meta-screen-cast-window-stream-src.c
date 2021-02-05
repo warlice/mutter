@@ -25,6 +25,7 @@
 #include "backends/meta-backend-private.h"
 #include "backends/meta-cursor-tracker-private.h"
 #include "backends/meta-screen-cast-session.h"
+#include "backends/meta-screen-cast-stream-src-common.h"
 #include "backends/meta-screen-cast-window.h"
 #include "backends/meta-screen-cast-window-stream.h"
 #include "compositor/meta-window-actor-private.h"
