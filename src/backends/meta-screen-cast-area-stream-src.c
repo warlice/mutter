@@ -300,18 +300,16 @@ meta_screen_cast_area_stream_src_enable (MetaScreenCastStreamSrc *src)
                                 G_CALLBACK (cursor_changed),
                                 area_src);
       meta_cursor_tracker_track_position (cursor_tracker);
-      G_GNUC_FALLTHROUGH;
-    case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
-      add_view_painted_watches (area_src,
-                                META_STAGE_WATCH_AFTER_ACTOR_PAINT);
       break;
     case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
       inhibit_hw_cursor (area_src);
       meta_cursor_tracker_track_position (cursor_tracker);
-      add_view_painted_watches (area_src,
-                                META_STAGE_WATCH_AFTER_ACTOR_PAINT);
+      break;
+    case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
       break;
     }
+
+  on_monitors_changed (monitor_manager, area_src);
 
   g_signal_connect_object (monitor_manager, "monitors-changed-internal",
                            G_CALLBACK (on_monitors_changed),
