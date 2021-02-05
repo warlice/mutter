@@ -32,4 +32,11 @@ void meta_screen_cast_stream_src_common_set_cursor_metadata (MetaScreenCastStrea
                                                              float                    scale,
                                                              gboolean                *cursor_bitmap_invalid);
 
+void meta_screen_cast_stream_src_common_maybe_paint_cursor_sprite (MetaScreenCastStreamSrc *src,
+                                                                   MetaRectangle           *stream_area,
+                                                                   int                      width,
+                                                                   int                      height,
+                                                                   int                      stride,
+                                                                   uint8_t                 *data);
+
 #endif /* META_SCREEN_CAST_STREAM_SRC_COMMON_H */

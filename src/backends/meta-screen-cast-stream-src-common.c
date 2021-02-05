@@ -107,3 +107,68 @@ meta_screen_cast_stream_src_common_set_cursor_metadata (MetaScreenCastStreamSrc 
                                                                 x, y);
     }
 }
+
+void
+meta_screen_cast_stream_src_common_maybe_paint_cursor_sprite (MetaScreenCastStreamSrc *src,
+                                                              MetaRectangle           *stream_area,
+                                                              int                      width,
+                                                              int                      height,
+                                                              int                      stride,
+                                                              uint8_t                 *data)
+{
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
+  MetaCursorRenderer *cursor_renderer =
+    meta_backend_get_cursor_renderer (backend);
+  MetaCursorSprite *cursor_sprite;
+  CoglTexture *sprite_texture;
+  int sprite_width, sprite_height, sprite_stride;
+  float sprite_scale;
+  uint8_t *sprite_data;
+  cairo_surface_t *sprite_surface;
+  graphene_rect_t sprite_rect;
+  cairo_surface_t *surface;
+  cairo_t *cr;
+
+  if (!meta_screen_cast_stream_src_common_is_cursor_in_stream (src, stream_area))
+    return;
+
+  cursor_sprite = meta_cursor_renderer_get_cursor (cursor_renderer);
+  if (!cursor_sprite)
+    return;
+
+  if (meta_cursor_renderer_is_overlay_visible (cursor_renderer))
+    return;
+
+  sprite_rect = meta_cursor_renderer_calculate_rect (cursor_renderer,
+                                                     cursor_sprite);
+  sprite_texture = meta_cursor_sprite_get_cogl_texture (cursor_sprite);
+  sprite_width = cogl_texture_get_width (sprite_texture);
+  sprite_height = cogl_texture_get_height (sprite_texture);
+  sprite_stride = sprite_width * 4;
+  sprite_scale = meta_cursor_sprite_get_texture_scale (cursor_sprite);
+  sprite_data = g_new0 (uint8_t, sprite_stride * sprite_height);
+  cogl_texture_get_data (sprite_texture,
+                         CLUTTER_CAIRO_FORMAT_ARGB32,
+                         sprite_stride,
+                         sprite_data);
+  sprite_surface = cairo_image_surface_create_for_data (sprite_data,
+                                                        CAIRO_FORMAT_ARGB32,
+                                                        sprite_width,
+                                                        sprite_height,
+                                                        sprite_stride);
+  cairo_surface_set_device_scale (sprite_surface, sprite_scale, sprite_scale);
+
+  surface = cairo_image_surface_create_for_data (data,
+                                                 CAIRO_FORMAT_ARGB32,
+                                                 width, height, stride);
+
+  cr = cairo_create (surface);
+  cairo_set_source_surface (cr, sprite_surface,
+                            sprite_rect.origin.x,
+                            sprite_rect.origin.y);
+  cairo_paint (cr);
+  cairo_destroy (cr);
+  cairo_surface_destroy (sprite_surface);
+  cairo_surface_destroy (surface);
+  g_free (sprite_data);
+}
