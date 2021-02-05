@@ -26,6 +26,7 @@
 
 #include "backends/meta-backend-private.h"
 #include "backends/meta-cursor-tracker-private.h"
+#include "backends/meta-logical-monitor.h"
 #include "backends/meta-screen-cast-area-stream.h"
 #include "backends/meta-screen-cast-session.h"
 #include "backends/meta-screen-cast-stream-src-common.h"
@@ -37,6 +38,8 @@
 struct _MetaScreenCastAreaStreamSrc
 {
   MetaScreenCastStreamSrc parent;
+
+  MetaLogicalMonitor *logical_monitor_to_use;
 
   gboolean cursor_bitmap_invalid;
   gboolean hw_cursor_inhibited;
@@ -264,10 +267,40 @@ on_monitors_changed (MetaMonitorManager          *monitor_manager,
 {
   MetaStage *stage = META_STAGE (get_stage (area_src));
   GList *l;
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (area_src);
+  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
+  MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
+  MetaRectangle *area;
+  GList *logical_monitors;
 
   for (l = area_src->watches; l; l = l->next)
     meta_stage_remove_watch (stage, l->data);
   g_clear_pointer (&area_src->watches, g_list_free);
+
+  area = meta_screen_cast_area_stream_get_area (area_stream);
+  logical_monitors = meta_monitor_manager_get_logical_monitors (monitor_manager);
+
+  area_src->logical_monitor_to_use = NULL;
+
+  for (l = logical_monitors; l; l = l->next)
+    {
+      MetaLogicalMonitor *logical_monitor = l->data;
+
+      /* FIXME: Once we have proper frame rate negotiation with pipewire,
+       * compare that to the monitor frame rate and don't apply the optimization
+       * in case the requested frame rate is larger than the monitor rate.
+       */
+      if (meta_rectangle_equal (area, &logical_monitor->rect))
+        {
+          meta_topic (META_DEBUG_SCREEN_CAST,
+                      "Found a logical monitor that's equal to the screen cast "
+                      "area, recording monitor framebuffer instead of painting "
+                      "the stage.");
+
+          area_src->logical_monitor_to_use = logical_monitor;
+          break;
+        }
+    }
 
   add_view_painted_watches (area_src,
                             META_STAGE_WATCH_AFTER_ACTOR_PAINT);
@@ -380,6 +413,19 @@ meta_screen_cast_area_stream_src_record_to_buffer (MetaScreenCastStreamSrc  *src
   ClutterPaintFlag paint_flags = CLUTTER_PAINT_FLAG_CLEAR;
 
   stage = get_stage (area_src);
+
+  if (area_src->logical_monitor_to_use)
+    {
+      return meta_screen_cast_stream_src_common_record_monitor_to_buffer (src,
+                                                                          area_src->logical_monitor_to_use,
+                                                                          stage,
+                                                                          width,
+                                                                          height,
+                                                                          stride,
+                                                                          data,
+                                                                          error);
+    }
+
   area = meta_screen_cast_area_stream_get_area (area_stream);
   scale = meta_screen_cast_area_stream_get_scale (area_stream);
 
@@ -410,6 +456,8 @@ meta_screen_cast_area_stream_src_record_to_framebuffer (MetaScreenCastStreamSrc 
                                                         CoglFramebuffer          *framebuffer,
                                                         GError                  **error)
 {
+  MetaScreenCastAreaStreamSrc *area_src =
+    META_SCREEN_CAST_AREA_STREAM_SRC (src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
   MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
@@ -417,6 +465,14 @@ meta_screen_cast_area_stream_src_record_to_framebuffer (MetaScreenCastStreamSrc 
   MetaRectangle *area;
   float scale;
   ClutterPaintFlag paint_flags = CLUTTER_PAINT_FLAG_CLEAR;
+
+  if (area_src->logical_monitor_to_use)
+    {
+      return meta_screen_cast_stream_src_common_record_monitor_to_framebuffer (src,
+                                                                               area_src->logical_monitor_to_use,
+                                                                               framebuffer,
+                                                                               error);
+    }
 
   stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
   area = meta_screen_cast_area_stream_get_area (area_stream);
