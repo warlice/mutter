@@ -607,6 +607,17 @@ meta_screen_cast_stream_src_maybe_record_frame (MetaScreenCastStreamSrc  *src,
   pw_stream_queue_buffer (priv->pipewire_stream, buffer);
 }
 
+MetaBackend *
+meta_screen_cast_stream_src_get_backend (MetaScreenCastStreamSrc *src)
+{
+  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
+  MetaScreenCastSession *session = meta_screen_cast_stream_get_session (stream);
+  MetaScreenCast *screen_cast =
+    meta_screen_cast_session_get_screen_cast (session);
+
+  return meta_screen_cast_get_backend (screen_cast);
+}
+
 static gboolean
 meta_screen_cast_stream_src_is_enabled (MetaScreenCastStreamSrc *src)
 {

@@ -109,4 +109,6 @@ void meta_screen_cast_stream_src_set_cursor_sprite_metadata (MetaScreenCastStrea
                                                              int                      y,
                                                              float                    scale);
 
+MetaBackend * meta_screen_cast_stream_src_get_backend (MetaScreenCastStreamSrc *src);
+
 #endif /* META_SCREEN_CAST_STREAM_SRC_H */

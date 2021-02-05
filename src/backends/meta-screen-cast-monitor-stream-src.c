@@ -146,22 +146,11 @@ before_stage_painted (MetaStage           *stage,
     }
 }
 
-static MetaBackend *
-get_backend (MetaScreenCastMonitorStreamSrc *monitor_src)
-{
-  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
-  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
-  MetaScreenCastSession *session = meta_screen_cast_stream_get_session (stream);
-  MetaScreenCast *screen_cast =
-    meta_screen_cast_session_get_screen_cast (session);
-
-  return meta_screen_cast_get_backend (screen_cast);
-}
-
 static gboolean
 is_cursor_in_stream (MetaScreenCastMonitorStreamSrc *monitor_src)
 {
-  MetaBackend *backend = get_backend (monitor_src);
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
   MetaMonitor *monitor;
@@ -202,7 +191,8 @@ is_cursor_in_stream (MetaScreenCastMonitorStreamSrc *monitor_src)
 static gboolean
 is_redraw_queued (MetaScreenCastMonitorStreamSrc *monitor_src)
 {
-  MetaBackend *backend = get_backend (monitor_src);
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   ClutterStage *stage = get_stage (monitor_src);
   MetaMonitor *monitor = get_monitor (monitor_src);
@@ -255,12 +245,13 @@ cursor_changed (MetaCursorTracker              *cursor_tracker,
 static void
 inhibit_hw_cursor (MetaScreenCastMonitorStreamSrc *monitor_src)
 {
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
   MetaHwCursorInhibitor *inhibitor;
   MetaBackend *backend;
 
   g_return_if_fail (!monitor_src->hw_cursor_inhibited);
 
-  backend = get_backend (monitor_src);
+  backend = meta_screen_cast_stream_src_get_backend (src);
   inhibitor = META_HW_CURSOR_INHIBITOR (monitor_src);
   meta_backend_add_hw_cursor_inhibitor (backend, inhibitor);
 
@@ -270,12 +261,13 @@ inhibit_hw_cursor (MetaScreenCastMonitorStreamSrc *monitor_src)
 static void
 uninhibit_hw_cursor (MetaScreenCastMonitorStreamSrc *monitor_src)
 {
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
   MetaHwCursorInhibitor *inhibitor;
   MetaBackend *backend;
 
   g_return_if_fail (monitor_src->hw_cursor_inhibited);
 
-  backend = get_backend (monitor_src);
+  backend = meta_screen_cast_stream_src_get_backend (src);
   inhibitor = META_HW_CURSOR_INHIBITOR (monitor_src);
   meta_backend_remove_hw_cursor_inhibitor (backend, inhibitor);
 
@@ -287,7 +279,8 @@ add_view_watches (MetaScreenCastMonitorStreamSrc *monitor_src,
                   MetaStageWatchPhase             watch_phase,
                   MetaStageWatchFunc              callback)
 {
-  MetaBackend *backend = get_backend (monitor_src);
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   ClutterStage *stage;
   MetaStage *meta_stage;
@@ -369,7 +362,7 @@ meta_screen_cast_monitor_stream_src_enable (MetaScreenCastStreamSrc *src)
 {
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (src);
-  MetaBackend *backend = get_backend (monitor_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
@@ -412,7 +405,7 @@ meta_screen_cast_monitor_stream_src_disable (MetaScreenCastStreamSrc *src)
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
-  MetaBackend *backend = get_backend (monitor_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
   ClutterStage *stage;
   MetaStage *meta_stage;
@@ -455,7 +448,8 @@ maybe_paint_cursor_sprite (MetaScreenCastMonitorStreamSrc *monitor_src,
                            int                             stride,
                            uint8_t                        *data)
 {
-  MetaBackend *backend = get_backend (monitor_src);
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (monitor_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
   MetaCursorSprite *cursor_sprite;
@@ -552,7 +546,7 @@ meta_screen_cast_monitor_stream_src_record_to_framebuffer (MetaScreenCastStreamS
 {
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (src);
-  MetaBackend *backend = get_backend (monitor_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   MetaMonitor *monitor;
   MetaLogicalMonitor *logical_monitor;
@@ -618,7 +612,7 @@ meta_screen_cast_monitor_stream_record_follow_up (MetaScreenCastStreamSrc *src)
 {
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (src);
-  MetaBackend *backend = get_backend (monitor_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   ClutterStage *stage = get_stage (monitor_src);
   MetaMonitor *monitor;
@@ -657,7 +651,7 @@ meta_screen_cast_monitor_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc
 {
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (src);
-  MetaBackend *backend = get_backend (monitor_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
   MetaCursorTracker *cursor_tracker =

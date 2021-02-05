@@ -71,18 +71,6 @@ get_stage (MetaScreenCastAreaStreamSrc *area_src)
   return meta_screen_cast_area_stream_get_stage (area_stream);
 }
 
-static MetaBackend *
-get_backend (MetaScreenCastAreaStreamSrc *area_src)
-{
-  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (area_src);
-  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
-  MetaScreenCastSession *session = meta_screen_cast_stream_get_session (stream);
-  MetaScreenCast *screen_cast =
-    meta_screen_cast_session_get_screen_cast (session);
-
-  return meta_screen_cast_get_backend (screen_cast);
-}
-
 static void
 meta_screen_cast_area_stream_src_get_specs (MetaScreenCastStreamSrc *src,
                                             int                     *width,
@@ -108,7 +96,7 @@ is_cursor_in_stream (MetaScreenCastAreaStreamSrc *area_src)
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (area_src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
-  MetaBackend *backend = get_backend (area_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
   MetaRectangle *area;
@@ -186,12 +174,13 @@ cursor_changed (MetaCursorTracker           *cursor_tracker,
 static void
 inhibit_hw_cursor (MetaScreenCastAreaStreamSrc *area_src)
 {
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (area_src);
   MetaHwCursorInhibitor *inhibitor;
   MetaBackend *backend;
 
   g_return_if_fail (!area_src->hw_cursor_inhibited);
 
-  backend = get_backend (area_src);
+  backend = meta_screen_cast_stream_src_get_backend (src);
   inhibitor = META_HW_CURSOR_INHIBITOR (area_src);
   meta_backend_add_hw_cursor_inhibitor (backend, inhibitor);
 
@@ -201,12 +190,13 @@ inhibit_hw_cursor (MetaScreenCastAreaStreamSrc *area_src)
 static void
 uninhibit_hw_cursor (MetaScreenCastAreaStreamSrc *area_src)
 {
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (area_src);
   MetaHwCursorInhibitor *inhibitor;
   MetaBackend *backend;
 
   g_return_if_fail (area_src->hw_cursor_inhibited);
 
-  backend = get_backend (area_src);
+  backend = meta_screen_cast_stream_src_get_backend (src);
   inhibitor = META_HW_CURSOR_INHIBITOR (area_src);
   meta_backend_remove_hw_cursor_inhibitor (backend, inhibitor);
 
@@ -271,7 +261,7 @@ add_view_painted_watches (MetaScreenCastAreaStreamSrc *area_src,
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (area_src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
-  MetaBackend *backend = get_backend (area_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   ClutterStage *stage;
   MetaStage *meta_stage;
@@ -323,7 +313,7 @@ meta_screen_cast_area_stream_src_enable (MetaScreenCastStreamSrc *src)
 {
   MetaScreenCastAreaStreamSrc *area_src =
     META_SCREEN_CAST_AREA_STREAM_SRC (src);
-  MetaBackend *backend = get_backend (area_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
@@ -371,7 +361,7 @@ meta_screen_cast_area_stream_src_disable (MetaScreenCastStreamSrc *src)
   MetaScreenCastAreaStreamSrc *area_src =
     META_SCREEN_CAST_AREA_STREAM_SRC (src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
-  MetaBackend *backend = get_backend (area_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
   ClutterStage *stage;
   MetaStage *meta_stage;
@@ -461,7 +451,7 @@ meta_screen_cast_area_stream_src_record_to_framebuffer (MetaScreenCastStreamSrc 
     META_SCREEN_CAST_AREA_STREAM_SRC (src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
-  MetaBackend *backend = get_backend (area_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   ClutterStage *stage;
   MetaRectangle *area;
   float scale;
@@ -511,7 +501,7 @@ meta_screen_cast_area_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc *s
     META_SCREEN_CAST_AREA_STREAM_SRC (src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaScreenCastAreaStream *area_stream = META_SCREEN_CAST_AREA_STREAM (stream);
-  MetaBackend *backend = get_backend (area_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
   MetaCursorTracker *cursor_tracker =

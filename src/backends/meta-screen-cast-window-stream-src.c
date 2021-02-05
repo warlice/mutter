@@ -47,18 +47,6 @@ G_DEFINE_TYPE (MetaScreenCastWindowStreamSrc,
                meta_screen_cast_window_stream_src,
                META_TYPE_SCREEN_CAST_STREAM_SRC)
 
-static MetaBackend *
-get_backend (MetaScreenCastWindowStreamSrc *window_src)
-{
-  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (window_src);
-  MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
-  MetaScreenCastSession *session = meta_screen_cast_stream_get_session (stream);
-  MetaScreenCast *screen_cast =
-    meta_screen_cast_session_get_screen_cast (session);
-
-  return meta_screen_cast_get_backend (screen_cast);
-}
-
 static MetaScreenCastWindowStream *
 get_window_stream (MetaScreenCastWindowStreamSrc *window_src)
 {
@@ -107,7 +95,7 @@ maybe_draw_cursor_sprite (MetaScreenCastWindowStreamSrc *window_src,
                           MetaRectangle                 *stream_rect)
 {
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (window_src);
-  MetaBackend *backend = get_backend (window_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
   MetaCursorTracker *cursor_tracker =
@@ -186,7 +174,8 @@ maybe_blit_cursor_sprite (MetaScreenCastWindowStreamSrc *window_src,
                           CoglFramebuffer               *framebuffer,
                           MetaRectangle                 *stream_rect)
 {
-  MetaBackend *backend = get_backend (window_src);
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (window_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   CoglContext *cogl_context =
     clutter_backend_get_cogl_context (clutter_get_default_backend ());
   MetaCursorRenderer *cursor_renderer =
@@ -316,7 +305,7 @@ meta_screen_cast_window_stream_src_stop (MetaScreenCastWindowStreamSrc *window_s
 {
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (window_src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
-  MetaBackend *backend = get_backend (window_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
 
   if (!window_src->screen_cast_window)
@@ -394,7 +383,7 @@ meta_screen_cast_window_stream_src_enable (MetaScreenCastStreamSrc *src)
 {
   MetaScreenCastWindowStreamSrc *window_src =
     META_SCREEN_CAST_WINDOW_STREAM_SRC (src);
-  MetaBackend *backend = get_backend (window_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
   MetaWindowActor *window_actor;
   MetaScreenCastStream *stream;
@@ -521,7 +510,7 @@ meta_screen_cast_window_stream_src_set_cursor_metadata (MetaScreenCastStreamSrc 
 {
   MetaScreenCastWindowStreamSrc *window_src =
     META_SCREEN_CAST_WINDOW_STREAM_SRC (src);
-  MetaBackend *backend = get_backend (window_src);
+  MetaBackend *backend = meta_screen_cast_stream_src_get_backend (src);
   MetaCursorRenderer *cursor_renderer =
     meta_backend_get_cursor_renderer (backend);
   MetaCursorTracker *cursor_tracker =
