@@ -528,6 +528,11 @@ bind_to_unix_socket (int      display,
       return -1;
     }
 
+  /* Make the socket writeable to all users, the X11 server does the
+   * authentication itself.
+   */
+  fchmod (fd, ACCESSPERMS);
+
   return fd;
 }
 
