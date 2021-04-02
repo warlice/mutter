@@ -1286,8 +1286,8 @@ constrain_fullscreen (MetaWindow         *window,
                       ConstraintPriority  priority,
                       gboolean            check_only)
 {
-  MetaRectangle min_size, max_size, monitor;
-  gboolean too_big, too_small, constraint_already_satisfied;
+  MetaRectangle monitor;
+  gboolean constraint_already_satisfied;
 
   if (priority > PRIORITY_FULLSCREEN)
     return TRUE;
@@ -1297,12 +1297,6 @@ constrain_fullscreen (MetaWindow         *window,
     return TRUE;
 
   monitor = info->entire_monitor;
-
-  get_size_limits (window, &min_size, &max_size);
-  too_big =   !meta_rectangle_could_fit_rect (&monitor, &min_size);
-  too_small = !meta_rectangle_could_fit_rect (&max_size, &monitor);
-  if (too_big || too_small)
-    return TRUE;
 
   /* Determine whether constraint is already satisfied; exit if it is */
   constraint_already_satisfied =
@@ -1424,9 +1418,17 @@ constrain_size_limits (MetaWindow         *window,
   if (check_only || constraint_already_satisfied)
     return constraint_already_satisfied;
 
-  /*** Enforce constraint ***/
-  new_width  = CLAMP (info->current.width,  min_size.width,  max_size.width);
-  new_height = CLAMP (info->current.height, min_size.height, max_size.height);
+  if (!window->fullscreen)
+    {
+      /*** Enforce constraint ***/
+      new_width  = CLAMP (info->current.width,  min_size.width,  max_size.width);
+      new_height = CLAMP (info->current.height, min_size.height, max_size.height);
+    }
+  else
+    {
+      new_width  = info->current.width;
+      new_height = info->current.height;
+    }
 
   start_rect = get_start_rect_for_resize (window, info);
 
