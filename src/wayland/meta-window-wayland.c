@@ -1064,7 +1064,6 @@ meta_window_wayland_set_min_size (MetaWindow *window,
                                   int         width,
                                   int         height)
 {
-  gint64 new_width, new_height;
   float scale;
 
   meta_topic (META_DEBUG_GEOMETRY, "Window %s sets min size %d x %d",
@@ -1082,13 +1081,8 @@ meta_window_wayland_set_min_size (MetaWindow *window,
   scale = (float) meta_window_wayland_get_geometry_scale (window);
   scale_size (&width, &height, scale);
 
-  new_width = width + (window->custom_frame_extents.left +
-                       window->custom_frame_extents.right);
-  new_height = height + (window->custom_frame_extents.top +
-                         window->custom_frame_extents.bottom);
-
-  window->size_hints.min_width = (int) MIN (new_width, G_MAXINT);
-  window->size_hints.min_height = (int) MIN (new_height, G_MAXINT);
+  window->size_hints.min_width = (int) MIN (width, G_MAXINT);
+  window->size_hints.min_height = (int) MIN (height, G_MAXINT);
   window->size_hints.flags |= PMinSize;
 }
 
@@ -1098,7 +1092,6 @@ meta_window_wayland_set_max_size (MetaWindow *window,
                                   int         height)
 
 {
-  gint64 new_width, new_height;
   float scale;
 
   meta_topic (META_DEBUG_GEOMETRY, "Window %s sets max size %d x %d",
@@ -1116,15 +1109,10 @@ meta_window_wayland_set_max_size (MetaWindow *window,
   scale = (float) meta_window_wayland_get_geometry_scale (window);
   scale_size (&width, &height, scale);
 
-  new_width = width + (window->custom_frame_extents.left +
-                       window->custom_frame_extents.right);
-  new_height = height + (window->custom_frame_extents.top +
-                         window->custom_frame_extents.bottom);
-
-  window->size_hints.max_width = (int) ((new_width > 0 && new_width < G_MAXINT) ?
-                                        new_width : G_MAXINT);
-  window->size_hints.max_height = (int)  ((new_height > 0 && new_height < G_MAXINT) ?
-                                          new_height : G_MAXINT);
+  window->size_hints.max_width = (int) ((width > 0 && width < G_MAXINT) ?
+                                        width : G_MAXINT);
+  window->size_hints.max_height = (int) ((height > 0 && height < G_MAXINT) ?
+                                         height : G_MAXINT);
   window->size_hints.flags |= PMaxSize;
 }
 
