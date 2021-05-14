@@ -1213,25 +1213,39 @@ meta_window_actor_transform_cursor_position (MetaScreenCastWindow *screen_cast_w
   MetaWindowActorPrivate *priv =
     meta_window_actor_get_instance_private (window_actor);
   MetaWindow *window;
+  MetaShapedTexture *stex;
+  double texture_scale;
+  float cursor_texture_scale;
 
   window = priv->window;
   if (!meta_window_has_pointer (window))
     return FALSE;
 
-  if (cursor_sprite &&
-      meta_cursor_sprite_get_cogl_texture (cursor_sprite) &&
-      out_cursor_scale)
+  if (!cursor_sprite ||
+      !meta_cursor_sprite_get_cogl_texture (cursor_sprite))
+    return FALSE;
+
+  stex = meta_surface_actor_get_texture (priv->surface);
+  texture_scale = meta_shaped_texture_get_buffer_scale (stex);
+  cursor_texture_scale = meta_cursor_sprite_get_texture_scale (cursor_sprite);
+
+  if (!meta_is_stage_views_scaled ())
     {
-      MetaShapedTexture *stex;
-      double texture_scale;
-      float cursor_texture_scale;
+      MetaBackend *backend;
+      MetaMonitorManager *monitor_manager;
+      MetaLogicalMonitor *logical_monitor;
 
-      stex = meta_surface_actor_get_texture (priv->surface);
-      texture_scale = meta_shaped_texture_get_buffer_scale (stex);
-      cursor_texture_scale = meta_cursor_sprite_get_texture_scale (cursor_sprite);
+      backend = meta_get_backend ();
+      monitor_manager = meta_backend_get_monitor_manager (backend);
+      logical_monitor = meta_monitor_manager_get_logical_monitor_at (monitor_manager,
+                                                                     (int) cursor_position->x,
+                                                                     (int) cursor_position->y);
 
-      *out_cursor_scale = texture_scale / cursor_texture_scale;
+      cursor_texture_scale /= logical_monitor->scale;
     }
+
+  if (out_cursor_scale)
+    *out_cursor_scale = texture_scale * cursor_texture_scale;
 
   if (out_relative_cursor_position)
     {
@@ -1240,6 +1254,9 @@ meta_window_actor_transform_cursor_position (MetaScreenCastWindow *screen_cast_w
                                            cursor_position->y,
                                            &out_relative_cursor_position->x,
                                            &out_relative_cursor_position->y);
+
+      out_relative_cursor_position->x *= texture_scale;
+      out_relative_cursor_position->y *= texture_scale;
     }
 
   return TRUE;
