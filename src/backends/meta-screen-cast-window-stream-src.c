@@ -28,6 +28,7 @@
 #include "backends/meta-screen-cast-window.h"
 #include "backends/meta-screen-cast-window-stream.h"
 #include "compositor/meta-window-actor-private.h"
+#include "core/window-private.h"
 
 struct _MetaScreenCastWindowStreamSrc
 {
@@ -275,6 +276,34 @@ capture_into (MetaScreenCastWindowStreamSrc *window_src,
   return TRUE;
 }
 
+static float
+calculate_frame_rate (MetaScreenCastWindowStreamSrc *window_src)
+{
+  MetaScreenCastWindowStream *window_stream;
+  MetaWindow *window;
+  MetaLogicalMonitor *logical_monitor;
+  GList *monitors, *l;
+  float max_frame_rate = 0.0;
+
+  window_stream = get_window_stream (window_src);
+  window = meta_screen_cast_window_stream_get_window (window_stream);
+  logical_monitor = meta_window_get_main_logical_monitor (window);
+  monitors = meta_logical_monitor_get_monitors (logical_monitor);
+
+  for (l = monitors; l; l = l->next)
+    {
+      MetaMonitorMode *mode;
+      float frame_rate;
+
+      mode = meta_monitor_get_current_mode (l->data);
+      frame_rate = meta_monitor_mode_get_refresh_rate (mode);
+
+      max_frame_rate = MAX (frame_rate, max_frame_rate);
+    }
+
+  return max_frame_rate;
+}
+
 static gboolean
 meta_screen_cast_window_stream_src_get_specs (MetaScreenCastStreamSrc *src,
                                               int                     *width,
@@ -286,7 +315,7 @@ meta_screen_cast_window_stream_src_get_specs (MetaScreenCastStreamSrc *src,
 
   *width = get_stream_width (window_src);
   *height = get_stream_height (window_src);
-  *frame_rate = 60.0f;
+  *frame_rate = calculate_frame_rate (window_src);
 
   return TRUE;
 }
