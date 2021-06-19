@@ -352,6 +352,8 @@ struct _ClutterScrollEvent
   ClutterInputDevice *device;
   ClutterScrollSource scroll_source;
   ClutterScrollFinishFlags finish_flags;
+
+  double speed;
 };
 
 /**
@@ -823,6 +825,12 @@ gboolean                 clutter_event_get_relative_motion (const ClutterEvent *
                                                             double             *dy,
                                                             double             *dx_unaccel,
                                                             double             *dy_unaccel);
+
+CLUTTER_EXPORT
+void                     clutter_event_set_scroll_speed (ClutterEvent *event,
+                                                         double        speed);
+CLUTTER_EXPORT
+double                   clutter_event_get_scroll_speed (const ClutterEvent *event);
 
 
 G_END_DECLS

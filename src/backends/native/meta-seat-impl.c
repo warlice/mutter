@@ -754,25 +754,34 @@ notify_scroll (ClutterInputDevice       *input_device,
                ClutterScrollFinishFlags  flags,
                gboolean                  emulated)
 {
+  MetaInputDeviceNative *device_native;
   MetaSeatImpl *seat_impl;
   ClutterEvent *event = NULL;
-  double scroll_factor;
+  double scroll_speed, scroll_factor;
+
+  device_native = META_INPUT_DEVICE_NATIVE (input_device);
 
   seat_impl = seat_impl_from_device (input_device);
 
   event = clutter_event_new (CLUTTER_SCROLL);
 
+  scroll_speed = meta_input_device_native_get_scroll_speed_in_impl (device_native);
+
   event->scroll.time = us2ms (time_us);
   meta_xkb_translate_state (event, seat_impl->xkb, seat_impl->button_state);
+
+  event->scroll.direction = CLUTTER_SCROLL_SMOOTH;
 
   /* libinput pointer axis events are in pointer motion coordinate space.
    * To convert to Xi2 discrete step coordinate space, multiply the factor
    * 1/10. */
-  event->scroll.direction = CLUTTER_SCROLL_SMOOTH;
   scroll_factor = 1.0 / DISCRETE_SCROLL_STEP;
+
   clutter_event_set_scroll_delta (event,
                                   scroll_factor * dx,
                                   scroll_factor * dy);
+
+  clutter_event_set_scroll_speed (event, scroll_speed);
 
   event->scroll.x = seat_impl->pointer_x;
   event->scroll.y = seat_impl->pointer_y;
@@ -793,20 +802,28 @@ notify_discrete_scroll (ClutterInputDevice     *input_device,
                         ClutterScrollSource     scroll_source,
                         gboolean                emulated)
 {
+  MetaInputDeviceNative *device_native;
   MetaSeatImpl *seat_impl;
   ClutterEvent *event = NULL;
+  double scroll_speed;
 
   if (direction == CLUTTER_SCROLL_SMOOTH)
     return;
+
+  device_native = META_INPUT_DEVICE_NATIVE (input_device);
 
   seat_impl = seat_impl_from_device (input_device);
 
   event = clutter_event_new (CLUTTER_SCROLL);
 
+  scroll_speed = meta_input_device_native_get_scroll_speed_in_impl (device_native);
+
   event->scroll.time = us2ms (time_us);
   meta_xkb_translate_state (event, seat_impl->xkb, seat_impl->button_state);
 
   event->scroll.direction = direction;
+
+  clutter_event_set_scroll_speed (event, scroll_speed);
 
   event->scroll.x = seat_impl->pointer_x;
   event->scroll.y = seat_impl->pointer_y;

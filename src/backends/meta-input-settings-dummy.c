@@ -47,6 +47,13 @@ meta_input_settings_dummy_set_speed (MetaInputSettings  *settings,
 }
 
 static void
+meta_input_settings_dummy_set_scroll_speed (MetaInputSettings  *settings,
+                                            ClutterInputDevice *device,
+                                            gdouble             speed)
+{
+}
+
+static void
 meta_input_settings_dummy_set_left_handed (MetaInputSettings  *settings,
                                            ClutterInputDevice *device,
                                            gboolean            enabled)
@@ -244,6 +251,8 @@ meta_input_settings_dummy_class_init (MetaInputSettingsDummyClass *klass)
     meta_input_settings_dummy_set_matrix;
   input_settings_class->set_speed =
     meta_input_settings_dummy_set_speed;
+  input_settings_class->set_scroll_speed =
+    meta_input_settings_dummy_set_scroll_speed;
   input_settings_class->set_left_handed =
     meta_input_settings_dummy_set_left_handed;
   input_settings_class->set_tap_enabled =

@@ -1274,6 +1274,7 @@ meta_input_device_native_init (MetaInputDeviceNative *self)
   cairo_matrix_init_identity (&self->device_matrix);
   self->device_aspect_ratio = 0;
   self->output_ratio = 0;
+  self->scroll_speed = 1;
 }
 
 static void
@@ -1596,4 +1597,17 @@ void
 meta_input_device_native_detach_libinput_in_impl (MetaInputDeviceNative *device_native)
 {
   g_clear_pointer (&device_native->libinput_device, libinput_device_unref);
+}
+
+void
+meta_input_device_native_set_scroll_speed_in_impl (MetaInputDeviceNative *device_native,
+                                                   double                 speed)
+{
+  device_native->scroll_speed = speed;
+}
+
+double
+meta_input_device_native_get_scroll_speed_in_impl (MetaInputDeviceNative *device_native)
+{
+  return device_native->scroll_speed;
 }

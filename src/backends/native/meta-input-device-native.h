@@ -84,6 +84,8 @@ struct _MetaInputDeviceNative
   double output_ratio;        /* w:h */
   MetaInputDeviceMapping mapping_mode;
 
+  double scroll_speed;
+
   /* Pointer position */
   float pointer_x;
   float pointer_y;
@@ -158,5 +160,9 @@ void                     meta_input_device_native_get_coords_in_impl (MetaInputD
 gboolean                 meta_input_device_native_process_kbd_a11y_event_in_impl (ClutterInputDevice *device,
                                                                                   ClutterEvent       *event);
 void                     meta_input_device_native_detach_libinput_in_impl (MetaInputDeviceNative *device_native);
+
+void                     meta_input_device_native_set_scroll_speed_in_impl (MetaInputDeviceNative *device_native,
+                                                                            double                 speed);
+double                   meta_input_device_native_get_scroll_speed_in_impl (MetaInputDeviceNative *device_native);
 
 #endif /* META_INPUT_DEVICE_NATIVE_H */
