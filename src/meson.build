@@ -608,6 +608,8 @@ if have_wayland
     'wayland/meta-wayland-text-input-legacy.h',
     'wayland/meta-wayland-touch.c',
     'wayland/meta-wayland-touch.h',
+    'wayland/meta-wayland-transactions.c',
+    'wayland/meta-wayland-transactions.h',
     'wayland/meta-wayland-types.h',
     'wayland/meta-wayland-versions.h',
     'wayland/meta-wayland-viewporter.c',
@@ -868,7 +870,7 @@ wayland_protocol_sources = []
 if have_wayland
   # Format:
   #  - protocol name
-  #  - protocol stability ('private', 'stable' or 'unstable')
+  #  - protocol stage ('private', 'stable', 'staging' or 'unstable')
   #  - protocol version (if stability is 'unstable')
   wayland_protocols = [
     ['gtk-primary-selection', 'private', ],
@@ -883,12 +885,14 @@ if have_wayland
     ['relative-pointer', 'unstable', 'v1', ],
     ['tablet', 'unstable', 'v2', ],
     ['text-input', 'unstable', 'v3', ],
+    ['transactions', 'unstable', 'v1', ],
     ['viewporter', 'stable', ],
     ['xdg-foreign', 'unstable', 'v1', ],
     ['xdg-output', 'unstable', 'v1', ],
     ['xdg-shell', 'unstable', 'v6', ],
     ['xdg-shell', 'stable', ],
     ['xwayland-keyboard-grab', 'unstable', 'v1', ],
+    ['transactions', 'staging', 'v1', ],
   ]
   if have_wayland_eglstream
     wayland_eglstream_protocols_dir = wayland_eglstream_protocols_dep.get_pkgconfig_variable('pkgdatadir')
@@ -911,6 +915,13 @@ if have_wayland
                          '@0@/@1@/@2@.xml'.format(protocol_type,
                          protocol_name,
                          output_base))
+    elif protocol_type == 'staging'
+      protocol_version = p.get(2)
+      output_base = '@0@-@1@'.format(protocol_name, protocol_version)
+      input = join_paths(protocols_dir,
+                         '@0@/@1@/@1@-@2@.xml'.format(protocol_type,
+                         protocol_name,
+                         protocol_version))
     elif protocol_type == 'private'
       output_base = protocol_name
       input = 'wayland/protocol/@0@.xml'.format(protocol_name)

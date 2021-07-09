@@ -54,6 +54,7 @@ typedef struct _MetaWaylandRegion MetaWaylandRegion;
 
 typedef struct _MetaWaylandSurface MetaWaylandSurface;
 typedef struct _MetaWaylandSurfaceState MetaWaylandSurfaceState;
+typedef struct _MetaWaylandTransactions MetaWaylandTransactions;
 
 typedef struct _MetaWaylandOutput MetaWaylandOutput;
 

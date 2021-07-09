@@ -33,6 +33,18 @@
 #include "wayland/meta-wayland-pointer-constraints.h"
 #include "wayland/meta-wayland-types.h"
 
+typedef enum _MetaWaylandStateFencePriority
+{
+  META_WAYLAND_STATE_FENCE_PRIORITY_TOP,
+  META_WAYLAND_STATE_FENCE_PRIORITY_SUBSURFACE,
+  META_WAYLAND_STATE_FENCE_PRIORITY_TRANSACTION,
+  META_WAYLAND_STATE_FENCE_PRIORITY_BASE,
+} MetaWaylandStateFencePriority;
+
+typedef gboolean (* MetaWaylandStateFence) (MetaWaylandSurface      *surface,
+                                            MetaWaylandSurfaceState *state,
+                                            gpointer                 user_data);
+
 #define META_TYPE_WAYLAND_SURFACE (meta_wayland_surface_get_type ())
 G_DECLARE_FINAL_TYPE (MetaWaylandSurface,
                       meta_wayland_surface,
@@ -63,7 +75,6 @@ struct _MetaWaylandSurfaceRoleClass
   gboolean (*is_on_logical_monitor) (MetaWaylandSurfaceRole *surface_role,
                                      MetaLogicalMonitor     *logical_monitor);
   MetaWaylandSurface * (*get_toplevel) (MetaWaylandSurfaceRole *surface_role);
-  gboolean (*should_cache_state) (MetaWaylandSurfaceRole *surface_role);
   void (*notify_subsurface_state_changed) (MetaWaylandSurfaceRole *surface_role);
   void (*get_relative_coordinates) (MetaWaylandSurfaceRole *surface_role,
                                     float                   abs_x,
@@ -181,40 +192,16 @@ struct _MetaWaylandSurface
     MetaWaylandBuffer *buffer;
   } unassigned;
 
+  GList *state_fences;
+
   struct {
     const MetaWaylandDragDestFuncs *funcs;
   } dnd;
 
   /* All the pending state that wl_surface.commit will apply. */
   MetaWaylandSurfaceState *pending_state;
-  /* State cached due to inter-surface synchronization such. */
-  MetaWaylandSurfaceState *cached_state;
 
   /* Extension resources. */
-  struct wl_resource *wl_subsurface;
-
-  /* wl_subsurface stuff. */
-  struct {
-    MetaWaylandSurface *parent;
-    struct wl_listener parent_destroy_listener;
-
-    int x;
-    int y;
-
-    /* When the surface is synchronous, its state will be applied
-     * when the parent is committed. This is done by moving the
-     * "real" pending state below to here when this surface is
-     * committed and in synchronous mode.
-     *
-     * When the parent surface is committed, we apply the pending
-     * state here.
-     */
-    gboolean synchronous;
-
-    int32_t pending_x;
-    int32_t pending_y;
-    gboolean pending_pos;
-  } sub;
 
   /* wp_viewport */
   struct {
@@ -259,10 +246,19 @@ MetaWaylandSurface *meta_wayland_surface_create (MetaWaylandCompositor *composit
 MetaWaylandSurfaceState *
                     meta_wayland_surface_get_pending_state (MetaWaylandSurface *surface);
 
-MetaWaylandSurfaceState *
-                    meta_wayland_surface_ensure_cached_state (MetaWaylandSurface *surface);
+void                meta_wayland_surface_add_state_fence (MetaWaylandSurface            *surface,
+                                                          MetaWaylandStateFencePriority  priority,
+                                                          MetaWaylandStateFence          fence,
+                                                          gpointer                       user_data);
+void                meta_wayland_surface_remove_state_fence (MetaWaylandSurface    *surface,
+                                                             MetaWaylandStateFence  fence);
 
-void                meta_wayland_surface_apply_cached_state (MetaWaylandSurface *surface);
+void                meta_wayland_surface_commit_past_fence (MetaWaylandSurface            *surface,
+                                                            MetaWaylandSurfaceState       *state,
+                                                            MetaWaylandStateFencePriority  from_priority);
+
+void                meta_wayland_surface_state_merge_into (MetaWaylandSurfaceState *from,
+                                                           MetaWaylandSurfaceState *to);
 
 gboolean            meta_wayland_surface_is_effectively_synchronized (MetaWaylandSurface *surface);
 
@@ -301,8 +297,6 @@ void                meta_wayland_surface_update_outputs (MetaWaylandSurface *sur
 MetaWaylandSurface *meta_wayland_surface_get_toplevel (MetaWaylandSurface *surface);
 
 MetaWindow *        meta_wayland_surface_get_window (MetaWaylandSurface *surface);
-
-gboolean            meta_wayland_surface_should_cache_state (MetaWaylandSurface *surface);
 
 MetaWindow *        meta_wayland_surface_get_toplevel_window (MetaWaylandSurface *surface);
 
@@ -361,6 +355,8 @@ int                 meta_wayland_surface_get_height (MetaWaylandSurface *surface
 
 CoglScanout *       meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface *surface,
                                                               CoglOnscreen       *onscreen);
+
+void meta_wayland_surface_state_discard_presentation_feedback (MetaWaylandSurfaceState *state);
 
 static inline GNode *
 meta_get_next_subsurface_sibling (GNode *n)
