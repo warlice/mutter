@@ -138,6 +138,9 @@ G_DEFINE_TYPE (MetaOnscreenNative, meta_onscreen_native,
 
 static GQuark blit_source_quark = 0;
 
+static void
+post_latest_swap (CoglOnscreen *onscreen);
+
 static gboolean
 init_secondary_gpu_state (MetaRendererNative  *renderer_native,
                           CoglOnscreen        *onscreen,
@@ -1292,31 +1295,20 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   CoglRendererEGL *cogl_renderer_egl = cogl_renderer->winsys;
   MetaRendererNativeGpuData *renderer_gpu_data = cogl_renderer_egl->platform;
   MetaRendererNative *renderer_native = renderer_gpu_data->renderer_native;
-  MetaRenderer *renderer = META_RENDERER (renderer_native);
-  MetaBackend *backend = meta_renderer_get_backend (renderer);
-  MetaMonitorManager *monitor_manager =
-    meta_backend_get_monitor_manager (backend);
   MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
   MetaOnscreenNativeSecondaryGpuState *secondary_gpu_state;
   MetaGpuKms *render_gpu = onscreen_native->render_gpu;
   MetaDeviceFile *render_device_file;
   ClutterFrame *frame = user_data;
   MetaFrameNative *frame_native = meta_frame_native_from_frame (frame);
-  MetaKmsUpdate *kms_update;
   CoglOnscreenClass *parent_class;
   gboolean create_timestamp_query = TRUE;
-  MetaPowerSave power_save_mode;
   g_autoptr (GError) error = NULL;
   MetaDrmBufferFlags buffer_flags;
   MetaDrmBufferGbm *buffer_gbm;
   g_autoptr (MetaDrmBuffer) primary_gpu_fb = NULL;
   g_autoptr (MetaDrmBuffer) secondary_gpu_fb = NULL;
   g_autoptr (MetaDrmBuffer) buffer = NULL;
-  MetaKmsCrtc *kms_crtc;
-  MetaKmsDevice *kms_device;
-  int sync_fd;
-
-  COGL_TRACE_SCOPED_ANCHOR (MetaRendererNativePostKmsUpdate);
 
   COGL_TRACE_BEGIN_SCOPED (MetaRendererNativeSwapBuffers,
                            "Meta::OnscreenNative::swap_buffers_with_damage()");
@@ -1421,12 +1413,50 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   clutter_frame_set_result (frame,
                             CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
 
-  kms_crtc = meta_crtc_kms_get_kms_crtc (META_CRTC_KMS (onscreen_native->crtc));
-  kms_device = meta_kms_crtc_get_device (kms_crtc);
+  meta_frame_native_set_damage (frame_native, rectangles, n_rectangles);
+  post_latest_swap (onscreen);
+  return;
+
+swap_failed:
+  frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
+  meta_onscreen_native_notify_frame_complete (onscreen);
+  clutter_frame_set_result (frame, CLUTTER_FRAME_RESULT_IDLE);
+}
+
+static void
+post_latest_swap (CoglOnscreen *onscreen)
+{
+  CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (onscreen);
+  CoglContext *cogl_context = cogl_framebuffer_get_context (framebuffer);
+  CoglRenderer *cogl_renderer = cogl_context->display->renderer;
+  CoglRendererEGL *cogl_renderer_egl = cogl_renderer->winsys;
+  MetaRendererNativeGpuData *renderer_gpu_data = cogl_renderer_egl->platform;
+  MetaRendererNative *renderer_native = renderer_gpu_data->renderer_native;
+  MetaRenderer *renderer = META_RENDERER (renderer_native);
+  MetaBackend *backend = meta_renderer_get_backend (renderer);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+  MetaPowerSave power_save_mode;
+  MetaCrtcKms *crtc_kms = META_CRTC_KMS (onscreen_native->crtc);
+  MetaKmsCrtc *kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
+  MetaKmsDevice *kms_device = meta_kms_crtc_get_device (kms_crtc);
+  MetaKmsUpdate *kms_update;
+  g_autoptr (MetaKmsFeedback) kms_feedback = NULL;
+  ClutterFrame *frame = onscreen_native->next_frame;
+  MetaFrameNative *frame_native;
+  int sync_fd;
+  COGL_TRACE_SCOPED_ANCHOR (MetaRendererNativePostKmsUpdate);
 
   power_save_mode = meta_monitor_manager_get_power_save_mode (monitor_manager);
   if (power_save_mode == META_POWER_SAVE_ON)
     {
+      int n_rectangles;
+      int *rectangles;
+
+      frame_native = meta_frame_native_from_frame (frame);
+      n_rectangles = meta_frame_native_get_damage (frame_native, &rectangles);
+
       kms_update = meta_frame_native_ensure_kms_update (frame_native,
                                                         kms_device);
       meta_kms_update_add_result_listener (kms_update,
@@ -1452,7 +1482,7 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
     }
 
   COGL_TRACE_BEGIN_ANCHORED (MetaRendererNativePostKmsUpdate,
-                             "Meta::OnscreenNative::swap_buffers_with_damage#post_pending_update()");
+                             "Meta::OnscreenNative::post_latest_swap#post_pending_update()");
 
   switch (renderer_gpu_data->mode)
     {
@@ -1511,12 +1541,6 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   meta_kms_update_set_sync_fd (kms_update, sync_fd);
   meta_kms_device_post_update (kms_device, kms_update,
                                META_KMS_UPDATE_FLAG_NONE);
-  return;
-
-swap_failed:
-  frame_info->flags |= COGL_FRAME_INFO_FLAG_SYMBOLIC;
-  meta_onscreen_native_notify_frame_complete (onscreen);
-  clutter_frame_set_result (frame, CLUTTER_FRAME_RESULT_IDLE);
 }
 
 gboolean
