@@ -570,8 +570,10 @@ meta_background_get_color_info (MetaBackground *self,
   g_return_val_if_fail (monitor_index >= 0 && monitor_index < self->n_monitors, FALSE);
 
   texture = self->background_image1 ? meta_background_image_get_texture (self->background_image1) : NULL;
-  if (texture == NULL)
+  if (texture == NULL) {
+    g_warning("texture is null");
     return FALSE;
+  }
 
   meta_display_get_monitor_geometry (self->display, monitor_index, &geometry);
   monitor_scale = meta_display_get_monitor_scale (self->display, monitor_index);
@@ -596,8 +598,10 @@ meta_background_get_color_info (MetaBackground *self,
   rect.width *= monitor_scale;
   rect.height *= monitor_scale;
 
-  if (!get_image_area_by_rect (self, texture, &monitor_area, monitor_scale, &rect, &image_area))
+  if (!get_image_area_by_rect (self, texture, &monitor_area, monitor_scale, &rect, &image_area)) {
+g_warning("BACKGROUND: no image area");
     return FALSE;
+}
 
   return meta_background_image_get_color_info (self->background_image1, &image_area,
                                                mean_luminance, luminance_variance, mean_acutance, acutance_variance);
