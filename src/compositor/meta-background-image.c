@@ -510,12 +510,18 @@ meta_background_image_get_color_info (MetaBackgroundImage   *image,
   if (image_area->width == 0 ||
       image_area->x + image_area->width > texture_width ||
       image_area->x < 0)
+{
+g_warning("BACKGROUND: req out of width");
     return FALSE;
+}
 
   if (image_area->height == 0 ||
       image_area->y + image_area->height > texture_height ||
       image_area->y < 0)
+{
+g_warning("BACKGROUND: req out of height");
     return FALSE;
+}
 
   tiles_rowstride = (texture_width + STATS_TILE_SIZE - 1) / STATS_TILE_SIZE;
 
@@ -524,8 +530,10 @@ meta_background_image_get_color_info (MetaBackgroundImage   *image,
   tile_area.width = (image_area->width + STATS_TILE_SIZE - 1) / STATS_TILE_SIZE;
   tile_area.height = (image_area->height + STATS_TILE_SIZE - 1) / STATS_TILE_SIZE;
 
-  if (tile_area.x + tile_area.width + (tile_area.y + tile_area.height) * tiles_rowstride > image->n_stats_tiles)
+  if (tile_area.x + tile_area.width + (tile_area.y + tile_area.height) * tiles_rowstride > image->n_stats_tiles) {
+g_warning("BACKGROUND: not enough tiles");
     return FALSE;
+}
 
   for (y = tile_area.y; y < tile_area.y + tile_area.height; y++)
     for (x = tile_area.x; x < tile_area.x + tile_area.width; x++)

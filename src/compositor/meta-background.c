@@ -482,8 +482,10 @@ meta_background_get_color_info (MetaBackground *self,
   rect.width *= monitor_scale;
   rect.height *= monitor_scale;
 
-  if (!get_image_area_by_rect (self, texture, &monitor_area, monitor_scale, &rect, &image_area))
+  if (!get_image_area_by_rect (self, texture, &monitor_area, monitor_scale, &rect, &image_area)) {
+g_warning("BACKGROUND: no image area");
     return FALSE;
+}
 
   return meta_background_image_get_color_info (self->background_image, &image_area,
                                                mean_luminance, luminance_variance, mean_acutance, acutance_variance);
