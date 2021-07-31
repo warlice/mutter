@@ -42,6 +42,16 @@
 #define META_REMOTE_DESKTOP_DBUS_PATH "/org/gnome/Mutter/RemoteDesktop"
 #define META_REMOTE_DESKTOP_API_VERSION 1
 
+enum
+{
+  ENABLED,
+  DISABLED,
+
+  N_SIGNALS
+};
+
+static guint signals[N_SIGNALS];
+
 typedef enum _MetaRemoteDesktopDeviceTypes
 {
   META_REMOTE_DESKTOP_DEVICE_TYPE_NONE = 0,
@@ -57,6 +67,7 @@ struct _MetaRemoteDesktop
   MetaBackend *backend;
   int dbus_name_id;
 
+  gboolean is_enabled;
   int inhibit_count;
 
   GHashTable *sessions;
@@ -222,7 +233,13 @@ on_name_acquired (GDBusConnection *connection,
                   const char      *name,
                   gpointer         user_data)
 {
+  MetaRemoteDesktop *remote_desktop = META_REMOTE_DESKTOP (user_data);
+
   g_info ("Acquired name %s", name);
+
+  remote_desktop->is_enabled = TRUE;
+
+  g_signal_emit (remote_desktop, signals[ENABLED], 0);
 }
 
 static void
@@ -230,7 +247,13 @@ on_name_lost (GDBusConnection *connection,
               const char      *name,
               gpointer         user_data)
 {
+  MetaRemoteDesktop *remote_desktop = META_REMOTE_DESKTOP (user_data);
+
   g_warning ("Lost or failed to acquire name %s", name);
+
+  remote_desktop->is_enabled = FALSE;
+
+  g_signal_emit (remote_desktop, signals[DISABLED], 0);
 }
 
 static void
@@ -339,4 +362,23 @@ meta_remote_desktop_class_init (MetaRemoteDesktopClass *klass)
 
   object_class->constructed = meta_remote_desktop_constructed;
   object_class->finalize = meta_remote_desktop_finalize;
+
+  signals[ENABLED] = g_signal_new ("enabled",
+                                   G_TYPE_FROM_CLASS (klass),
+                                   G_SIGNAL_RUN_LAST,
+                                   0,
+                                   NULL, NULL, NULL,
+                                   G_TYPE_NONE, 0);
+  signals[DISABLED] = g_signal_new ("disabled",
+                                   G_TYPE_FROM_CLASS (klass),
+                                   G_SIGNAL_RUN_LAST,
+                                   0,
+                                   NULL, NULL, NULL,
+                                   G_TYPE_NONE, 0);
+}
+
+gboolean
+meta_remote_desktop_is_enabled (MetaRemoteDesktop *remote_desktop)
+{
+  return remote_desktop->is_enabled;
 }
