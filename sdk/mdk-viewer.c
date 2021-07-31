@@ -20,6 +20,10 @@
 #include <glib/gi18n-lib.h>
 #include <gtk/gtk.h>
 
+#include "mdk-context.h"
+#include "mdk-monitor.h"
+#include "mdk-session.h"
+
 static void
 activate_about (GSimpleAction *action,
                 GVariant      *parameter,
@@ -45,7 +49,31 @@ activate_about (GSimpleAction *action,
 }
 
 static void
-activate (GApplication *app)
+on_context_ready (MdkContext   *context,
+                  GApplication *app)
+{
+  GList *windows;
+  GtkWindow *window;
+
+  windows = gtk_application_get_windows (GTK_APPLICATION (app));
+  g_warn_if_fail (g_list_length (windows) == 1);
+
+  window = windows->data;
+
+  gtk_window_set_child (window, GTK_WIDGET (mdk_monitor_new (context)));
+}
+
+static void
+on_context_error (MdkContext   *context,
+                  GError       *error,
+                  GApplication *app)
+{
+  g_warning ("Context got an error: %s", error->message);
+}
+
+static void
+activate (GApplication *app,
+          MdkContext   *context)
 {
   g_autoptr (GtkBuilder) builder = NULL;
   GtkWidget *window;
@@ -53,8 +81,13 @@ activate (GApplication *app)
   builder = gtk_builder_new_from_resource ("/ui/mdk-viewer.ui");
 
   window = GTK_WIDGET (gtk_builder_get_object (builder, "window"));
+  gtk_window_set_resizable (GTK_WINDOW (window), FALSE);
   gtk_application_add_window (GTK_APPLICATION (app), GTK_WINDOW (window));
   gtk_widget_show (window);
+
+  g_signal_connect (context, "ready", G_CALLBACK (on_context_ready), app);
+  g_signal_connect (context, "error", G_CALLBACK (on_context_error), app);
+  mdk_context_activate (context);
 }
 
 static void
@@ -85,6 +118,7 @@ int
 main (int    argc,
       char **argv)
 {
+  g_autoptr (MdkContext) context = NULL;
   g_autoptr (GtkApplication) app = NULL;
   static GActionEntry app_entries[] = {
     { "about", activate_about, NULL, NULL, NULL },
@@ -95,9 +129,22 @@ main (int    argc,
   } accels[] = {
     { "app.about", { "F1", NULL } },
   };
+  gboolean is_sdk;
+  GOptionEntry options[] = {
+    {
+      "sdk", 0, 0, G_OPTION_ARG_NONE,
+      &is_sdk,
+      N_("Used by mutter's SDK mode"),
+      NULL
+    },
+    { NULL }
+  };
   int i;
 
   g_set_prgname ("org.gnome.Mutter.Sdk");
+
+  context = mdk_context_new ();
+
   app = gtk_application_new ("org.gnome.Mutter.Sdk",
                              G_APPLICATION_NON_UNIQUE);
 
@@ -114,8 +161,9 @@ main (int    argc,
   g_application_add_main_option (G_APPLICATION (app),
                                  "version", 0, 0, G_OPTION_ARG_NONE,
                                  "Show version", NULL);
+  g_application_add_main_option_entries (G_APPLICATION (app), options);
 
-  g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);
+  g_signal_connect (app, "activate", G_CALLBACK (activate), context);
   g_signal_connect (app, "handle-local-options", G_CALLBACK (local_options), NULL);
 
   g_application_run (G_APPLICATION (app), argc, argv);
