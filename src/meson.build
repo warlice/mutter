@@ -767,6 +767,8 @@ if have_native_backend
     'backends/native/meta-virtual-monitor-native.h',
     'backends/native/meta-xkb-utils.c',
     'backends/native/meta-xkb-utils.h',
+    'core/meta-sdk.c',
+    'core/meta-sdk.h',
     'compositor/meta-compositor-native.c',
     'compositor/meta-compositor-native.h',
   ]
