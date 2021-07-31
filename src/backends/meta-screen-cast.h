@@ -66,4 +66,6 @@ CoglDmaBufHandle * meta_screen_cast_create_dma_buf_handle (MetaScreenCast *scree
 MetaScreenCast * meta_screen_cast_new (MetaBackend            *backend,
                                        MetaDbusSessionWatcher *session_watcher);
 
+gboolean meta_screen_cast_is_enabled (MetaScreenCast *screen_cast);
+
 #endif /* META_SCREEN_CAST_H */

@@ -34,12 +34,23 @@
 #define META_SCREEN_CAST_DBUS_PATH "/org/gnome/Mutter/ScreenCast"
 #define META_SCREEN_CAST_API_VERSION 4
 
+enum
+{
+  ENABLED,
+  DISABLED,
+
+  N_SIGNALS
+};
+
+static guint signals[N_SIGNALS];
+
 struct _MetaScreenCast
 {
   MetaDBusScreenCastSkeleton parent;
 
   int dbus_name_id;
 
+  gboolean is_enabled;
   int inhibit_count;
 
   GList *sessions;
@@ -288,7 +299,13 @@ on_name_acquired (GDBusConnection *connection,
                   const char      *name,
                   gpointer         user_data)
 {
+  MetaScreenCast *screen_cast = META_SCREEN_CAST (user_data);
+
   g_info ("Acquired name %s", name);
+
+  screen_cast->is_enabled = TRUE;
+
+  g_signal_emit (screen_cast, signals[ENABLED], 0);
 }
 
 static void
@@ -296,7 +313,13 @@ on_name_lost (GDBusConnection *connection,
               const char      *name,
               gpointer         user_data)
 {
+  MetaScreenCast *screen_cast = META_SCREEN_CAST (user_data);
+
   g_warning ("Lost or failed to acquire name %s", name);
+
+  screen_cast->is_enabled = FALSE;
+
+  g_signal_emit (screen_cast, signals[DISABLED], 0);
 }
 
 static void
@@ -382,4 +405,23 @@ meta_screen_cast_class_init (MetaScreenCastClass *klass)
 
   object_class->constructed = meta_screen_cast_constructed;
   object_class->finalize = meta_screen_cast_finalize;
+
+  signals[ENABLED] = g_signal_new ("enabled",
+                                   G_TYPE_FROM_CLASS (klass),
+                                   G_SIGNAL_RUN_LAST,
+                                   0,
+                                   NULL, NULL, NULL,
+                                   G_TYPE_NONE, 0);
+  signals[DISABLED] = g_signal_new ("disabled",
+                                   G_TYPE_FROM_CLASS (klass),
+                                   G_SIGNAL_RUN_LAST,
+                                   0,
+                                   NULL, NULL, NULL,
+                                   G_TYPE_NONE, 0);
+}
+
+gboolean
+meta_screen_cast_is_enabled (MetaScreenCast *screen_cast)
+{
+  return screen_cast->is_enabled;
 }
