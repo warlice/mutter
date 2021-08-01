@@ -134,6 +134,35 @@ click_released_cb (GtkGestureClick *gesture,
 }
 
 static void
+maybe_release_all_buttons (MdkMonitor *monitor)
+{
+  GtkWindow *window;
+
+  window = GTK_WINDOW (gtk_widget_get_root (GTK_WIDGET (monitor)));
+
+  if (!gtk_widget_has_focus (GTK_WIDGET (monitor)) ||
+      !gtk_window_is_active (window))
+    {
+      if (monitor->pointer)
+        mdk_pointer_release_all (monitor->pointer);
+    }
+}
+
+static void
+is_active_changed (GtkWindow   *window,
+                   GParamSpec  *pspec,
+                   MdkMonitor  *monitor)
+{
+  maybe_release_all_buttons (monitor);
+}
+
+static void
+has_focus_changed (GtkWidget *widget)
+{
+  maybe_release_all_buttons (MDK_MONITOR (widget));
+}
+
+static void
 mdk_monitor_realize (GtkWidget *widget)
 {
   MdkMonitor *monitor = MDK_MONITOR (widget);
@@ -161,16 +190,26 @@ static void
 mdk_monitor_map (GtkWidget *widget)
 {
   MdkMonitor *monitor = MDK_MONITOR (widget);
+  GtkWindow *window;
 
   GTK_WIDGET_CLASS (mdk_monitor_parent_class)->map (widget);
 
   mdk_stream_map (monitor->stream);
+
+  window = GTK_WINDOW (gtk_widget_get_root (GTK_WIDGET (monitor)));
+  g_signal_connect_object (window, "notify::is-active",
+                           G_CALLBACK (is_active_changed),
+                           monitor, 0);
 }
 
 static void
 mdk_monitor_unmap (GtkWidget *widget)
 {
   MdkMonitor *monitor = MDK_MONITOR (widget);
+  GtkWindow *window;
+
+  window = GTK_WINDOW (gtk_widget_get_root (GTK_WIDGET (monitor)));
+  g_signal_handlers_disconnect_by_func (window, is_active_changed, monitor);
 
   mdk_stream_unmap (monitor->stream);
 
@@ -242,6 +281,10 @@ mdk_monitor_init (MdkMonitor *monitor)
                     G_CALLBACK (click_released_cb), monitor);
   gtk_widget_add_controller (GTK_WIDGET (monitor),
                              GTK_EVENT_CONTROLLER (click_gesture));
+
+  g_signal_connect (monitor, "notify::has-focus",
+                    G_CALLBACK (has_focus_changed),
+                    NULL);
 
   none_cursor = gdk_cursor_new_from_name ("none", NULL);
   gtk_widget_set_cursor (GTK_WIDGET (monitor), none_cursor);
