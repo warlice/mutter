@@ -39,4 +39,7 @@ const char * mdk_session_create_monitor_finish (MdkSession    *session,
 
 MdkContext * mdk_session_get_context (MdkSession *session);
 
+MdkPointer * mdk_session_create_pointer (MdkSession *session,
+                                         MdkMonitor *monitor);
+
 #endif /* MDK_SESSION_H */

@@ -7,6 +7,8 @@ sdk_sources = [
   'mdk-monitor.h',
   'mdk-pipewire.c',
   'mdk-pipewire.h',
+  'mdk-pointer.c',
+  'mdk-pointer.h',
   'mdk-session.c',
   'mdk-session.h',
   'mdk-stream.c',

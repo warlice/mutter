@@ -19,8 +19,12 @@
 #define MDK_TYPES_H
 
 typedef struct _MdkContext MdkContext;
+typedef struct _MdkMonitor MdkMonitor;
 typedef struct _MdkPipewire MdkPipewire;
+typedef struct _MdkPointer MdkPointer;
 typedef struct _MdkSession MdkSession;
 typedef struct _MdkStream MdkStream;
+
+typedef struct _MdkDBusRemoteDesktopSession MdkDBusRemoteDesktopSession;
 
 #endif /* MDK_TYPES_H */
