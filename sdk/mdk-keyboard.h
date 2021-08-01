@@ -15,17 +15,25 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MDK_TYPES_H
-#define MDK_TYPES_H
+#ifndef MDK_KEYBOARD_H
+#define MDK_KEYBOARD_H
 
-typedef struct _MdkContext MdkContext;
-typedef struct _MdkKeyboard MdkKeyboard;
-typedef struct _MdkMonitor MdkMonitor;
-typedef struct _MdkPipewire MdkPipewire;
-typedef struct _MdkPointer MdkPointer;
-typedef struct _MdkSession MdkSession;
-typedef struct _MdkStream MdkStream;
+#include <glib-object.h>
 
-typedef struct _MdkDBusRemoteDesktopSession MdkDBusRemoteDesktopSession;
+#include "mdk-types.h"
 
-#endif /* MDK_TYPES_H */
+#define MDK_TYPE_KEYBOARD (mdk_keyboard_get_type ())
+G_DECLARE_FINAL_TYPE (MdkKeyboard, mdk_keyboard,
+                      MDK, KEYBOARD,
+                      GObject)
+
+MdkKeyboard * mdk_keyboard_new (MdkSession                  *session,
+                                MdkDBusRemoteDesktopSession *session_proxy);
+
+void mdk_keyboard_release_all (MdkKeyboard *keyboard);
+
+void mdk_keyboard_notify_key (MdkKeyboard *keyboard,
+                              int32_t     key,
+                              int         state);
+
+#endif /* MDK_KEYBOARD_H */

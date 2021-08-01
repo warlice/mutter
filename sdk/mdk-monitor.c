@@ -23,6 +23,7 @@
 #include <linux/input-event-codes.h>
 
 #include "mdk-context.h"
+#include "mdk-keyboard.h"
 #include "mdk-pointer.h"
 #include "mdk-session.h"
 #include "mdk-stream.h"
@@ -42,6 +43,7 @@ struct _MdkMonitor
   MdkStream *stream;
 
   MdkPointer *pointer;
+  MdkKeyboard *keyboard;
 };
 
 G_DEFINE_TYPE (MdkMonitor, mdk_monitor, GTK_TYPE_BOX)
@@ -56,6 +58,18 @@ ensure_pointer (MdkMonitor *monitor)
 
   monitor->pointer = mdk_session_create_pointer (session, monitor);
   return monitor->pointer;
+}
+
+static MdkKeyboard *
+ensure_keyboard (MdkMonitor *monitor)
+{
+  MdkSession *session = mdk_context_get_session (monitor->context);
+
+  if (monitor->keyboard)
+    return monitor->keyboard;
+
+  monitor->keyboard = mdk_session_create_keyboard (session);
+  return monitor->keyboard;
 }
 
 static void
@@ -133,8 +147,48 @@ click_released_cb (GtkGestureClick *gesture,
   gtk_gesture_set_state (GTK_GESTURE (gesture), GTK_EVENT_SEQUENCE_CLAIMED);
 }
 
+static uint32_t
+gdk_key_code_to_evdev (unsigned int gtk_key_code)
+{
+  return gtk_key_code - 8;
+}
+
+static gboolean
+key_pressed_cb (GtkEventControllerKey *controller,
+                unsigned int           keyval,
+                unsigned int           keycode,
+                GdkModifierType        state,
+                MdkMonitor            *monitor)
+{
+  MdkKeyboard *keyboard;
+  uint32_t evdev_key_code;
+
+  evdev_key_code = gdk_key_code_to_evdev (keycode);
+  keyboard = ensure_keyboard (monitor);
+  mdk_keyboard_notify_key (keyboard, evdev_key_code, 1);
+
+  return TRUE;
+}
+
+static gboolean
+key_released_cb (GtkEventControllerKey *controller,
+                 unsigned int           keyval,
+                 unsigned int           keycode,
+                 GdkModifierType        state,
+                 MdkMonitor            *monitor)
+{
+  MdkKeyboard *keyboard;
+  uint32_t evdev_key_code;
+
+  evdev_key_code = gdk_key_code_to_evdev (keycode);
+  keyboard = ensure_keyboard (monitor);
+  mdk_keyboard_notify_key (keyboard, evdev_key_code, 0);
+
+  return TRUE;
+}
+
 static void
-maybe_release_all_buttons (MdkMonitor *monitor)
+maybe_release_all_keys_and_buttons (MdkMonitor *monitor)
 {
   GtkWindow *window;
 
@@ -145,6 +199,8 @@ maybe_release_all_buttons (MdkMonitor *monitor)
     {
       if (monitor->pointer)
         mdk_pointer_release_all (monitor->pointer);
+      if (monitor->keyboard)
+        mdk_keyboard_release_all (monitor->keyboard);
     }
 }
 
@@ -153,13 +209,13 @@ is_active_changed (GtkWindow   *window,
                    GParamSpec  *pspec,
                    MdkMonitor  *monitor)
 {
-  maybe_release_all_buttons (monitor);
+  maybe_release_all_keys_and_buttons (monitor);
 }
 
 static void
 has_focus_changed (GtkWidget *widget)
 {
-  maybe_release_all_buttons (MDK_MONITOR (widget));
+  maybe_release_all_keys_and_buttons (MDK_MONITOR (widget));
 }
 
 static void
@@ -234,6 +290,7 @@ mdk_monitor_finalize (GObject *object)
 {
   MdkMonitor *monitor = MDK_MONITOR (object);
 
+  g_clear_object (&monitor->keyboard);
   g_clear_object (&monitor->pointer);
   g_clear_object (&monitor->stream);
 
@@ -260,6 +317,7 @@ mdk_monitor_init (MdkMonitor *monitor)
 {
   GtkEventController *motion_controller;
   GtkGesture *click_gesture;
+  GtkEventController *key_controller;
   g_autoptr (GdkCursor) none_cursor = NULL;
 
   motion_controller = gtk_event_controller_motion_new ();
@@ -281,6 +339,13 @@ mdk_monitor_init (MdkMonitor *monitor)
                     G_CALLBACK (click_released_cb), monitor);
   gtk_widget_add_controller (GTK_WIDGET (monitor),
                              GTK_EVENT_CONTROLLER (click_gesture));
+
+  key_controller = gtk_event_controller_key_new () ;
+  g_signal_connect (key_controller, "key-pressed",
+                    G_CALLBACK (key_pressed_cb), monitor);
+  g_signal_connect (key_controller, "key-released",
+                    G_CALLBACK (key_released_cb), monitor);
+  gtk_widget_add_controller (GTK_WIDGET (monitor), key_controller);
 
   g_signal_connect (monitor, "notify::has-focus",
                     G_CALLBACK (has_focus_changed),

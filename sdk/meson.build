@@ -3,6 +3,8 @@ epoxy_dep = dependency('epoxy')
 sdk_sources = [
   'mdk-context.c',
   'mdk-context.h',
+  'mdk-keyboard.c',
+  'mdk-keyboard.h',
   'mdk-monitor.c',
   'mdk-monitor.h',
   'mdk-pipewire.c',
