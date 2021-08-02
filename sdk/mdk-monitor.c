@@ -147,6 +147,52 @@ click_released_cb (GtkGestureClick *gesture,
   gtk_gesture_set_state (GTK_GESTURE (gesture), GTK_EVENT_SEQUENCE_CLAIMED);
 }
 
+static gboolean
+scroll_cb (GtkEventControllerScroll *controller,
+           double                    dx,
+           double                    dy,
+           MdkMonitor               *monitor)
+{
+  MdkPointer *pointer;
+  GdkEvent *event;
+  GdkScrollDirection direction;
+
+  event =
+    gtk_event_controller_get_current_event (GTK_EVENT_CONTROLLER (controller));
+
+  pointer = ensure_pointer (monitor);
+
+  direction = gdk_scroll_event_get_direction (event);
+  switch (direction)
+    {
+    case GDK_SCROLL_UP:
+    case GDK_SCROLL_DOWN:
+    case GDK_SCROLL_LEFT:
+    case GDK_SCROLL_RIGHT:
+      mdk_pointer_notify_scroll_discrete (pointer, direction);
+      break;
+    case GDK_SCROLL_SMOOTH:
+      mdk_pointer_notify_scroll (pointer, dx * 10.0, dy * 10.0);
+      break;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+scroll_end_cb (GtkEventControllerScroll *controller,
+               double                    dx,
+               double                    dy,
+               MdkMonitor               *monitor)
+{
+  MdkPointer *pointer;
+
+  pointer = ensure_pointer (monitor);
+  mdk_pointer_notify_scroll_end (pointer);
+
+  return TRUE;
+}
+
 static uint32_t
 gdk_key_code_to_evdev (unsigned int gtk_key_code)
 {
@@ -317,6 +363,7 @@ mdk_monitor_init (MdkMonitor *monitor)
 {
   GtkEventController *motion_controller;
   GtkGesture *click_gesture;
+  GtkEventController *scroll_controller;
   GtkEventController *key_controller;
   g_autoptr (GdkCursor) none_cursor = NULL;
 
@@ -339,6 +386,15 @@ mdk_monitor_init (MdkMonitor *monitor)
                     G_CALLBACK (click_released_cb), monitor);
   gtk_widget_add_controller (GTK_WIDGET (monitor),
                              GTK_EVENT_CONTROLLER (click_gesture));
+
+  scroll_controller =
+    gtk_event_controller_scroll_new (GTK_EVENT_CONTROLLER_SCROLL_BOTH_AXES);
+  g_signal_connect (scroll_controller, "scroll",
+                    G_CALLBACK (scroll_cb), monitor);
+  g_signal_connect (scroll_controller, "scroll-end",
+                    G_CALLBACK (scroll_end_cb), monitor);
+  gtk_widget_add_controller (GTK_WIDGET (monitor),
+                             GTK_EVENT_CONTROLLER (scroll_controller));
 
   key_controller = gtk_event_controller_key_new () ;
   g_signal_connect (key_controller, "key-pressed",
