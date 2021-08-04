@@ -44,4 +44,7 @@ MdkPointer * mdk_session_create_pointer (MdkSession *session,
 
 MdkKeyboard * mdk_session_create_keyboard (MdkSession *session);
 
+MdkTouch * mdk_session_create_touch (MdkSession *session,
+                                     MdkMonitor *monitor);
+
 #endif /* MDK_SESSION_H */
