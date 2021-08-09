@@ -50,7 +50,7 @@ MetaWaylandDmaBufBuffer *
 meta_wayland_dma_buf_from_buffer (MetaWaylandBuffer *buffer);
 
 CoglScanout *
-meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandDmaBufBuffer *dma_buf,
-                                          CoglOnscreen            *onscreen);
+meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer *buffer,
+                                          CoglOnscreen      *onscreen);
 
 #endif /* META_WAYLAND_DMA_BUF_H */

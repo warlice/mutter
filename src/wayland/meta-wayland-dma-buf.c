@@ -266,10 +266,11 @@ import_scanout_gbm_bo (MetaWaylandDmaBufBuffer *dma_buf,
 #endif
 
 CoglScanout *
-meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandDmaBufBuffer *dma_buf,
-                                          CoglOnscreen            *onscreen)
+meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer *buffer,
+                                          CoglOnscreen      *onscreen)
 {
 #ifdef HAVE_NATIVE_BACKEND
+  MetaWaylandDmaBufBuffer *dma_buf;
   MetaBackend *backend = meta_get_backend ();
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   MetaRendererNative *renderer_native = META_RENDERER_NATIVE (renderer);
@@ -283,6 +284,10 @@ meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandDmaBufBuffer *dma_buf,
   gboolean use_modifier;
   g_autoptr (GError) error = NULL;
   MetaDrmBufferGbm *fb;
+
+  dma_buf = meta_wayland_dma_buf_from_buffer (buffer);
+  if (!dma_buf)
+    return NULL;
 
   for (n_planes = 0; n_planes < META_WAYLAND_DMA_BUF_MAX_FDS; n_planes++)
     {
