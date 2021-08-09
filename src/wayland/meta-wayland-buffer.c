@@ -687,47 +687,43 @@ try_acquire_egl_image_scanout (MetaWaylandBuffer *buffer,
   MetaBackend *backend = meta_get_backend ();
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   MetaRendererNative *renderer_native = META_RENDERER_NATIVE (renderer);
-  MetaGpuKms *gpu_kms;
   MetaDeviceFile *device_file;
-  struct gbm_device *gbm_device;
-  struct gbm_bo *gbm_bo;
   uint32_t drm_format;
   uint64_t drm_modifier;
   uint32_t stride;
   MetaDrmBufferGbm *fb;
   g_autoptr (GError) error = NULL;
 
-  gpu_kms = meta_renderer_native_get_primary_gpu (renderer_native);
-  device_file = meta_renderer_native_get_primary_device_file (renderer_native);
-  gbm_device = meta_gbm_device_from_gpu (gpu_kms);
-
-  gbm_bo = gbm_bo_import (gbm_device,
-                          GBM_BO_IMPORT_WL_BUFFER, buffer->resource,
-                          GBM_BO_USE_SCANOUT);
-  if (!gbm_bo)
-    return NULL;
-
-  drm_format = gbm_bo_get_format (gbm_bo);
-  drm_modifier = gbm_bo_get_modifier (gbm_bo);
-  stride = gbm_bo_get_stride (gbm_bo);
-  if (!meta_onscreen_native_is_buffer_scanout_compatible (onscreen,
-                                                          drm_format,
-                                                          drm_modifier,
-                                                          stride))
+  if (!buffer->gbm_bo)
     {
-      gbm_bo_destroy (gbm_bo);
-      return NULL;
+      MetaGpuKms *gpu_kms;
+      struct gbm_device *gbm_device;
+
+      gpu_kms = meta_renderer_native_get_primary_gpu (renderer_native);
+      gbm_device = meta_gbm_device_from_gpu (gpu_kms);
+
+      buffer->gbm_bo = gbm_bo_import (gbm_device, GBM_BO_IMPORT_WL_BUFFER,
+                                      buffer->resource, GBM_BO_USE_SCANOUT);
+      if (!buffer->gbm_bo)
+        return NULL;
     }
 
+  drm_format = gbm_bo_get_format (buffer->gbm_bo);
+  drm_modifier = gbm_bo_get_modifier (buffer->gbm_bo);
+  stride = gbm_bo_get_stride (buffer->gbm_bo);
+  if (!meta_onscreen_native_is_buffer_scanout_compatible (
+      onscreen, drm_format, drm_modifier, stride))
+    return NULL;
+
+  device_file = meta_renderer_native_get_primary_device_file (renderer_native);
   fb = meta_drm_buffer_gbm_new_take (device_file,
+                                     buffer,
                                      NULL,
-                                     gbm_bo,
                                      drm_modifier != DRM_FORMAT_MOD_INVALID,
                                      &error);
   if (!fb)
     {
       g_debug ("Failed to create scanout buffer: %s", error->message);
-      gbm_bo_destroy (gbm_bo);
       return NULL;
     }
 
