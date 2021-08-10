@@ -55,6 +55,7 @@ struct _MetaWaylandBuffer
 
 #ifdef HAVE_NATIVE_BACKEND
   struct gbm_bo *gbm_bo;
+  CoglOffscreen *cogl_fbo;
 #endif
 
   MetaWaylandBufferType type;

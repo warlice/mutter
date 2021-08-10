@@ -244,6 +244,10 @@ cogl_fbo_from_buffer (MetaDrmBufferGbm *buffer_gbm,
   int dmabuf_fd = -1;
   uint32_t i;
 
+  if (buffer_gbm->wayland_buffer &&
+      buffer_gbm->wayland_buffer->cogl_fbo)
+    return g_object_ref (buffer_gbm->wayland_buffer->cogl_fbo);
+
   gbm_bo = meta_drm_buffer_gbm_get_bo (buffer_gbm);
   if (!gbm_bo)
     return NULL;
@@ -309,6 +313,9 @@ cogl_fbo_from_buffer (MetaDrmBufferGbm *buffer_gbm,
 
   cogl_fbo = cogl_offscreen_new_with_texture (COGL_TEXTURE (cogl_tex));
   cogl_object_unref (cogl_tex);
+
+  if (buffer_gbm->wayland_buffer)
+    buffer_gbm->wayland_buffer->cogl_fbo = g_object_ref (cogl_fbo);
 
 out:
   close (dmabuf_fd);

@@ -785,6 +785,9 @@ meta_wayland_buffer_finalize (GObject *object)
     gbm_bo_destroy (buffer->gbm_bo);
 #endif
 
+#ifdef HAVE_NATIVE_BACKEND
+  g_clear_object (&buffer->cogl_fbo);
+#endif
   g_clear_pointer (&buffer->egl_image.texture, cogl_object_unref);
 #ifdef HAVE_WAYLAND_EGLSTREAM
   g_clear_pointer (&buffer->egl_stream.texture, cogl_object_unref);
