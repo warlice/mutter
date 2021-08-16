@@ -334,34 +334,22 @@ meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
                                          GError          **error)
 {
   MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (scanout);
-  CoglOffscreen *cogl_fbo;
-  gboolean result;
+  g_autoptr (CoglOffscreen) cogl_fbo = NULL;
 
   cogl_fbo = cogl_fbo_from_buffer (buffer_gbm, error);
   if (!cogl_fbo)
-    {
-      result = FALSE;
-      goto out;
-    }
+    return FALSE;
 
   if (!cogl_framebuffer_allocate (COGL_FRAMEBUFFER (cogl_fbo), error))
-    {
-      result = FALSE;
-      goto out;
-    }
+    return FALSE;
 
-  result = cogl_blit_framebuffer (COGL_FRAMEBUFFER (cogl_fbo),
-                                  framebuffer,
-                                  0, 0,
-                                  x, y,
-                                  gbm_bo_get_width (buffer_gbm->bo),
-                                  gbm_bo_get_height (buffer_gbm->bo),
-                                  error);
-
-out:
-  g_clear_object (&cogl_fbo);
-
-  return result;
+  return cogl_blit_framebuffer (COGL_FRAMEBUFFER (cogl_fbo),
+                                framebuffer,
+                                0, 0,
+                                x, y,
+                                gbm_bo_get_width (buffer_gbm->bo),
+                                gbm_bo_get_height (buffer_gbm->bo),
+                                error);
 }
 
 static void
