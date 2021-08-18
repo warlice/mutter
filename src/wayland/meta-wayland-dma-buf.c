@@ -314,6 +314,7 @@ meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer *buffer,
     }
 
   fb = meta_drm_buffer_gbm_new_take (device_file,
+                                     NULL,
                                      gbm_bo,
                                      use_modifier,
                                      &error);

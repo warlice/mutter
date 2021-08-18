@@ -1293,7 +1293,8 @@ load_cursor_sprite_gbm_buffer_for_gpu (MetaCursorRendererNative *native,
           return;
         }
 
-      buffer_gbm = meta_drm_buffer_gbm_new_take (device_file, bo, FALSE, &error);
+      buffer_gbm = meta_drm_buffer_gbm_new_take (device_file, NULL, bo, FALSE,
+                                                 &error);
       if (!buffer_gbm)
         {
           meta_warning ("Failed to create DRM buffer wrapper: %s",
@@ -1633,7 +1634,8 @@ realize_cursor_sprite_from_wl_buffer_for_gpu (MetaCursorRenderer      *renderer,
 
       unset_can_preprocess (cursor_sprite);
 
-      buffer_gbm = meta_drm_buffer_gbm_new_take (device_file, bo, FALSE, &error);
+      buffer_gbm = meta_drm_buffer_gbm_new_take (device_file, NULL, bo, FALSE,
+                                                 &error);
       if (!buffer_gbm)
         {
           meta_warning ("Failed to create DRM buffer wrapper: %s",

@@ -53,6 +53,10 @@ struct _MetaWaylandBuffer
 
   gboolean is_y_inverted;
 
+#ifdef HAVE_NATIVE_BACKEND
+  struct gbm_bo *gbm_bo;
+#endif
+
   MetaWaylandBufferType type;
 
   struct {

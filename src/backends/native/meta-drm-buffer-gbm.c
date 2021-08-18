@@ -41,7 +41,16 @@ struct _MetaDrmBufferGbm
 
   struct gbm_surface *surface;
 
+  /*
+   * If this is non-NULL, the referenced GBM BO is owned by this buffer and
+   * destroyed with it.
+   */
   struct gbm_bo *bo;
+
+  /*
+   * Otherwise, this buffer uses the referenced Wayland buffer's gbm_bo.
+   */
+  MetaWaylandBuffer *wayland_buffer;
 };
 
 static void
@@ -54,6 +63,10 @@ G_DEFINE_TYPE_WITH_CODE (MetaDrmBufferGbm, meta_drm_buffer_gbm, META_TYPE_DRM_BU
 struct gbm_bo *
 meta_drm_buffer_gbm_get_bo (MetaDrmBufferGbm *buffer_gbm)
 {
+  if (buffer_gbm->wayland_buffer &&
+      buffer_gbm->wayland_buffer->gbm_bo)
+    return buffer_gbm->wayland_buffer->gbm_bo;
+
   return buffer_gbm->bo;
 }
 
@@ -62,7 +75,7 @@ meta_drm_buffer_gbm_get_width (MetaDrmBuffer *buffer)
 {
   MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
 
-  return gbm_bo_get_width (buffer_gbm->bo);
+  return gbm_bo_get_width (meta_drm_buffer_gbm_get_bo (buffer_gbm));
 }
 
 static int
@@ -70,7 +83,7 @@ meta_drm_buffer_gbm_get_height (MetaDrmBuffer *buffer)
 {
   MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
 
-  return gbm_bo_get_height (buffer_gbm->bo);
+  return gbm_bo_get_height (meta_drm_buffer_gbm_get_bo (buffer_gbm));
 }
 
 static int
@@ -78,7 +91,7 @@ meta_drm_buffer_gbm_get_stride (MetaDrmBuffer *buffer)
 {
   MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
 
-  return gbm_bo_get_stride (buffer_gbm->bo);
+  return gbm_bo_get_stride (meta_drm_buffer_gbm_get_bo (buffer_gbm));
 }
 
 static uint32_t
@@ -86,7 +99,7 @@ meta_drm_buffer_gbm_get_format (MetaDrmBuffer *buffer)
 {
   MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
 
-  return gbm_bo_get_format (buffer_gbm->bo);
+  return gbm_bo_get_format (meta_drm_buffer_gbm_get_bo (buffer_gbm));
 }
 
 static gboolean
@@ -170,10 +183,11 @@ meta_drm_buffer_gbm_new_lock_front (MetaDeviceFile      *device_file,
 }
 
 MetaDrmBufferGbm *
-meta_drm_buffer_gbm_new_take (MetaDeviceFile  *device_file,
-                              struct gbm_bo   *bo,
-                              gboolean         use_modifiers,
-                              GError         **error)
+meta_drm_buffer_gbm_new_take (MetaDeviceFile    *device_file,
+                              MetaWaylandBuffer *wayland_buffer,
+                              struct gbm_bo     *gbm_bo,
+                              gboolean           use_modifiers,
+                              GError           **error)
 {
   MetaDrmBufferGbm *buffer_gbm;
 
@@ -181,13 +195,19 @@ meta_drm_buffer_gbm_new_take (MetaDeviceFile  *device_file,
                              "device-file", device_file,
                              NULL);
 
-  if (!init_fb_id (buffer_gbm, bo, use_modifiers, error))
+  if (wayland_buffer)
+    gbm_bo = wayland_buffer->gbm_bo;
+
+  if (!init_fb_id (buffer_gbm, gbm_bo, use_modifiers, error))
     {
       g_object_unref (buffer_gbm);
       return NULL;
     }
 
-  buffer_gbm->bo = bo;
+  if (wayland_buffer)
+    buffer_gbm->wayland_buffer = g_object_ref (wayland_buffer);
+  else
+    buffer_gbm->bo = gbm_bo;
 
   return buffer_gbm;
 }
@@ -220,10 +240,15 @@ cogl_fbo_from_buffer (MetaDrmBufferGbm *buffer_gbm,
   uint32_t drm_format;
   int *fds;
   gboolean result;
+  struct gbm_bo *gbm_bo;
   int dmabuf_fd = -1;
   uint32_t i;
 
-  dmabuf_fd = gbm_bo_get_fd (buffer_gbm->bo);
+  gbm_bo = meta_drm_buffer_gbm_get_bo (buffer_gbm);
+  if (!gbm_bo)
+    return NULL;
+
+  dmabuf_fd = gbm_bo_get_fd (gbm_bo);
   if (dmabuf_fd == -1)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -232,15 +257,15 @@ cogl_fbo_from_buffer (MetaDrmBufferGbm *buffer_gbm,
       return NULL;
     }
 
-  drm_format = gbm_bo_get_format (buffer_gbm->bo);
+  drm_format = gbm_bo_get_format (gbm_bo);
   result = meta_cogl_pixel_format_from_drm_format (drm_format,
                                                    &cogl_format,
                                                    NULL);
   g_assert (result);
 
-  width = gbm_bo_get_width (buffer_gbm->bo);
-  height = gbm_bo_get_height (buffer_gbm->bo);
-  n_planes = gbm_bo_get_plane_count (buffer_gbm->bo);
+  width = gbm_bo_get_width (gbm_bo);
+  height = gbm_bo_get_height (gbm_bo);
+  n_planes = gbm_bo_get_plane_count (gbm_bo);
   fds = g_alloca (sizeof (int) * n_planes);
   strides = g_alloca (sizeof (uint32_t) * n_planes);
   offsets = g_alloca (sizeof (uint32_t) * n_planes);
@@ -249,9 +274,9 @@ cogl_fbo_from_buffer (MetaDrmBufferGbm *buffer_gbm,
   for (i = 0; i < n_planes; i++)
     {
       fds[i] = dmabuf_fd;
-      strides[i] = gbm_bo_get_stride_for_plane (buffer_gbm->bo, i);
-      offsets[i] = gbm_bo_get_offset (buffer_gbm->bo, i);
-      modifiers[i] = gbm_bo_get_modifier (buffer_gbm->bo);
+      strides[i] = gbm_bo_get_stride_for_plane (gbm_bo, i);
+      offsets[i] = gbm_bo_get_offset (gbm_bo, i);
+      modifiers[i] = gbm_bo_get_modifier (gbm_bo);
     }
 
   egl_image = meta_egl_create_dmabuf_image (egl,
@@ -335,6 +360,7 @@ meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
 {
   MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (scanout);
   g_autoptr (CoglOffscreen) cogl_fbo = NULL;
+  struct gbm_bo *gbm_bo;
 
   cogl_fbo = cogl_fbo_from_buffer (buffer_gbm, error);
   if (!cogl_fbo)
@@ -343,12 +369,13 @@ meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
   if (!cogl_framebuffer_allocate (COGL_FRAMEBUFFER (cogl_fbo), error))
     return FALSE;
 
+  gbm_bo = meta_drm_buffer_gbm_get_bo (buffer_gbm);
   return cogl_blit_framebuffer (COGL_FRAMEBUFFER (cogl_fbo),
                                 framebuffer,
                                 0, 0,
                                 x, y,
-                                gbm_bo_get_width (buffer_gbm->bo),
-                                gbm_bo_get_height (buffer_gbm->bo),
+                                gbm_bo_get_width (gbm_bo),
+                                gbm_bo_get_height (gbm_bo),
                                 error);
 }
 
@@ -370,6 +397,8 @@ meta_drm_buffer_gbm_finalize (GObject *object)
       else
         gbm_bo_destroy (buffer_gbm->bo);
     }
+
+  g_clear_object (&buffer_gbm->wayland_buffer);
 
   G_OBJECT_CLASS (meta_drm_buffer_gbm_parent_class)->finalize (object);
 }

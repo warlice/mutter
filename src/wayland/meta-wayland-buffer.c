@@ -720,6 +720,7 @@ try_acquire_egl_image_scanout (MetaWaylandBuffer *buffer,
     }
 
   fb = meta_drm_buffer_gbm_new_take (device_file,
+                                     NULL,
                                      gbm_bo,
                                      drm_modifier != DRM_FORMAT_MOD_INVALID,
                                      &error);
@@ -765,6 +766,11 @@ static void
 meta_wayland_buffer_finalize (GObject *object)
 {
   MetaWaylandBuffer *buffer = META_WAYLAND_BUFFER (object);
+
+#ifdef HAVE_NATIVE_BACKEND
+  if (buffer->gbm_bo)
+    gbm_bo_destroy (buffer->gbm_bo);
+#endif
 
   g_clear_pointer (&buffer->egl_image.texture, cogl_object_unref);
 #ifdef HAVE_WAYLAND_EGLSTREAM
