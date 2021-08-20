@@ -1268,18 +1268,7 @@ meta_onscreen_native_direct_scanout (CoglOnscreen   *onscreen,
 
   g_set_object (&onscreen_native->gbm.next_fb, META_DRM_BUFFER (scanout));
 
-  /* Try to get a measurement of GPU rendering time on the scanout buffer.
-   *
-   * The successful operation here adds ~0.4 ms to a ~0.1 ms total frame clock
-   * dispatch duration when displaying an unredirected client, thus
-   * unfortunately bringing it more in line with duration of the regular
-   * non-unredirected frame clock dispatch. However, measuring GPU rendering
-   * time is important for computing accurate max render time without
-   * underestimating. Also this operation should be optimizable by caching
-   * EGLImage for each buffer instead of re-creating it every time it's needed.
-   * This should also help all other cases which convert the buffer to a
-   * EGLImage.
-   */
+  /* Try to get a measurement of GPU rendering time on the scanout buffer. */
   if (META_IS_DRM_BUFFER (scanout))
     {
       scanout_buffer = META_DRM_BUFFER (scanout);
