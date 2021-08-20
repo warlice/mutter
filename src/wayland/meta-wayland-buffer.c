@@ -679,43 +679,61 @@ meta_wayland_buffer_process_damage (MetaWaylandBuffer *buffer,
     }
 }
 
+#ifdef HAVE_NATIVE_BACKEND
+
+static struct gbm_bo *
+egl_image_get_scanout_gbm_bo (MetaWaylandBuffer *buffer,
+                              CoglOnscreen      *onscreen)
+{
+  MetaBackend *backend = meta_get_backend ();
+  MetaRenderer *renderer = meta_backend_get_renderer (backend);
+  MetaRendererNative *renderer_native = META_RENDERER_NATIVE (renderer);
+  MetaGpuKms *gpu_kms;
+  struct gbm_device *gbm_device;
+
+  gpu_kms = meta_renderer_native_get_primary_gpu (renderer_native);
+  gbm_device = meta_gbm_device_from_gpu (gpu_kms);
+
+  return gbm_bo_import (gbm_device, GBM_BO_IMPORT_WL_BUFFER,
+                        buffer->resource, GBM_BO_USE_SCANOUT);
+}
+
+#endif /* HAVE_NATIVE_BACKEND */
+
 static CoglScanout *
-try_acquire_egl_image_scanout (MetaWaylandBuffer *buffer,
-                               CoglOnscreen      *onscreen)
+meta_wayland_buffer_acquire_scanout (MetaWaylandBuffer *buffer,
+                                     CoglOnscreen      *onscreen)
 {
 #ifdef HAVE_NATIVE_BACKEND
   MetaBackend *backend = meta_get_backend ();
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   MetaRendererNative *renderer_native = META_RENDERER_NATIVE (renderer);
   MetaDeviceFile *device_file;
-  uint32_t drm_format;
-  uint64_t drm_modifier;
-  uint32_t stride;
   MetaDrmBufferGbm *fb;
+  uint64_t drm_modifier;
   g_autoptr (GError) error = NULL;
+
+  device_file = meta_renderer_native_get_primary_device_file (renderer_native);
 
   if (!buffer->gbm_bo)
     {
-      MetaGpuKms *gpu_kms;
-      struct gbm_device *gbm_device;
-
-      gpu_kms = meta_renderer_native_get_primary_gpu (renderer_native);
-      gbm_device = meta_gbm_device_from_gpu (gpu_kms);
-
-      buffer->gbm_bo = gbm_bo_import (gbm_device, GBM_BO_IMPORT_WL_BUFFER,
-                                      buffer->resource, GBM_BO_USE_SCANOUT);
-      if (!buffer->gbm_bo)
-        return NULL;
+      switch (buffer->type)
+        {
+        case META_WAYLAND_BUFFER_TYPE_DMA_BUF:
+          buffer->gbm_bo = meta_wayland_dma_buf_get_scanout_gbm_bo (buffer, onscreen);
+          break;
+        case META_WAYLAND_BUFFER_TYPE_EGL_IMAGE:
+          buffer->gbm_bo = egl_image_get_scanout_gbm_bo (buffer, onscreen);
+          break;
+        default:
+          return NULL;
+        }
     }
 
-  drm_format = gbm_bo_get_format (buffer->gbm_bo);
-  drm_modifier = gbm_bo_get_modifier (buffer->gbm_bo);
-  stride = gbm_bo_get_stride (buffer->gbm_bo);
-  if (!meta_onscreen_native_is_buffer_scanout_compatible (
-      onscreen, drm_format, drm_modifier, stride))
+  if (!buffer->gbm_bo)
     return NULL;
 
-  device_file = meta_renderer_native_get_primary_device_file (renderer_native);
+  drm_modifier = gbm_bo_get_modifier (buffer->gbm_bo);
   fb = meta_drm_buffer_gbm_new_take (device_file,
                                      buffer,
                                      NULL,
@@ -741,14 +759,13 @@ meta_wayland_buffer_try_acquire_scanout (MetaWaylandBuffer *buffer,
     {
     case META_WAYLAND_BUFFER_TYPE_SHM:
       return NULL;
-    case META_WAYLAND_BUFFER_TYPE_EGL_IMAGE:
-      return try_acquire_egl_image_scanout (buffer, onscreen);
 #ifdef HAVE_WAYLAND_EGLSTREAM
     case META_WAYLAND_BUFFER_TYPE_EGL_STREAM:
       return NULL;
 #endif
     case META_WAYLAND_BUFFER_TYPE_DMA_BUF:
-      return meta_wayland_dma_buf_try_acquire_scanout (buffer, onscreen);
+    case META_WAYLAND_BUFFER_TYPE_EGL_IMAGE:
+      return meta_wayland_buffer_acquire_scanout (buffer, onscreen);
     case META_WAYLAND_BUFFER_TYPE_UNKNOWN:
       g_warn_if_reached ();
       return NULL;

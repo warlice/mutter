@@ -49,8 +49,10 @@ meta_wayland_dma_buf_buffer_attach (MetaWaylandBuffer  *buffer,
 MetaWaylandDmaBufBuffer *
 meta_wayland_dma_buf_from_buffer (MetaWaylandBuffer *buffer);
 
-CoglScanout *
-meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer *buffer,
-                                          CoglOnscreen      *onscreen);
+#ifdef HAVE_NATIVE_BACKEND
+struct gbm_bo *
+meta_wayland_dma_buf_get_scanout_gbm_bo (MetaWaylandBuffer *buffer,
+                                         CoglOnscreen      *onscreen);
+#endif
 
 #endif /* META_WAYLAND_DMA_BUF_H */

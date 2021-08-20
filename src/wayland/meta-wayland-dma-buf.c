@@ -75,7 +75,6 @@ struct _MetaWaylandDmaBufBuffer
   uint32_t drm_format;
   uint64_t drm_modifier;
   bool is_y_inverted;
-  bool use_modifier;
   int fds[META_WAYLAND_DMA_BUF_MAX_FDS];
   uint32_t offsets[META_WAYLAND_DMA_BUF_MAX_FDS];
   uint32_t strides[META_WAYLAND_DMA_BUF_MAX_FDS];
@@ -208,6 +207,7 @@ meta_wayland_dma_buf_buffer_attach (MetaWaylandBuffer  *buffer,
 }
 
 #ifdef HAVE_NATIVE_BACKEND
+
 static struct gbm_bo *
 import_scanout_gbm_bo (MetaWaylandDmaBufBuffer *dma_buf,
                        MetaGpuKms              *gpu_kms,
@@ -240,7 +240,6 @@ import_scanout_gbm_bo (MetaWaylandDmaBufBuffer *dma_buf,
               dma_buf->offsets,
               sizeof (import_with_modifier.offsets));
 
-      dma_buf->use_modifier = TRUE;
       return gbm_bo_import (gbm_device, GBM_BO_IMPORT_FD_MODIFIER,
                             &import_with_modifier,
                             GBM_BO_USE_SCANOUT);
@@ -257,81 +256,50 @@ import_scanout_gbm_bo (MetaWaylandDmaBufBuffer *dma_buf,
         .fd = dma_buf->fds[0],
       };
 
-      dma_buf->use_modifier = FALSE;
       return gbm_bo_import (gbm_device, GBM_BO_IMPORT_FD,
                             &import_legacy,
                             GBM_BO_USE_SCANOUT);
     }
 }
-#endif
 
-CoglScanout *
-meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer *buffer,
-                                          CoglOnscreen      *onscreen)
+struct gbm_bo *
+meta_wayland_dma_buf_get_scanout_gbm_bo (MetaWaylandBuffer *buffer,
+                                         CoglOnscreen      *onscreen)
 {
-#ifdef HAVE_NATIVE_BACKEND
   MetaWaylandDmaBufBuffer *dma_buf;
   MetaBackend *backend = meta_get_backend ();
   MetaRenderer *renderer = meta_backend_get_renderer (backend);
   MetaRendererNative *renderer_native = META_RENDERER_NATIVE (renderer);
-  MetaDeviceFile *device_file;
-  g_autoptr (GError) error = NULL;
-  MetaDrmBufferGbm *fb;
+  MetaGpuKms *gpu_kms;
+  int n_planes;
+  uint32_t drm_format;
+  uint64_t drm_modifier;
+  uint32_t stride;
 
   dma_buf = meta_wayland_dma_buf_from_buffer (buffer);
   if (!dma_buf)
     return NULL;
 
-  device_file = meta_renderer_native_get_primary_device_file (renderer_native);
-
-  if (!buffer->gbm_bo)
+  for (n_planes = 0; n_planes < META_WAYLAND_DMA_BUF_MAX_FDS; n_planes++)
     {
-      MetaGpuKms *gpu_kms;
-      int n_planes;
-      uint32_t drm_format;
-      uint64_t drm_modifier;
-      uint32_t stride;
-
-      for (n_planes = 0; n_planes < META_WAYLAND_DMA_BUF_MAX_FDS; n_planes++)
-        {
-          if (dma_buf->fds[n_planes] < 0)
-            break;
-        }
-
-      drm_format = dma_buf->drm_format;
-      drm_modifier = dma_buf->drm_modifier;
-      stride = dma_buf->strides[0];
-      if (!meta_onscreen_native_is_buffer_scanout_compatible (onscreen,
-                                                              drm_format,
-                                                              drm_modifier,
-                                                              stride))
-        return NULL;
-
-      gpu_kms = meta_renderer_native_get_primary_gpu (renderer_native);
-      buffer->gbm_bo = import_scanout_gbm_bo (dma_buf, gpu_kms, n_planes);
-      if (!buffer->gbm_bo)
-        {
-          g_debug ("Failed to import scanout gbm_bo: %s", g_strerror (errno));
-          return NULL;
-        }
+      if (dma_buf->fds[n_planes] < 0)
+        break;
     }
 
-  fb = meta_drm_buffer_gbm_new_take (device_file,
-                                     buffer,
-                                     NULL,
-                                     dma_buf->use_modifier,
-                                     &error);
-  if (!fb)
-    {
-      g_debug ("Failed to create scanout buffer: %s", error->message);
-      return NULL;
-    }
+  drm_format = dma_buf->drm_format;
+  drm_modifier = dma_buf->drm_modifier;
+  stride = dma_buf->strides[0];
+  if (!meta_onscreen_native_is_buffer_scanout_compatible (onscreen,
+                                                          drm_format,
+                                                          drm_modifier,
+                                                          stride))
+    return NULL;
 
-  return COGL_SCANOUT (fb);
-#else
-  return NULL;
-#endif
+  gpu_kms = meta_renderer_native_get_primary_gpu (renderer_native);
+  return import_scanout_gbm_bo (dma_buf, gpu_kms, n_planes);
 }
+
+#endif /* HAVE_NATIVE_BACKEND */
 
 static void
 buffer_params_add (struct wl_client   *client,
