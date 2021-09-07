@@ -42,6 +42,15 @@ enum
 
 static guint signals[N_SIGNALS];
 
+typedef enum
+{
+  TRIPLE_BUFFERING_MODE_NEVER,
+  TRIPLE_BUFFERING_MODE_AUTO,
+  TRIPLE_BUFFERING_MODE_ALWAYS,
+} TripleBufferingMode;
+
+static TripleBufferingMode triple_buffering_mode = TRIPLE_BUFFERING_MODE_AUTO;
+
 #define SYNC_DELAY_FALLBACK_FRACTION 0.875f
 
 #define MINIMUM_REFRESH_RATE 30.f
@@ -858,6 +867,25 @@ clutter_frame_clock_uninhibit (ClutterFrameClock *frame_clock)
     maybe_reschedule_update (frame_clock);
 }
 
+static gboolean
+want_triple_buffering (ClutterFrameClock *frame_clock)
+{
+  switch (triple_buffering_mode)
+    {
+    case TRIPLE_BUFFERING_MODE_NEVER:
+      return FALSE;
+    case TRIPLE_BUFFERING_MODE_AUTO:
+      return frame_clock->mode == CLUTTER_FRAME_CLOCK_MODE_FIXED &&
+             !(frame_clock->last_flip_hints &
+               CLUTTER_FRAME_HINT_DIRECT_SCANOUT_ATTEMPTED);
+    case TRIPLE_BUFFERING_MODE_ALWAYS:
+      return TRUE;
+    }
+
+  g_assert_not_reached ();
+  return FALSE;
+}
+
 void
 clutter_frame_clock_schedule_update_now (ClutterFrameClock *frame_clock)
 {
@@ -880,11 +908,18 @@ clutter_frame_clock_schedule_update_now (ClutterFrameClock *frame_clock)
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW:
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_NOW:
       return;
-    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE:
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED:
       frame_clock->state =
         CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_NOW;
       break;
+    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE:
+      if (want_triple_buffering (frame_clock))
+        {
+          frame_clock->state =
+            CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_NOW;
+          break;
+        }
+      G_GNUC_FALLTHROUGH;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO:
       frame_clock->pending_reschedule = TRUE;
       frame_clock->pending_reschedule_now = TRUE;
@@ -920,6 +955,11 @@ void
 clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
 {
   int64_t next_update_time_us = -1;
+  TripleBufferingMode current_mode = triple_buffering_mode;
+
+  if (current_mode == TRIPLE_BUFFERING_MODE_AUTO &&
+      !want_triple_buffering (frame_clock))
+    current_mode = TRIPLE_BUFFERING_MODE_NEVER;
 
   if (frame_clock->inhibit_count > 0)
     {
@@ -943,7 +983,23 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED_NOW:
       return;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE:
-      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED;
+      switch (current_mode)
+        {
+        case TRIPLE_BUFFERING_MODE_NEVER:
+          frame_clock->pending_reschedule = TRUE;
+          return;
+        case TRIPLE_BUFFERING_MODE_AUTO:
+          frame_clock->state =
+            CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED;
+          break;
+        case TRIPLE_BUFFERING_MODE_ALWAYS:
+          next_update_time_us = g_get_monotonic_time ();
+          frame_clock->next_presentation_time_us = 0;
+          frame_clock->is_next_presentation_time_valid = FALSE;
+          frame_clock->state =
+            CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE_AND_SCHEDULED;
+          goto got_update_time;
+        }
       break;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO:
       frame_clock->pending_reschedule = TRUE;
@@ -970,6 +1026,7 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
       break;
     }
 
+got_update_time:
   g_warn_if_fail (next_update_time_us != -1);
 
   frame_clock->next_update_time_us = next_update_time_us;
@@ -1385,6 +1442,15 @@ static void
 clutter_frame_clock_class_init (ClutterFrameClockClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  const char *mode_str;
+
+  mode_str = g_getenv ("MUTTER_DEBUG_TRIPLE_BUFFERING");
+  if (!g_strcmp0 (mode_str, "never"))
+    triple_buffering_mode = TRIPLE_BUFFERING_MODE_NEVER;
+  else if (!g_strcmp0 (mode_str, "auto"))
+    triple_buffering_mode = TRIPLE_BUFFERING_MODE_AUTO;
+  else if (!g_strcmp0 (mode_str, "always"))
+    triple_buffering_mode = TRIPLE_BUFFERING_MODE_ALWAYS;
 
   object_class->dispose = clutter_frame_clock_dispose;
 
