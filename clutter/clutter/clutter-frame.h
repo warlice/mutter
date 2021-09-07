@@ -54,4 +54,11 @@ void clutter_frame_set_result (ClutterFrame       *frame,
 CLUTTER_EXPORT
 gboolean clutter_frame_has_result (ClutterFrame *frame);
 
+CLUTTER_EXPORT
+void clutter_frame_add_hint (ClutterFrame     *frame,
+                             ClutterFrameHint  hint);
+
+CLUTTER_EXPORT
+ClutterFrameHint clutter_frame_get_hints (ClutterFrame *frame);
+
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (ClutterFrame, clutter_frame_unref)
