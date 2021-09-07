@@ -118,6 +118,8 @@ struct _ClutterFrameClock
   int64_t last_flip_time_us;
   int64_t prev_last_flip_time_us;
 
+  ClutterFrameHint last_flip_hints;
+
   /* Last time we promoted short-term maximum to long-term one */
   int64_t longterm_promotion_us;
   /* Long-term maximum update duration */
@@ -1176,11 +1178,13 @@ frame_clock_source_dispatch (GSource     *source,
 }
 
 void
-clutter_frame_clock_record_flip_time (ClutterFrameClock *frame_clock,
-                                      int64_t            flip_time_us)
+clutter_frame_clock_record_flip (ClutterFrameClock *frame_clock,
+                                 int64_t            flip_time_us,
+                                 ClutterFrameHint   hints)
 {
   frame_clock->prev_last_flip_time_us = frame_clock->last_flip_time_us;
   frame_clock->last_flip_time_us = flip_time_us;
+  frame_clock->last_flip_hints = hints;
 }
 
 GString *
