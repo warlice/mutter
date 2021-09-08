@@ -117,6 +117,48 @@ local_options (GApplication *app,
   return -1;
 }
 
+static gboolean
+transform_action_state_to (GBinding     *binding,
+                           const GValue *from_value,
+                           GValue       *to_value,
+                           gpointer      user_data)
+{
+  GVariant *state_variant;
+
+  state_variant = g_value_get_variant (from_value);
+  if (g_variant_is_of_type (state_variant, G_VARIANT_TYPE_BOOLEAN))
+    {
+      g_value_set_boolean (to_value, g_variant_get_boolean (state_variant));
+      return TRUE;
+    }
+  else
+    {
+      return FALSE;
+    }
+}
+
+static void
+bind_action_to_property (GtkApplication *app,
+                         const char     *action_name,
+                         gpointer        object,
+                         const char     *property)
+{
+  GAction *action;
+  GParamSpec *pspec;
+
+  action = g_action_map_lookup_action (G_ACTION_MAP (app), action_name);
+  g_return_if_fail (action);
+
+  pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (object), property);
+  
+  g_object_bind_property_full (action, "state", object, property,
+                               G_BINDING_SYNC_CREATE,
+                               transform_action_state_to,
+                               NULL, 
+                               g_param_spec_ref (pspec),
+                               (GDestroyNotify) g_param_spec_unref);
+}
+
 int
 main (int    argc,
       char **argv)
@@ -125,6 +167,7 @@ main (int    argc,
   g_autoptr (GtkApplication) app = NULL;
   static GActionEntry app_entries[] = {
     { "about", activate_about, NULL, NULL, NULL },
+    { "toggle_emulate_touch", .state = "false", },
   };
   struct {
     const char *action_and_target;
@@ -160,6 +203,9 @@ main (int    argc,
                                              accels[i].action_and_target,
                                              accels[i].accelerators);
     }
+
+  bind_action_to_property (app, "toggle_emulate_touch",
+                           context, "emulate-touch");
 
   g_application_add_main_option (G_APPLICATION (app),
                                  "version", 0, 0, G_OPTION_ARG_NONE,

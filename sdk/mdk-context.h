@@ -35,4 +35,6 @@ MdkSession * mdk_context_get_session (MdkContext *context);
 
 MdkPipewire * mdk_context_get_pipewire (MdkContext *context);
 
+gboolean mdk_context_get_emulate_touch (MdkContext *context);
+
 #endif /* MDK_CONTEXT_H */
