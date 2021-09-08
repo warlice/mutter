@@ -1581,8 +1581,8 @@ has_tablet_switch (MetaSeatImpl *seat_impl)
   return FALSE;
 }
 
-static void
-update_touch_mode (MetaSeatImpl *seat_impl)
+void
+meta_seat_impl_update_touch_mode (MetaSeatImpl *seat_impl)
 {
   gboolean touch_mode;
 
@@ -1640,7 +1640,7 @@ evdev_add_device (MetaSeatImpl           *seat_impl,
   seat_impl->has_pointer |= is_pointer;
 
   if (is_touchscreen || is_tablet_switch || is_pointer)
-    update_touch_mode (seat_impl);
+    meta_seat_impl_update_touch_mode (seat_impl);
 
   return device;
 }
@@ -1670,7 +1670,7 @@ evdev_remove_device (MetaSeatImpl          *seat_impl,
     seat_impl->has_pointer = has_pointer (seat_impl);
 
   if (is_touchscreen || is_tablet_switch || is_pointer)
-    update_touch_mode (seat_impl);
+    meta_seat_impl_update_touch_mode (seat_impl);
 
   if (seat_impl->repeat_source && seat_impl->repeat_device == device)
     meta_seat_impl_clear_repeat_source (seat_impl);
@@ -2518,7 +2518,7 @@ process_device_event (MetaSeatImpl          *seat_impl,
         if (sw == LIBINPUT_SWITCH_TABLET_MODE)
           {
             seat_impl->tablet_mode_switch_state = (state == LIBINPUT_SWITCH_STATE_ON);
-            update_touch_mode (seat_impl);
+            meta_seat_impl_update_touch_mode (seat_impl);
           }
         break;
       }
@@ -2748,7 +2748,7 @@ input_thread (MetaSeatImpl *seat_impl)
 
   seat_impl->has_touchscreen = has_touchscreen (seat_impl);
   seat_impl->has_tablet_switch = has_tablet_switch (seat_impl);
-  update_touch_mode (seat_impl);
+  meta_seat_impl_update_touch_mode (seat_impl);
 
   g_mutex_lock (&seat_impl->init_mutex);
   seat_impl->input_thread_initialized = TRUE;
@@ -2859,6 +2859,20 @@ meta_seat_impl_get_property (GObject    *object,
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+void
+meta_seat_impl_add_virtual_device (MetaSeatImpl *seat_impl,
+                                   ClutterInputDevice *device)
+{
+  seat_impl->devices = g_slist_prepend (seat_impl->devices, device);
+
+  if (clutter_input_device_get_device_type (device) ==
+      CLUTTER_TOUCHSCREEN_DEVICE)
+    {
+      seat_impl->has_touchscreen |= TRUE;
+      meta_seat_impl_update_touch_mode (seat_impl);
     }
 }
 

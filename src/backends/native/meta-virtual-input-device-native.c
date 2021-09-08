@@ -206,6 +206,8 @@ release_device_in_impl (GTask *task)
   g_clear_object (&impl_state->device);
   g_task_return_boolean (task, TRUE);
 
+  meta_seat_impl_update_touch_mode (seat_impl);
+
   return G_SOURCE_REMOVE;
 }
 
@@ -1003,6 +1005,17 @@ meta_virtual_input_device_native_set_property (GObject      *object,
     }
 }
 
+static gboolean
+constructed_in_impl (GTask *task)
+{
+  ClutterInputDevice *device = g_task_get_source_object (task);
+  MetaSeatImpl *seat_impl = g_task_get_task_data (task);
+
+  meta_seat_impl_add_virtual_device (seat_impl, device);
+
+  return G_SOURCE_REMOVE;
+}
+
 static void
 meta_virtual_input_device_native_constructed (GObject *object)
 {
@@ -1012,6 +1025,7 @@ meta_virtual_input_device_native_constructed (GObject *object)
     META_VIRTUAL_INPUT_DEVICE_NATIVE (object);
   ClutterInputDeviceType device_type;
   ClutterEvent *device_event = NULL;
+  g_autoptr (GTask) task = NULL;
 
   device_type = clutter_virtual_input_device_get_device_type (virtual_device);
 
@@ -1028,6 +1042,11 @@ meta_virtual_input_device_native_constructed (GObject *object)
   device_event = clutter_event_new (CLUTTER_DEVICE_ADDED);
   clutter_event_set_device (device_event, virtual_native->impl_state->device);
   _clutter_event_push (device_event, FALSE);
+
+  task = g_task_new (virtual_native->impl_state->device, NULL, NULL, NULL);
+  g_task_set_task_data (task, virtual_native->seat->impl, NULL);
+  meta_seat_impl_run_input_task (virtual_native->seat->impl, task,
+                                 (GSourceFunc) constructed_in_impl);
 }
 
 static void
