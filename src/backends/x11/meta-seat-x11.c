@@ -473,7 +473,7 @@ guess_source_from_wacom_type (MetaSeatX11             *seat_x11,
 
 static ClutterInputDevice *
 create_device (MetaSeatX11    *seat_x11,
-               ClutterBackend *backend,
+               ClutterBackend *clutter_backend,
                XIDeviceInfo   *info)
 {
   Display *xdisplay = xdisplay_from_seat (seat_x11);
@@ -554,7 +554,7 @@ create_device (MetaSeatX11    *seat_x11,
                          "has-cursor", (info->use == XIMasterPointer),
                          "device-type", source,
                          "device-mode", mode,
-                         "backend", backend,
+                         "backend", clutter_backend,
                          "vendor-id", vendor_id,
                          "product-id", product_id,
                          "device-node", node_path,
@@ -636,12 +636,12 @@ update_touch_mode (MetaSeatX11 *seat_x11)
 
 static ClutterInputDevice *
 add_device (MetaSeatX11    *seat_x11,
-            ClutterBackend *backend,
+            ClutterBackend *clutter_backend,
             XIDeviceInfo   *info)
 {
   ClutterInputDevice *device;
 
-  device = create_device (seat_x11, backend, info);
+  device = create_device (seat_x11, clutter_backend, info);
 
   g_hash_table_replace (seat_x11->devices_by_id,
                         GINT_TO_POINTER (info->deviceid),
@@ -779,7 +779,7 @@ device_get_tool_serial (MetaSeatX11        *seat_x11,
 }
 
 static gboolean
-translate_hierarchy_event (ClutterBackend   *backend,
+translate_hierarchy_event (ClutterBackend   *clutter_backend,
                            MetaSeatX11      *seat_x11,
                            XIHierarchyEvent *ev,
                            ClutterEvent     *event)
@@ -808,7 +808,7 @@ translate_hierarchy_event (ClutterBackend   *backend,
             {
               ClutterInputDevice *device;
 
-              device = add_device (seat_x11, backend, &info[0]);
+              device = add_device (seat_x11, clutter_backend, &info[0]);
 
               event->any.type = CLUTTER_DEVICE_ADDED;
               event->any.time = ev->time;
@@ -1391,7 +1391,7 @@ meta_seat_x11_constructed (GObject *object)
 {
   MetaSeatX11 *seat_x11 = META_SEAT_X11 (object);
   Display *xdisplay = xdisplay_from_seat (seat_x11);
-  ClutterBackend *backend =
+  ClutterBackend *clutter_backend =
     meta_backend_get_clutter_backend (seat_x11->backend);
   XIDeviceInfo *info;
   XIEventMask event_mask;
@@ -1407,7 +1407,7 @@ meta_seat_x11_constructed (GObject *object)
       if (!xi_device->enabled)
         continue;
 
-      add_device (seat_x11, backend, xi_device);
+      add_device (seat_x11, clutter_backend, xi_device);
     }
 
   XIFreeDeviceInfo (info);
@@ -1438,7 +1438,7 @@ meta_seat_x11_constructed (GObject *object)
   XSync (xdisplay, False);
 
   seat_x11->keymap = g_object_new (META_TYPE_KEYMAP_X11,
-                                   "backend", backend,
+                                   "backend", clutter_backend,
                                    NULL);
   g_signal_connect (seat_x11->keymap,
                     "state-changed",
@@ -1823,7 +1823,7 @@ meta_seat_x11_translate_event (MetaSeatX11  *seat,
                                ClutterEvent *event)
 {
   Display *xdisplay = xdisplay_from_seat (seat);
-  ClutterBackend *backend =
+  ClutterBackend *clutter_backend =
     meta_backend_get_clutter_backend (seat->backend);
   gboolean retval = FALSE;
   ClutterStage *stage = NULL;
@@ -1872,7 +1872,7 @@ meta_seat_x11_translate_event (MetaSeatX11  *seat,
       {
         XIHierarchyEvent *xev = (XIHierarchyEvent *) xi_event;
 
-        retval = translate_hierarchy_event (backend, seat, xev, event);
+        retval = translate_hierarchy_event (clutter_backend, seat, xev, event);
       }
       break;
 
