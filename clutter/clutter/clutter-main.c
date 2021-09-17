@@ -74,7 +74,7 @@
 #include "cally/cally.h" /* For accessibility support */
 
 /* main context */
-static ClutterMainContext *ClutterCntx       = NULL;
+static ClutterContext *ClutterCntx       = NULL;
 
 /* command line options */
 static gboolean clutter_is_initialized       = FALSE;
@@ -138,7 +138,7 @@ static const GDebugKey clutter_paint_debug_keys[] = {
 gboolean
 _clutter_context_get_show_fps (void)
 {
-  ClutterMainContext *context = _clutter_context_get_default ();
+  ClutterContext *context = _clutter_context_get_default ();
 
   return context->show_fps;
 }
@@ -186,7 +186,7 @@ clutter_disable_accessibility (void)
 static CoglPangoFontMap *
 clutter_context_get_pango_fontmap (void)
 {
-  ClutterMainContext *self;
+  ClutterContext *self;
   CoglPangoFontMap *font_map;
   gdouble resolution;
   gboolean use_mipmapping;
@@ -483,7 +483,7 @@ _clutter_context_is_initialized (void)
   return ClutterCntx->is_initialized;
 }
 
-ClutterMainContext *
+ClutterContext *
 _clutter_context_get_default (void)
 {
   g_assert (ClutterCntx);
@@ -491,8 +491,8 @@ _clutter_context_get_default (void)
 }
 
 static gboolean
-clutter_init_real (ClutterMainContext  *clutter_context,
-                   GError             **error)
+clutter_init_real (ClutterContext  *clutter_context,
+                   GError         **error)
 {
   ClutterBackend *backend;
 
@@ -540,7 +540,7 @@ clutter_init_real (ClutterMainContext  *clutter_context,
 }
 
 static void
-init_clutter_debug (ClutterMainContext *clutter_context)
+init_clutter_debug (ClutterContext *clutter_context)
 {
   const char *env_string;
 
@@ -590,7 +590,7 @@ clutter_context_new (ClutterBackendConstructor   backend_constructor,
                      gpointer                    user_data,
                      GError                    **error)
 {
-  ClutterMainContext *clutter_context;
+  ClutterContext *clutter_context;
 
   if (ClutterCntx)
     {
@@ -601,7 +601,7 @@ clutter_context_new (ClutterBackendConstructor   backend_constructor,
 
   clutter_graphene_init ();
 
-  clutter_context = g_new0 (ClutterMainContext, 1);
+  clutter_context = g_new0 (ClutterContext, 1);
   init_clutter_debug (clutter_context);
   clutter_context->show_fps = clutter_show_fps;
   clutter_context->is_initialized = FALSE;
@@ -623,7 +623,7 @@ clutter_context_new (ClutterBackendConstructor   backend_constructor,
 }
 
 void
-clutter_context_free (ClutterMainContext *clutter_context)
+clutter_context_free (ClutterContext *clutter_context)
 {
   g_clear_pointer (&clutter_context->events_queue, g_async_queue_unref);
   g_clear_pointer (&clutter_context->backend, clutter_backend_destroy);
@@ -1081,12 +1081,11 @@ remove_device_for_event (ClutterStage *stage,
 
 
 static void
-_clutter_process_event_details (ClutterActor        *stage,
-                                ClutterMainContext  *context,
-                                ClutterEvent        *event)
+_clutter_process_event_details (ClutterActor    *stage,
+                                ClutterContext  *clutter_context,
+                                ClutterEvent    *event)
 {
   ClutterInputDevice *device = clutter_event_get_device (event);
-  ClutterMainContext *clutter_context;
   ClutterBackend *backend;
 
   clutter_context = _clutter_context_get_default ();
@@ -1468,7 +1467,7 @@ _clutter_process_event_details (ClutterActor        *stage,
 void
 _clutter_process_event (ClutterEvent *event)
 {
-  ClutterMainContext *context;
+  ClutterContext *context;
   ClutterActor *stage;
   ClutterSeat *seat;
 
@@ -1533,7 +1532,7 @@ void
 clutter_threads_remove_repaint_func (guint handle_id)
 {
   ClutterRepaintFunction *repaint_func;
-  ClutterMainContext *context;
+  ClutterContext *context;
   GList *l;
 
   g_return_if_fail (handle_id > 0);
@@ -1654,7 +1653,7 @@ clutter_threads_add_repaint_func_full (ClutterRepaintFlags flags,
                                        gpointer            data,
                                        GDestroyNotify      notify)
 {
-  ClutterMainContext *context;
+  ClutterContext *context;
   ClutterRepaintFunction *repaint_func;
 
   g_return_val_if_fail (func != NULL, 0);
@@ -1688,7 +1687,7 @@ clutter_threads_add_repaint_func_full (ClutterRepaintFlags flags,
 void
 _clutter_run_repaint_functions (ClutterRepaintFlags flags)
 {
-  ClutterMainContext *context = _clutter_context_get_default ();
+  ClutterContext *context = _clutter_context_get_default ();
   ClutterRepaintFunction *repaint_func;
   GList *invoke_list, *reinvoke_list, *l;
 
@@ -1766,7 +1765,7 @@ clutter_get_default_text_direction (void)
 void
 _clutter_clear_events_queue (void)
 {
-  ClutterMainContext *context = _clutter_context_get_default ();
+  ClutterContext *context = _clutter_context_get_default ();
   ClutterEvent *event;
   GAsyncQueue *events_queue;
 

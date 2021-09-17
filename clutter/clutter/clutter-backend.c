@@ -150,7 +150,7 @@ get_units_per_em (ClutterBackend       *backend,
 static void
 clutter_backend_real_resolution_changed (ClutterBackend *backend)
 {
-  ClutterMainContext *context;
+  ClutterContext *context;
   ClutterSettings *settings;
   gdouble resolution;
   gint dpi;
@@ -524,7 +524,7 @@ _clutter_backend_get_units_per_em (ClutterBackend       *backend,
 ClutterBackend *
 clutter_get_default_backend (void)
 {
-  ClutterMainContext *clutter_context;
+  ClutterContext *clutter_context;
 
   clutter_context = _clutter_context_get_default ();
 
