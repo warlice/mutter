@@ -66,8 +66,6 @@ struct _ClutterBackendClass
   GObjectClass parent_class;
 
   /* vfuncs */
-  gboolean              (* finish_init)        (ClutterBackend  *backend,
-                                                GError         **error);
   ClutterStageWindow *  (* create_stage)       (ClutterBackend  *backend,
                                                 ClutterStage    *wrapper,
                                                 GError         **error);
@@ -98,9 +96,6 @@ ClutterStageWindow *    _clutter_backend_create_stage                   (Clutter
                                                                          ClutterStage           *wrapper,
                                                                          GError                **error);
 gboolean                _clutter_backend_create_context                 (ClutterBackend         *backend,
-                                                                         GError                **error);
-
-gboolean                _clutter_backend_finish_init                    (ClutterBackend         *backend,
                                                                          GError                **error);
 
 CLUTTER_EXPORT
