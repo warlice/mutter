@@ -122,6 +122,7 @@ rect_event_cb (ClutterActor *actor, ClutterEvent *event, gpointer data)
 G_MODULE_EXPORT int
 test_touch_events_main (int argc, char *argv[])
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage, *canvas_actor;
   ClutterContent *canvas;
   int i;
@@ -143,6 +144,7 @@ test_touch_events_main (int argc, char *argv[])
   g_signal_connect (canvas, "draw", G_CALLBACK (draw_touches), NULL);
 
   canvas_actor = g_object_new (CLUTTER_TYPE_ACTOR,
+                               "context", clutter_test_get_context (),
                                "content", canvas,
                                NULL);
   clutter_container_add_actor (CLUTTER_CONTAINER (stage), canvas_actor);
@@ -153,7 +155,7 @@ test_touch_events_main (int argc, char *argv[])
     {
       gfloat size = STAGE_HEIGHT / NUM_ACTORS;
       ClutterColor color = static_colors[i % NUM_COLORS];
-      ClutterActor *rectangle = clutter_actor_new ();
+      ClutterActor *rectangle = clutter_actor_new (context);
 
       clutter_actor_set_background_color (rectangle, &color);
 

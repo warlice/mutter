@@ -4654,6 +4654,7 @@ clutter_text_init (ClutterText *self)
 
 /**
  * clutter_text_new:
+ * @context: a #ClutterContext
  *
  * Creates a new #ClutterText actor. This actor can be used to
  * display and edit text.
@@ -4663,13 +4664,16 @@ clutter_text_init (ClutterText *self)
  * Since: 1.0
  */
 ClutterActor *
-clutter_text_new (void)
+clutter_text_new (ClutterContext *context)
 {
-  return g_object_new (CLUTTER_TYPE_TEXT, NULL);
+  return g_object_new (CLUTTER_TYPE_TEXT,
+                       "context", context,
+                       NULL);
 }
 
 /**
  * clutter_text_new_full:
+ * @context: a #ClutterContext
  * @font_name: a string with a font description
  * @text: the contents of the actor
  * @color: the color to be used to render @text
@@ -4687,11 +4691,13 @@ clutter_text_new (void)
  * Since: 1.0
  */
 ClutterActor *
-clutter_text_new_full (const gchar        *font_name,
+clutter_text_new_full (ClutterContext     *context,
+                       const gchar        *font_name,
                        const gchar        *text,
                        const ClutterColor *color)
 {
   return g_object_new (CLUTTER_TYPE_TEXT,
+                       "context", context,
                        "font-name", font_name,
                        "text", text,
                        "color", color,
@@ -4700,6 +4706,7 @@ clutter_text_new_full (const gchar        *font_name,
 
 /**
  * clutter_text_new_with_text:
+ * @context: a #ClutterContext
  * @font_name: (allow-none): a string with a font description
  * @text: the contents of the actor
  *
@@ -4714,10 +4721,12 @@ clutter_text_new_full (const gchar        *font_name,
  * Since: 1.0
  */
 ClutterActor *
-clutter_text_new_with_text (const gchar *font_name,
-                            const gchar *text)
+clutter_text_new_with_text (ClutterContext *context,
+                            const char     *font_name,
+                            const char     *text)
 {
   return g_object_new (CLUTTER_TYPE_TEXT,
+                       "context", context,
                        "font-name", font_name,
                        "text", text,
                        NULL);
@@ -4876,10 +4885,14 @@ buffer_disconnect_signals (ClutterText *self)
  * Since: 1.10
  */
 ClutterActor *
-clutter_text_new_with_buffer (ClutterTextBuffer *buffer)
+clutter_text_new_with_buffer (ClutterContext    *context,
+                              ClutterTextBuffer *buffer)
 {
   g_return_val_if_fail (CLUTTER_IS_TEXT_BUFFER (buffer), NULL);
-  return g_object_new (CLUTTER_TYPE_TEXT, "buffer", buffer, NULL);
+  return g_object_new (CLUTTER_TYPE_TEXT,
+                       "context", context,
+                       "buffer", buffer,
+                       NULL);
 }
 
 /**

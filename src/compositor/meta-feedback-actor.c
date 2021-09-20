@@ -166,12 +166,14 @@ meta_feedback_actor_init (MetaFeedbackActor *self)
  * Return value: the newly created background actor
  */
 ClutterActor *
-meta_feedback_actor_new (float anchor_x,
-                         float anchor_y)
+meta_feedback_actor_new (ClutterContext *clutter_context,
+                         float           anchor_x,
+                         float           anchor_y)
 {
   MetaFeedbackActor *self;
 
   self = g_object_new (META_TYPE_FEEDBACK_ACTOR,
+                       "context", clutter_context,
                        "anchor-x", anchor_x,
                        "anchor-y", anchor_y,
                        NULL);

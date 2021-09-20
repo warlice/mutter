@@ -33,6 +33,7 @@
 static void
 make_ui (ClutterActor *stage)
 {
+  ClutterContext *clutter_context = clutter_actor_get_context (stage);
   ClutterActor    *editable      = NULL;
   ClutterActor    *rectangle     = NULL;
   ClutterActor    *label         = NULL;
@@ -48,13 +49,15 @@ make_ui (ClutterActor *stage)
   clutter_actor_set_background_color (CLUTTER_ACTOR (stage), &color_stage);
   clutter_actor_set_size (stage, WIDTH, HEIGHT);
 
-  label = clutter_text_new_full ("Sans Bold 32px",
+  label = clutter_text_new_full (clutter_context,
+                                 "Sans Bold 32px",
                                  "Entry",
                                  &color_label);
   clutter_actor_set_position (label, 0, 50);
 
   /* editable */
-  editable = clutter_text_new_full ("Sans Bold 32px",
+  editable = clutter_text_new_full (clutter_context,
+                                    "Sans Bold 32px",
                                     "ddd",
                                     &color_text);
   clutter_actor_set_position (editable, 150, 50);
@@ -66,12 +69,12 @@ make_ui (ClutterActor *stage)
   clutter_actor_set_reactive (editable, TRUE);
 
   /* rectangle: to create a entry "feeling" */
-  rectangle = clutter_actor_new ();
+  rectangle = clutter_actor_new (clutter_context);
   clutter_actor_set_background_color (rectangle, &color_rect);
   clutter_actor_set_position (rectangle, 150, 50);
   clutter_actor_add_constraint (rectangle, clutter_bind_constraint_new (editable, CLUTTER_BIND_SIZE, 0));
 
-  full_entry = clutter_actor_new ();
+  full_entry = clutter_actor_new (clutter_context);
   clutter_actor_set_position (full_entry, 0, 50);
   clutter_actor_set_size (full_entry, 100, 75);
   clutter_container_add_actor (CLUTTER_CONTAINER (full_entry), label);
@@ -81,7 +84,7 @@ make_ui (ClutterActor *stage)
   clutter_container_add_actor (CLUTTER_CONTAINER (stage), full_entry);
 
   /* Cloning! */
-  cloned_entry = clutter_clone_new (full_entry);
+  cloned_entry = clutter_clone_new (clutter_context, full_entry);
   clutter_actor_set_position (cloned_entry, 50, 200);
   clutter_actor_set_scale (cloned_entry, 1, 2);
   clutter_actor_set_reactive (cloned_entry, TRUE);

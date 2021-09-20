@@ -9,9 +9,10 @@
 static void
 actor_initial_state (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *actor;
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 
@@ -32,9 +33,10 @@ actor_initial_state (void)
 static void
 actor_shown_not_parented (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *actor;
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 
@@ -59,10 +61,12 @@ actor_realized (void)
 {
   ClutterActor *actor;
   ClutterActor *stage;
+  ClutterContext *context;
 
   stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
 
   g_assert (!(CLUTTER_ACTOR_IS_REALIZED (actor)));
 
@@ -83,11 +87,13 @@ actor_mapped (void)
 {
   ClutterActor *actor;
   ClutterActor *stage;
+  ClutterContext *context;
 
   stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
   clutter_actor_show (stage);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
 
   g_assert (!(CLUTTER_ACTOR_IS_REALIZED (actor)));
   g_assert (!(CLUTTER_ACTOR_IS_MAPPED (actor)));
@@ -126,11 +132,13 @@ actor_visibility_not_recursive (void)
 {
   ClutterActor *actor, *group;
   ClutterActor *stage;
+  ClutterContext *context;
 
   stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
 
-  group = clutter_actor_new ();
-  actor = clutter_actor_new ();
+  group = clutter_actor_new (context);
+  actor = clutter_actor_new (context);
 
   clutter_actor_hide (group); /* don't show, so won't map */
   clutter_actor_hide (actor); /* don't show, so won't map */
@@ -169,13 +177,15 @@ actor_realize_not_recursive (void)
 {
   ClutterActor *actor, *group;
   ClutterActor *stage;
+  ClutterContext *context;
 
   stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
   clutter_actor_show (stage);
 
-  group = clutter_actor_new ();
+  group = clutter_actor_new (context);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
 
   clutter_actor_hide (group); /* don't show, so won't map */
   clutter_actor_hide (actor); /* don't show, so won't map */
@@ -207,13 +217,15 @@ actor_map_recursive (void)
 {
   ClutterActor *actor, *group;
   ClutterActor *stage;
+  ClutterContext *context;
 
   stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
   clutter_actor_show (stage);
 
-  group = clutter_actor_new ();
+  group = clutter_actor_new (context);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
 
   clutter_actor_hide (group); /* hide at first */
   clutter_actor_show (actor); /* show at first */
@@ -256,16 +268,18 @@ actor_show_on_set_parent (void)
   ClutterActor *actor, *group;
   gboolean show_on_set_parent;
   ClutterActor *stage;
+  ClutterContext *context;
 
   stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
 
-  group = clutter_actor_new ();
+  group = clutter_actor_new (context);
 
   g_assert (!(CLUTTER_ACTOR_IS_VISIBLE (group)));
 
   clutter_actor_add_child (stage, group);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   g_object_get (actor,
                 "show-on-set-parent", &show_on_set_parent,
                 NULL);
@@ -295,7 +309,7 @@ actor_show_on_set_parent (void)
   clutter_actor_destroy (actor);
   clutter_actor_destroy (group);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_add_child (stage, actor);
   clutter_actor_hide (actor);
   g_object_get (actor,
@@ -307,7 +321,7 @@ actor_show_on_set_parent (void)
 
   clutter_actor_destroy (actor);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_hide (actor);
   clutter_actor_add_child (stage, actor);
   g_object_get (actor,
@@ -324,15 +338,17 @@ static void
 clone_no_map (void)
 {
   ClutterActor *stage;
+  ClutterContext *context;
   ClutterActor *group;
   ClutterActor *actor;
   ClutterActor *clone;
 
   stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
   clutter_actor_show (stage);
 
-  group = clutter_actor_new ();
-  actor = clutter_actor_new ();
+  group = clutter_actor_new (context);
+  actor = clutter_actor_new (context);
 
   clutter_actor_hide (group);
 
@@ -342,7 +358,7 @@ clone_no_map (void)
   g_assert (!(CLUTTER_ACTOR_IS_MAPPED (group)));
   g_assert (!(CLUTTER_ACTOR_IS_MAPPED (actor)));
 
-  clone = clutter_clone_new (group);
+  clone = clutter_clone_new (context, group);
 
   clutter_actor_add_child (stage, clone);
 

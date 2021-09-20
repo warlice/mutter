@@ -212,9 +212,14 @@ meta_window_group_init (MetaWindowGroup *window_group)
 ClutterActor *
 meta_window_group_new (MetaDisplay *display)
 {
+  MetaContext *context = meta_display_get_context (display);
+  MetaBackend *backend = meta_context_get_backend (context);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaWindowGroup *window_group;
 
-  window_group = g_object_new (META_TYPE_WINDOW_GROUP, NULL);
+  window_group = g_object_new (META_TYPE_WINDOW_GROUP,
+                               "context", clutter_context,
+                               NULL);
 
   window_group->display = display;
 

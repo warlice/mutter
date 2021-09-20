@@ -123,7 +123,7 @@ test_group_init (TestGroup *self)
 static void
 script_child (void)
 {
-  ClutterScript *script = clutter_script_new ();
+  ClutterScript *script = clutter_script_new (clutter_test_get_context ());
   GObject *container, *actor;
   GError *error = NULL;
   gboolean focus_ret;
@@ -168,7 +168,7 @@ script_child (void)
 static void
 script_single (void)
 {
-  ClutterScript *script = clutter_script_new ();
+  ClutterScript *script = clutter_script_new (clutter_test_get_context ());
   ClutterColor color = { 0, };
   GObject *actor = NULL;
   GError *error = NULL;
@@ -201,7 +201,7 @@ script_single (void)
 static void
 script_object_property (void)
 {
-  ClutterScript *script = clutter_script_new ();
+  ClutterScript *script = clutter_script_new (clutter_test_get_context ());
   ClutterLayoutManager *manager;
   GObject *actor = NULL;
   GError *error = NULL;
@@ -227,7 +227,7 @@ script_object_property (void)
 static void
 script_named_object (void)
 {
-  ClutterScript *script = clutter_script_new ();
+  ClutterScript *script = clutter_script_new (clutter_test_get_context ());
   ClutterLayoutManager *manager;
   GObject *actor = NULL;
   GError *error = NULL;
@@ -254,7 +254,7 @@ script_named_object (void)
 static void
 script_margin (void)
 {
-  ClutterScript *script = clutter_script_new ();
+  ClutterScript *script = clutter_script_new (clutter_test_get_context ());
   ClutterActor *actor;
   gchar *test_file;
   GError *error = NULL;

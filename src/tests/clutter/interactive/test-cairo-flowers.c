@@ -144,6 +144,7 @@ draw_flower (ClutterCanvas *canvas,
 static ClutterActor *
 make_flower_actor (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   gint petal_size = PETAL_MIN + rand() % PETAL_VAR;
   gint size = petal_size * 8;
   ClutterActor *ctex;
@@ -155,6 +156,7 @@ make_flower_actor (void)
 
   clutter_canvas_set_size (CLUTTER_CANVAS (canvas), size, size);
   ctex = g_object_new (CLUTTER_TYPE_ACTOR,
+                       "context", context,
                        "content", canvas,
                        "width", (gfloat) size,
                        "height", (gfloat) size,

@@ -82,7 +82,8 @@ CLUTTER_EXPORT
 GType clutter_clone_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterActor *  clutter_clone_new               (ClutterActor *source);
+ClutterActor *  clutter_clone_new               (ClutterContext *context,
+                                                 ClutterActor   *source);
 CLUTTER_EXPORT
 void            clutter_clone_set_source        (ClutterClone *self,
                                                  ClutterActor *source);

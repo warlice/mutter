@@ -335,7 +335,9 @@ test_coglbox_class_init (TestCoglboxClass *klass)
 static ClutterActor*
 test_coglbox_new (void)
 {
-  return g_object_new (TEST_TYPE_COGLBOX, NULL);
+  return g_object_new (TEST_TYPE_COGLBOX,
+                       "context", clutter_test_get_context (),
+                       NULL);
 }
 
 static void
@@ -368,9 +370,12 @@ on_toggle_click (ClutterActor *button, ClutterEvent *event,
 static ClutterActor *
 make_toggle (const char *label_text, gboolean *toggle_val)
 {
-  ClutterActor *group = clutter_actor_new ();
-  ClutterActor *label = clutter_text_new_with_text ("Sans 14", label_text);
-  ClutterActor *button = clutter_text_new_with_text ("Sans 14", "");
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterActor *group = clutter_actor_new (clutter_test_get_context ());
+  ClutterActor *label = clutter_text_new_with_text (context,
+                                                    "Sans 14", label_text);
+  ClutterActor *button = clutter_text_new_with_text (context,
+                                                     "Sans 14", "");
 
   clutter_actor_set_reactive (button, TRUE);
 
@@ -388,6 +393,7 @@ make_toggle (const char *label_text, gboolean *toggle_val)
 G_MODULE_EXPORT int
 test_cogl_tex_polygon_main (int argc, char *argv[])
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor     *stage;
   ClutterActor     *coglbox;
   ClutterActor     *filtering_toggle;
@@ -428,7 +434,7 @@ test_cogl_tex_polygon_main (int argc, char *argv[])
   clutter_actor_set_position (filtering_toggle, 0,
 			      clutter_actor_get_y (slicing_toggle)
 			      - clutter_actor_get_height (filtering_toggle));
-  note = clutter_text_new_with_text ("Sans 10", "<- Click to change");
+  note = clutter_text_new_with_text (context, "Sans 10", "<- Click to change");
   clutter_actor_set_position (note,
 			      clutter_actor_get_width (filtering_toggle) + 10,
 			      (clutter_actor_get_height (stage)

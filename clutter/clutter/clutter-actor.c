@@ -72,7 +72,7 @@
  * clutter_actor_destroy().
  *
  * |[<!-- language="C" -->
- *  ClutterActor *actor = clutter_actor_new ();
+ *  ClutterActor *actor = clutter_actor_new (context);
  *
  *  // set the bounding box of the actor
  *  clutter_actor_set_position (actor, 0, 0);
@@ -82,7 +82,7 @@
  *  clutter_actor_set_background_color (actor, CLUTTER_COLOR_Orange);
  *
  *  // set the bounding box of the child, relative to the parent
- *  ClutterActor *child = clutter_actor_new ();
+ *  ClutterActor *child = clutter_actor_new (context);
  *  clutter_actor_set_position (child, 20, 20);
  *  clutter_actor_set_size (child, 80, 240);
  *
@@ -124,7 +124,7 @@
  * #ClutterActorClass.paint_node() virtual function.
  *
  * |[<!-- language="C" -->
- * ClutterActor *actor = clutter_actor_new ();
+ * ClutterActor *actor = clutter_actor_new (context);
  *
  * // set the bounding box
  * clutter_actor_set_position (actor, 50, 50);
@@ -671,6 +671,8 @@ typedef enum
 
 struct _ClutterActorPrivate
 {
+  ClutterContext *context;
+
   /* request mode */
   ClutterRequestMode request_mode;
 
@@ -847,6 +849,8 @@ struct _ClutterActorPrivate
 enum
 {
   PROP_0,
+
+  PROP_CONTEXT,
 
   PROP_NAME,
 
@@ -4763,6 +4767,10 @@ clutter_actor_set_property (GObject      *object,
 
   switch (prop_id)
     {
+    case PROP_CONTEXT:
+      priv->context = g_value_get_object (value);
+      break;
+
     case PROP_X:
       clutter_actor_set_x (actor, g_value_get_float (value));
       break;
@@ -5056,6 +5064,10 @@ clutter_actor_get_property (GObject    *object,
 
   switch (prop_id)
     {
+    case PROP_CONTEXT:
+      g_value_set_object (value, priv->context);
+      break;
+
     case PROP_X:
       g_value_set_float (value, clutter_actor_get_x (actor));
       break;
@@ -5885,6 +5897,16 @@ clutter_actor_constructor (GType gtype,
 }
 
 static void
+clutter_actor_constructed (GObject *object)
+{
+  ClutterActor *actor = CLUTTER_ACTOR (object);
+
+  g_warn_if_fail (actor->priv->context);
+
+  G_OBJECT_CLASS (clutter_actor_parent_class)->constructed (object);
+}
+
+static void
 clutter_actor_class_init (ClutterActorClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -5906,6 +5928,7 @@ clutter_actor_class_init (ClutterActorClass *klass)
   quark_im = g_quark_from_static_string ("im");
 
   object_class->constructor = clutter_actor_constructor;
+  object_class->constructed = clutter_actor_constructed;
   object_class->set_property = clutter_actor_set_property;
   object_class->get_property = clutter_actor_get_property;
   object_class->dispose = clutter_actor_dispose;
@@ -5929,6 +5952,23 @@ clutter_actor_class_init (ClutterActorClass *klass)
   klass->calculate_resource_scale = clutter_actor_real_calculate_resource_scale;
   klass->paint = clutter_actor_real_paint;
   klass->destroy = clutter_actor_real_destroy;
+
+  /**
+   * ClutterActor:context:
+   *
+   * The %ClutterContext of the actor
+   *
+   * Since: 0.2
+   */
+  obj_props[PROP_CONTEXT] =
+    g_param_spec_object ("context",
+                         P_("Context"),
+                         P_("The context of the actor"),
+                         CLUTTER_TYPE_CONTEXT,
+                         G_PARAM_READWRITE |
+                         G_PARAM_STATIC_STRINGS |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_EXPLICIT_NOTIFY);
 
   /**
    * ClutterActor:x:
@@ -7937,9 +7977,13 @@ clutter_actor_init (ClutterActor *self)
  * Since: 1.10
  */
 ClutterActor *
-clutter_actor_new (void)
+clutter_actor_new (ClutterContext *context)
 {
-  return g_object_new (CLUTTER_TYPE_ACTOR, NULL);
+  g_warn_if_fail (context);
+
+  return g_object_new (CLUTTER_TYPE_ACTOR,
+                       "context", context,
+                       NULL);
 }
 
 /**
@@ -13541,6 +13585,18 @@ clutter_actor_get_stage (ClutterActor *actor)
   g_return_val_if_fail (CLUTTER_IS_ACTOR (actor), NULL);
 
   return _clutter_actor_get_stage_internal (actor);
+}
+
+/**
+ * clutter_actor_get_context:
+ * @actor: a #ClutterActor
+ *
+ * Returns: (transfer none) (type Clutter.Context): the Clutter context
+ */
+ClutterContext *
+clutter_actor_get_context (ClutterActor *actor)
+{
+  return actor->priv->context;
 }
 
 /**

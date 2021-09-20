@@ -441,8 +441,10 @@ start (MetaPlugin *plugin)
   MetaDefaultPlugin *self = META_DEFAULT_PLUGIN (plugin);
   MetaDisplay *display = meta_plugin_get_display (plugin);
   MetaMonitorManager *monitor_manager = meta_monitor_manager_get ();
+  ClutterActor *stage = meta_get_stage_for_display (display);
+  ClutterContext *clutter_context = clutter_actor_get_context (stage);
 
-  self->priv->background_group = meta_background_group_new ();
+  self->priv->background_group = meta_background_group_new (clutter_context);
   clutter_actor_insert_child_below (meta_get_window_group_for_display (display),
                                     self->priv->background_group, NULL);
 
@@ -464,14 +466,19 @@ switch_workspace (MetaPlugin *plugin,
 {
   MetaDisplay *display;
   MetaDefaultPluginPrivate *priv = META_DEFAULT_PLUGIN (plugin)->priv;
+  ClutterContext *clutter_context;
   GList        *l;
-  ClutterActor *workspace0  = clutter_actor_new ();
-  ClutterActor *workspace1  = clutter_actor_new ();
+  ClutterActor *workspace0;
+  ClutterActor *workspace1;
   ClutterActor *stage;
   int           screen_width, screen_height;
 
   display = meta_plugin_get_display (plugin);
   stage = meta_get_stage_for_display (display);
+
+  clutter_context = clutter_actor_get_context (stage);
+  workspace0 = clutter_actor_new (clutter_context);
+  workspace1 = clutter_actor_new (clutter_context);
 
   meta_display_get_size (display,
                          &screen_width,
@@ -483,7 +490,6 @@ switch_workspace (MetaPlugin *plugin,
                               screen_height);
 
   clutter_actor_set_scale (workspace1, 0.0, 0.0);
-
   clutter_actor_add_child (stage, workspace1);
   clutter_actor_add_child (stage, workspace0);
 
@@ -783,9 +789,11 @@ get_display_tile_preview (MetaDisplay *display)
                                 display_tile_preview_data_quark);
   if (!preview)
     {
+      ClutterActor *stage = meta_get_stage_for_display (display);
+
       preview = g_new0 (DisplayTilePreview, 1);
 
-      preview->actor = clutter_actor_new ();
+      preview->actor = clutter_actor_new (clutter_actor_get_context (stage));
       clutter_actor_set_background_color (preview->actor, CLUTTER_COLOR_Blue);
       clutter_actor_set_opacity (preview->actor, 100);
 

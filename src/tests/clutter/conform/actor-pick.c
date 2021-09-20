@@ -32,6 +32,7 @@ static const char *test_passes[] = {
 static gboolean
 on_timeout (gpointer data)
 {
+  ClutterContext *context = clutter_test_get_context ();
   State *state = data;
   int test_num = 0;
   int y, x;
@@ -58,7 +59,7 @@ on_timeout (gpointer data)
           static const ClutterColor red = { 0xff, 0x00, 0x00, 0xff };
           /* Create an actor that covers the whole stage but that
              isn't visible so it shouldn't affect the picking */
-          over_actor = clutter_actor_new ();
+          over_actor = clutter_actor_new (context);
           clutter_actor_set_background_color (over_actor, &red);
           clutter_actor_set_size (over_actor, STAGE_WIDTH, STAGE_HEIGHT);
           clutter_actor_add_child (state->stage, over_actor);
@@ -170,6 +171,7 @@ on_timeout (gpointer data)
 static void
 actor_pick (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   int y, x;
   State state = { 0 };
   
@@ -186,7 +188,7 @@ actor_pick (void)
         ClutterColor color = { x * 255 / (ACTORS_X - 1),
                                y * 255 / (ACTORS_Y - 1),
                                128, 255 };
-        ClutterActor *rect = clutter_actor_new ();
+        ClutterActor *rect = clutter_actor_new (context);
         state.actor_list = g_list_prepend (state.actor_list, rect);
 
         clutter_actor_set_background_color (rect, &color);

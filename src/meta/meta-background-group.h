@@ -21,6 +21,6 @@ struct _MetaBackgroundGroupClass
 };
 
 META_EXPORT
-ClutterActor *meta_background_group_new (void);
+ClutterActor *meta_background_group_new (ClutterContext *clutter_context);
 
 #endif /* META_BACKGROUND_GROUP_H */

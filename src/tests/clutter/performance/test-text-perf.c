@@ -56,6 +56,7 @@ get_character (int ch)
 static ClutterActor *
 create_label (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterColor label_color = { 0xff, 0xff, 0xff, 0xff };
   ClutterActor *label;
   char         *font_name;
@@ -68,7 +69,7 @@ create_label (void)
   for (i = 0; i < n_chars; i++)
     g_string_append_unichar (str, get_character (i));
 
-  label = clutter_text_new_with_text (font_name, str->str);
+  label = clutter_text_new_with_text (context, font_name, str->str);
   clutter_text_set_color (CLUTTER_TEXT (label), &label_color);
 
   g_free (font_name);

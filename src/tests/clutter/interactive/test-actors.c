@@ -176,7 +176,7 @@ test_actors_main (int argc, char *argv[])
   g_free (file);
 
   /* create a new actor to hold other actors */
-  oh->group = clutter_actor_new ();
+  oh->group = clutter_actor_new (clutter_test_get_context ());
   clutter_actor_set_pivot_point (oh->group, 0.5, 0.5);
   clutter_actor_set_layout_manager (oh->group, clutter_fixed_layout_new ());
   clutter_actor_set_name (oh->group, "Group");
@@ -201,7 +201,8 @@ test_actors_main (int argc, char *argv[])
         }
       else
         {
-          oh->hand[i] = clutter_clone_new (real_hand);
+          oh->hand[i] = clutter_clone_new (clutter_test_get_context (),
+                                           real_hand);
           clutter_actor_set_name (oh->hand[i], "Clone Hand");
         }
 

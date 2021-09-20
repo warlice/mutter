@@ -117,7 +117,7 @@ test_path_constraint_main (int   argc,
   path = clutter_path_new ();
   clutter_path_set_description (path, PATH_DESCRIPTION);
 
-  rect = clutter_actor_new ();
+  rect = clutter_actor_new (clutter_test_get_context ());
   clutter_actor_set_background_color (rect, &rect_color);
   clutter_actor_set_size (rect, 128, 128);
   clutter_actor_set_reactive (rect, TRUE);
