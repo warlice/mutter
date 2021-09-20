@@ -38,27 +38,14 @@
 #include "clutter-stage-view-private.h"
 #include "clutter.h"
 
-typedef ClutterBackend * (* ClutterBackendConstructor) (gpointer user_data);
-
 /**
- * clutter_context_new: (skip)
+ * clutter_create_context: (skip)
  */
 CLUTTER_EXPORT
-ClutterContext * clutter_context_new (ClutterBackendConstructor   backend_constructor,
-                                      gpointer                    user_data,
-                                      GError                    **error);
-
-/**
- * clutter_context_free: (skip)
- */
-CLUTTER_EXPORT
-void clutter_context_free (ClutterContext *clutter_context);
-
-/**
- * clutter_context_get_backend: (skip)
- */
-CLUTTER_EXPORT
-ClutterBackend * clutter_context_get_backend (ClutterContext *clutter_context);
+ClutterContext * clutter_create_context (ClutterContextFlags         flags,
+                                         ClutterBackendConstructor   backend_constructor,
+                                         gpointer                    user_data,
+                                         GError                    **error);
 
 CLUTTER_EXPORT
 GList * clutter_stage_peek_stage_views (ClutterStage *stage);
