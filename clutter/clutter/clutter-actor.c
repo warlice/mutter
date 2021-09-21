@@ -1104,6 +1104,14 @@ G_DEFINE_TYPE_WITH_CODE (ClutterActor,
                          G_IMPLEMENT_INTERFACE (ATK_TYPE_IMPLEMENTOR,
                                                 atk_implementor_iface_init));
 
+static ClutterBackend *
+backend_from_actor (ClutterActor *actor)
+{
+  g_return_val_if_fail (actor->priv->context, NULL);
+
+  return clutter_context_get_backend (actor->priv->context);
+}
+
 /*< private >
  * clutter_actor_get_debug_name:
  * @actor: a #ClutterActor
@@ -3115,7 +3123,7 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
   graphene_point3d_t line_ends[12 * 2];
   int n_vertices;
   CoglContext *ctx =
-    clutter_backend_get_cogl_context (clutter_get_default_backend ());
+    clutter_backend_get_cogl_context (backend_from_actor (self));
   CoglColor cogl_color;
 
   if (outline == NULL)
@@ -5511,7 +5519,7 @@ clutter_actor_dispose (GObject *object)
 {
   ClutterActor *self = CLUTTER_ACTOR (object);
   ClutterActorPrivate *priv = self->priv;
-  ClutterBackend *backend = clutter_get_default_backend ();
+  ClutterBackend *backend = backend_from_actor (self);
 
   CLUTTER_NOTE (MISC, "Dispose actor (name='%s', ref_count:%d) of type '%s'",
 		_clutter_actor_get_debug_name (self),
@@ -13949,10 +13957,11 @@ clutter_actor_grab_key_focus (ClutterActor *self)
 }
 
 static void
-update_pango_context (ClutterBackend *backend,
-                      PangoContext   *context)
+update_pango_context (PangoContext   *pango_context,
+                      ClutterContext *context)
 {
   ClutterSettings *settings;
+  ClutterBackend *backend = clutter_context_get_backend (context);
   PangoFontDescription *font_desc;
   const cairo_font_options_t *font_options;
   gchar *font_name;
@@ -13967,7 +13976,7 @@ update_pango_context (ClutterBackend *backend,
   else
     pango_dir = PANGO_DIRECTION_LTR;
 
-  pango_context_set_base_dir (context, pango_dir);
+  pango_context_set_base_dir (pango_context, pango_dir);
 
   g_object_get (settings, "font-name", &font_name, NULL);
 
@@ -13980,12 +13989,19 @@ update_pango_context (ClutterBackend *backend,
   if (resolution < 0)
     resolution = 96.0; /* fall back */
 
-  pango_context_set_font_description (context, font_desc);
-  pango_cairo_context_set_font_options (context, font_options);
-  pango_cairo_context_set_resolution (context, resolution);
+  pango_context_set_font_description (pango_context, font_desc);
+  pango_cairo_context_set_font_options (pango_context, font_options);
+  pango_cairo_context_set_resolution (pango_context, resolution);
 
   pango_font_description_free (font_desc);
   g_free (font_name);
+}
+
+static void
+pango_context_invalidated (ClutterBackend *backend,
+                           ClutterActor   *self)
+{
+  update_pango_context (self->priv->pango_context, self->priv->context);
 }
 
 /**
@@ -14014,7 +14030,7 @@ PangoContext *
 clutter_actor_get_pango_context (ClutterActor *self)
 {
   ClutterActorPrivate *priv;
-  ClutterBackend *backend = clutter_get_default_backend ();
+  ClutterBackend *backend = backend_from_actor (self);
 
   g_return_val_if_fail (CLUTTER_IS_ACTOR (self), NULL);
 
@@ -14026,13 +14042,15 @@ clutter_actor_get_pango_context (ClutterActor *self)
 
       priv->resolution_changed_id =
         g_signal_connect_object (backend, "resolution-changed",
-                                 G_CALLBACK (update_pango_context), priv->pango_context, 0);
+                                 G_CALLBACK (pango_context_invalidated), self, 0);
       priv->font_changed_id =
         g_signal_connect_object (backend, "font-changed",
-                                 G_CALLBACK (update_pango_context), priv->pango_context, 0);
+                                 G_CALLBACK (pango_context_invalidated), self, 0);
     }
   else
-    update_pango_context (backend, priv->pango_context);
+    {
+      pango_context_invalidated (backend, self);
+    }
 
   return priv->pango_context;
 }
@@ -14057,15 +14075,15 @@ PangoContext *
 clutter_actor_create_pango_context (ClutterActor *self)
 {
   CoglPangoFontMap *font_map;
-  PangoContext *context;
+  PangoContext *pango_context;
 
   font_map = COGL_PANGO_FONT_MAP (clutter_get_font_map ());
 
-  context = cogl_pango_font_map_create_context (font_map);
-  update_pango_context (clutter_get_default_backend (), context);
-  pango_context_set_language (context, pango_language_get_default ());
+  pango_context = cogl_pango_font_map_create_context (font_map);
+  update_pango_context (pango_context, self->priv->context);
+  pango_context_set_language (pango_context, pango_language_get_default ());
 
-  return context;
+  return pango_context;
 }
 
 /**
@@ -15755,7 +15773,7 @@ clutter_actor_get_real_resource_scale (ClutterActor *self)
     }
   else
     {
-      ClutterBackend *backend = clutter_get_default_backend ();
+      ClutterBackend *backend = backend_from_actor (self);
 
       guessed_scale = clutter_backend_get_fallback_resource_scale (backend);
     }
