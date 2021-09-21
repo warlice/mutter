@@ -374,7 +374,7 @@ meta_backend_x11_handle_event_clutter (MetaBackendX11 *backend_x11,
 
   if (_clutter_backend_translate_event (clutter_backend, xevent, event))
     {
-      _clutter_event_push (event, FALSE);
+      clutter_context_push_event (clutter_context, event, FALSE);
     }
   else
     {
@@ -391,7 +391,7 @@ meta_backend_x11_handle_event_clutter (MetaBackendX11 *backend_x11,
   if (event->type == CLUTTER_MOTION)
     spin += 2;
 
-  while (spin > 0 && (event = clutter_event_get ()))
+  while (spin > 0 && (event = clutter_context_get_event (clutter_context)))
     {
       /* forward the event into clutter for emission etc. */
       _clutter_stage_queue_event (event->any.stage, event, FALSE);
@@ -1047,6 +1047,7 @@ void
 meta_backend_x11_sync_pointer (MetaBackendX11 *backend_x11)
 {
   MetaBackend *backend = META_BACKEND (backend_x11);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
   ClutterInputDevice *pointer = clutter_seat_get_pointer (seat);
@@ -1064,6 +1065,6 @@ meta_backend_x11_sync_pointer (MetaBackendX11 *backend_x11)
   clutter_event_set_source_device (event, NULL);
   clutter_event_set_stage (event, stage);
 
-  clutter_event_put (event);
+  clutter_context_put_event (clutter_context, event);
   clutter_event_free (event);
 }

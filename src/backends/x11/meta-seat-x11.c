@@ -916,9 +916,11 @@ emulate_motion (MetaSeatX11 *seat_x11,
   ClutterInputDevice *pointer;
   ClutterEvent *event;
   ClutterStage *stage;
+  ClutterContext *clutter_context;
 
   pointer = clutter_seat_get_pointer (CLUTTER_SEAT (seat_x11));
   stage = CLUTTER_STAGE (meta_backend_get_stage (seat_x11->backend));
+  clutter_context = meta_backend_get_clutter_context (seat_x11->backend);
 
   event = clutter_event_new (CLUTTER_MOTION);
   clutter_event_set_flags (event, CLUTTER_EVENT_FLAG_SYNTHETIC);
@@ -927,7 +929,7 @@ emulate_motion (MetaSeatX11 *seat_x11,
   clutter_event_set_source_device (event, NULL);
   clutter_event_set_stage (event, stage);
 
-  clutter_event_put (event);
+  clutter_context_put_event (clutter_context, event);
   clutter_event_free (event);
 }
 
@@ -1378,6 +1380,8 @@ void
 meta_seat_x11_notify_devices (MetaSeatX11  *seat_x11,
 			      ClutterStage *stage)
 {
+  ClutterContext *clutter_context =
+    meta_backend_get_clutter_context (seat_x11->backend);
   GHashTableIter iter;
   ClutterInputDevice *device;
 
@@ -1389,7 +1393,7 @@ meta_seat_x11_notify_devices (MetaSeatX11  *seat_x11,
       event = clutter_event_new (CLUTTER_DEVICE_ADDED);
       clutter_event_set_device (event, device);
       clutter_event_set_stage (event, stage);
-      clutter_event_put (event);
+      clutter_context_put_event (clutter_context, event);
       clutter_event_free (event);
     }
 }

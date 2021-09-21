@@ -971,15 +971,22 @@ static gboolean
 clutter_source_prepare (GSource *source,
                         int     *timeout)
 {
+  MetaBackendSource *backend_source = (MetaBackendSource *) source;
+  ClutterContext *clutter_context =
+    meta_backend_get_clutter_context (backend_source->backend);
   *timeout = -1;
 
-  return clutter_events_pending ();
+  return clutter_context_events_pending (clutter_context);
 }
 
 static gboolean
 clutter_source_check (GSource *source)
 {
-  return clutter_events_pending ();
+  MetaBackendSource *backend_source = (MetaBackendSource *) source;
+  ClutterContext *clutter_context =
+    meta_backend_get_clutter_context (backend_source->backend);
+
+  return clutter_context_events_pending (clutter_context);
 }
 
 static gboolean
@@ -988,8 +995,11 @@ clutter_source_dispatch (GSource     *source,
                          gpointer     user_data)
 {
   MetaBackendSource *backend_source = (MetaBackendSource *) source;
-  ClutterEvent *event = clutter_event_get ();
+  ClutterContext *clutter_context =
+    meta_backend_get_clutter_context (backend_source->backend);
+  ClutterEvent *event;
 
+  event = clutter_context_get_event (clutter_context);
   if (event)
     {
       event->any.stage =

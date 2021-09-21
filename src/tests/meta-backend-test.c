@@ -90,6 +90,7 @@ meta_backend_test_add_test_device (MetaBackendTest        *backend_test,
   g_autoptr (GList) devices = NULL;
   MetaBackend *backend = META_BACKEND (backend_test);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
   ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
   ClutterInputDevice *device;
@@ -154,7 +155,7 @@ meta_backend_test_add_test_device (MetaBackendTest        *backend_test,
   event = clutter_event_new (CLUTTER_DEVICE_ADDED);
   clutter_event_set_device (event, device);
   clutter_event_set_stage (event, stage);
-  clutter_event_put (event);
+  clutter_context_put_event (clutter_context, event);
   clutter_event_free (event);
 
   return device;
@@ -165,13 +166,14 @@ meta_backend_test_remove_device (MetaBackendTest    *backend_test,
                                  ClutterInputDevice *device)
 {
   MetaBackend *backend = META_BACKEND (backend_test);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   ClutterStage *stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
   ClutterEvent *event;
 
   event = clutter_event_new (CLUTTER_DEVICE_REMOVED);
   clutter_event_set_device (event, device);
   clutter_event_set_stage (event, stage);
-  clutter_event_put (event);
+  clutter_context_put_event (clutter_context, event);
   clutter_event_free (event);
 }
 

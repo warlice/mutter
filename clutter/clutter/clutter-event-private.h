@@ -11,10 +11,12 @@ void            _clutter_event_set_pointer_emulated     (ClutterEvent       *eve
 
 /* Reinjecting queued events for processing */
 CLUTTER_EXPORT
-void            _clutter_process_event                  (ClutterEvent       *event);
+void            clutter_context_process_event           (ClutterContext     *context,
+                                                         ClutterEvent       *event);
 
 CLUTTER_EXPORT
-gboolean        _clutter_event_process_filters          (ClutterEvent       *event);
+gboolean        clutter_context_process_event_filters   (ClutterContext     *context,
+                                                         ClutterEvent       *event);
 
 /* clears the event queue inside the main context */
 void            _clutter_clear_events_queue             (void);
@@ -34,7 +36,8 @@ void            _clutter_event_set_state_full           (ClutterEvent        *ev
 							 ClutterModifierType  effective_state);
 
 CLUTTER_EXPORT
-void            _clutter_event_push                     (const ClutterEvent *event,
+void            clutter_context_push_event              (ClutterContext     *context,
+                                                         const ClutterEvent *event,
                                                          gboolean            do_copy);
 
 G_END_DECLS

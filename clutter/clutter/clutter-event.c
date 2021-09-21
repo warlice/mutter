@@ -1430,9 +1430,8 @@ clutter_event_free (ClutterEvent *event)
  * Since: 0.4
  */
 ClutterEvent *
-clutter_event_get (void)
+clutter_context_get_event (ClutterContext *context)
 {
-  ClutterContext *context = _clutter_context_get_default ();
   ClutterEvent *event;
 
   event = g_async_queue_try_pop (context->events_queue);
@@ -1441,12 +1440,11 @@ clutter_event_get (void)
 }
 
 void
-_clutter_event_push (const ClutterEvent *event,
-                     gboolean            do_copy)
+clutter_context_push_event (ClutterContext     *context,
+                            const ClutterEvent *event,
+                            gboolean            do_copy)
 {
-  ClutterContext *context = _clutter_context_get_default ();
-
-  g_assert (context != NULL);
+  g_assert (CLUTTER_IS_CONTEXT (context));
 
   if (do_copy)
     {
@@ -1461,7 +1459,7 @@ _clutter_event_push (const ClutterEvent *event,
 }
 
 /**
- * clutter_event_put:
+ * clutter_context_put_event:
  * @event: a #ClutterEvent
  *
  * Puts a copy of the event on the back of the event queue. The event will
@@ -1473,13 +1471,14 @@ _clutter_event_push (const ClutterEvent *event,
  * Since: 0.6
  */
 void
-clutter_event_put (const ClutterEvent *event)
+clutter_context_put_event (ClutterContext     *context,
+                           const ClutterEvent *event)
 {
-  _clutter_event_push (event, TRUE);
+  clutter_context_push_event (context, event, TRUE);
 }
 
 /**
- * clutter_events_pending:
+ * clutter_context_events_pending:
  *
  * Checks if events are pending in the event queue.
  *
@@ -1488,17 +1487,15 @@ clutter_event_put (const ClutterEvent *event)
  * Since: 0.4
  */
 gboolean
-clutter_events_pending (void)
+clutter_context_events_pending (ClutterContext *context)
 {
-  ClutterContext *context = _clutter_context_get_default ();
-
-  g_return_val_if_fail (context != NULL, FALSE);
+  g_return_val_if_fail (CLUTTER_IS_CONTEXT (context), FALSE);
 
   return g_async_queue_length (context->events_queue) > 0;
 }
 
 /**
- * clutter_get_current_event_time:
+ * clutter_context_get_current_event_time:
  *
  * Retrieves the timestamp of the last event, if there is an
  * event or if the event has a timestamp.
@@ -1508,11 +1505,11 @@ clutter_events_pending (void)
  * Since: 1.0
  */
 guint32
-clutter_get_current_event_time (void)
+clutter_context_get_current_event_time (ClutterContext *context)
 {
   const ClutterEvent* event;
 
-  event = clutter_get_current_event ();
+  event = clutter_context_get_current_event (context);
 
   if (event != NULL)
     return clutter_event_get_time (event);
@@ -1534,11 +1531,9 @@ clutter_get_current_event_time (void)
  * Since: 1.2
  */
 const ClutterEvent *
-clutter_get_current_event (void)
+clutter_context_get_current_event (ClutterContext *context)
 {
-  ClutterContext *context = _clutter_context_get_default ();
-
-  g_return_val_if_fail (context != NULL, NULL);
+  g_return_val_if_fail (CLUTTER_IS_CONTEXT (context), NULL);
 
   return context->current_event != NULL ? context->current_event->data : NULL;
 }
@@ -1783,9 +1778,9 @@ clutter_event_is_pointer_emulated (const ClutterEvent *event)
 }
 
 gboolean
-_clutter_event_process_filters (ClutterEvent *event)
+clutter_context_process_event_filters (ClutterContext *context,
+                                       ClutterEvent   *event)
 {
-  ClutterContext *context = _clutter_context_get_default ();
   GList *l, *next;
 
   /* Event filters are handled in order from least recently added to
@@ -1808,7 +1803,7 @@ _clutter_event_process_filters (ClutterEvent *event)
 }
 
 /**
- * clutter_event_add_filter:
+ * clutter_context_add_event_filter:
  * @stage: (allow-none): The #ClutterStage to capture events for
  * @func: The callback function which will be passed all events.
  * @notify: A #GDestroyNotify
@@ -1824,12 +1819,12 @@ _clutter_event_process_filters (ClutterEvent *event)
  * Since: 1.18
  */
 guint
-clutter_event_add_filter (ClutterStage          *stage,
-                          ClutterEventFilterFunc func,
-                          GDestroyNotify         notify,
-                          gpointer               user_data)
+clutter_context_add_event_filter (ClutterContext         *context,
+                                  ClutterStage           *stage,
+                                  ClutterEventFilterFunc  func,
+                                  GDestroyNotify          notify,
+                                  gpointer                user_data)
 {
-  ClutterContext *context = _clutter_context_get_default ();
   ClutterEventFilter *event_filter = g_new0 (ClutterEventFilter, 1);
   static guint event_filter_id = 0;
 
@@ -1856,9 +1851,9 @@ clutter_event_add_filter (ClutterStage          *stage,
  * Since: 1.18
  */
 void
-clutter_event_remove_filter (guint id)
+clutter_context_remove_event_filter (ClutterContext *context,
+                                     guint           id)
 {
-  ClutterContext *context = _clutter_context_get_default ();
   GList *l;
 
   for (l = context->event_filters; l; l = l->next)

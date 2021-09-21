@@ -597,6 +597,7 @@ _clutter_stage_queue_event (ClutterStage *stage,
                             ClutterEvent *event,
                             gboolean      copy_event)
 {
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
   ClutterStagePrivate *priv;
   gboolean first_event;
 
@@ -616,7 +617,7 @@ _clutter_stage_queue_event (ClutterStage *stage,
 
       if (!compressible)
         {
-          _clutter_process_event (event);
+          clutter_context_process_event (context, event);
           clutter_event_free (event);
           return;
         }
@@ -670,11 +671,13 @@ void
 _clutter_stage_process_queued_events (ClutterStage *stage)
 {
   ClutterStagePrivate *priv;
+  ClutterContext *context;
   GList *events, *l;
 
   g_return_if_fail (CLUTTER_IS_STAGE (stage));
 
   priv = stage->priv;
+  context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
 
   if (priv->event_queue->length == 0)
     return;
@@ -750,7 +753,7 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
             }
         }
 
-      _clutter_process_event (event);
+      clutter_context_process_event (context, event);
 
     next_event:
       clutter_event_free (event);

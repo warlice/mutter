@@ -367,7 +367,13 @@ meta_wayland_tablet_pad_group_sync_focus (MetaWaylandTabletPadGroup *group)
 
   if (!wl_list_empty (&group->focus_resource_list))
     {
-      broadcast_group_mode (group, clutter_get_current_event_time ());
+      MetaWaylandSeat *seat = group->pad->tablet_seat->seat;
+      ClutterSeat *clutter_seat = meta_wayland_seat_get_seat (seat);
+      ClutterContext *clutter_context = clutter_seat_get_context (clutter_seat);
+      uint32_t current_event_time_ms;
+
+      current_event_time_ms = clutter_context_get_current_event_time (clutter_context);
+      broadcast_group_mode (group, current_event_time_ms);
       broadcast_group_buttons (group);
     }
 }

@@ -495,15 +495,26 @@ event_callback (const ClutterEvent *event,
 void
 meta_display_init_events (MetaDisplay *display)
 {
-  display->clutter_event_filter = clutter_event_add_filter (NULL,
-                                                            event_callback,
-                                                            NULL,
-                                                            display);
+  MetaContext *context = meta_display_get_context (display);
+  MetaBackend *backend = meta_context_get_backend (context);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
+
+  display->clutter_event_filter =
+    clutter_context_add_event_filter (clutter_context,
+                                      NULL,
+                                      event_callback,
+                                      NULL,
+                                      display);
 }
 
 void
 meta_display_free_events (MetaDisplay *display)
 {
-  clutter_event_remove_filter (display->clutter_event_filter);
+  MetaContext *context = meta_display_get_context (display);
+  MetaBackend *backend = meta_context_get_backend (context);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
+
+  clutter_context_remove_event_filter (clutter_context,
+                                       display->clutter_event_filter);
   display->clutter_event_filter = 0;
 }

@@ -560,10 +560,11 @@ emit_event_chain (ClutterEvent *event)
  */
 
 static inline void
-emit_pointer_event (ClutterEvent       *event,
+emit_pointer_event (ClutterContext     *context,
+                    ClutterEvent       *event,
                     ClutterInputDevice *device)
 {
-  if (_clutter_event_process_filters (event))
+  if (clutter_context_process_event_filters (context, event))
     return;
 
   if (device != NULL && device->pointer_grab_actor != NULL)
@@ -573,13 +574,14 @@ emit_pointer_event (ClutterEvent       *event,
 }
 
 static inline void
-emit_crossing_event (ClutterEvent       *event,
+emit_crossing_event (ClutterContext     *context,
+                     ClutterEvent       *event,
                      ClutterInputDevice *device)
 {
   ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
   ClutterActor *grab_actor = NULL;
 
-  if (_clutter_event_process_filters (event))
+  if (clutter_context_process_event_filters (context, event))
     return;
 
   if (sequence)
@@ -600,12 +602,13 @@ emit_crossing_event (ClutterEvent       *event,
 }
 
 static inline void
-emit_touch_event (ClutterEvent       *event,
+emit_touch_event (ClutterContext     *context,
+                  ClutterEvent       *event,
                   ClutterInputDevice *device)
 {
   ClutterActor *grab_actor = NULL;
 
-  if (_clutter_event_process_filters (event))
+  if (clutter_context_process_event_filters (context, event))
     return;
 
   if (device->sequence_grab_actors != NULL)
@@ -627,10 +630,11 @@ emit_touch_event (ClutterEvent       *event,
 }
 
 static inline void
-process_key_event (ClutterEvent       *event,
+process_key_event (ClutterContext     *context,
+                   ClutterEvent       *event,
                    ClutterInputDevice *device)
 {
-  if (_clutter_event_process_filters (event))
+  if (clutter_context_process_event_filters (context, event))
     return;
 
   if (device != NULL && device->keyboard_grab_actor != NULL)
@@ -693,7 +697,8 @@ clutter_do_event (ClutterEvent *event)
 }
 
 static void
-create_crossing_event (ClutterStage         *stage,
+create_crossing_event (ClutterContext       *context,
+                       ClutterStage         *stage,
                        ClutterInputDevice   *device,
                        ClutterEventSequence *sequence,
                        ClutterEventType      event_type,
@@ -720,7 +725,7 @@ create_crossing_event (ClutterStage         *stage,
    * now, so we go on, and synthesize the event emission
    * ourselves
    */
-  _clutter_process_event (event);
+  clutter_context_process_event (context, event);
 
   clutter_event_free (event);
 }
@@ -734,6 +739,7 @@ clutter_stage_update_device (ClutterStage         *stage,
                              ClutterActor         *new_actor,
                              gboolean              emit_crossing)
 {
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
   ClutterInputDeviceType device_type;
   ClutterActor *old_actor;
   gboolean device_actor_changed;
@@ -762,7 +768,8 @@ clutter_stage_update_device (ClutterStage         *stage,
 
       if (old_actor && emit_crossing)
         {
-          create_crossing_event (stage,
+          create_crossing_event (context,
+                                 stage,
                                  device, sequence,
                                  CLUTTER_LEAVE,
                                  old_actor, new_actor,
@@ -771,7 +778,8 @@ clutter_stage_update_device (ClutterStage         *stage,
 
       if (new_actor && emit_crossing)
         {
-          create_crossing_event (stage,
+          create_crossing_event (context,
+                                 stage,
                                  device, sequence,
                                  CLUTTER_ENTER,
                                  new_actor, old_actor,
@@ -855,15 +863,12 @@ remove_device_for_event (ClutterStage *stage,
 
 
 static void
-_clutter_process_event_details (ClutterActor    *stage,
-                                ClutterContext  *clutter_context,
-                                ClutterEvent    *event)
+process_event_details (ClutterActor    *stage,
+                       ClutterContext  *context,
+                       ClutterEvent    *event)
 {
   ClutterInputDevice *device = clutter_event_get_device (event);
-  ClutterBackend *backend;
-
-  clutter_context = _clutter_context_get_default ();
-  backend = clutter_context->backend;
+  ClutterBackend *backend = clutter_context_get_backend (context);
 
   switch (event->type)
     {
@@ -895,7 +900,7 @@ _clutter_process_event_details (ClutterActor    *stage,
                 }
             }
 
-          process_key_event (event, device);
+          process_key_event (context, event, device);
         }
         break;
 
@@ -909,7 +914,7 @@ _clutter_process_event_details (ClutterActor    *stage,
           {
             ClutterActor *actor = NULL;
 
-            emit_crossing_event (event, device);
+            emit_crossing_event (context, event, device);
 
             actor = update_device_for_event (CLUTTER_STAGE (stage), event, FALSE);
             if (actor != stage)
@@ -921,12 +926,12 @@ _clutter_process_event_details (ClutterActor    *stage,
                 crossing->crossing.related = stage;
                 crossing->crossing.source = actor;
 
-                emit_crossing_event (crossing, device);
+                emit_crossing_event (context, crossing, device);
                 clutter_event_free (crossing);
               }
           }
         else
-          emit_crossing_event (event, device);
+          emit_crossing_event (context, event, device);
         break;
 
       case CLUTTER_LEAVE:
@@ -946,10 +951,10 @@ _clutter_process_event_details (ClutterActor    *stage,
             crossing->crossing.source =
               clutter_stage_get_device_actor (CLUTTER_STAGE (stage), device, NULL);
 
-            emit_crossing_event (crossing, device);
+            emit_crossing_event (context, crossing, device);
             clutter_event_free (crossing);
           }
-        emit_crossing_event (event, device);
+        emit_crossing_event (context, event, device);
         break;
 
       case CLUTTER_MOTION:
@@ -971,7 +976,7 @@ _clutter_process_event_details (ClutterActor    *stage,
             /* Only stage gets motion events */
             event->any.source = stage;
 
-            if (_clutter_event_process_filters (event))
+            if (clutter_context_process_event_filters (context, event))
               break;
 
             if (device != NULL && device->pointer_grab_actor != NULL)
@@ -1034,7 +1039,7 @@ _clutter_process_event_details (ClutterActor    *stage,
                       event->button.source = stage;
                       event->button.click_count = 1;
 
-                      emit_pointer_event (event, device);
+                      emit_pointer_event (context, event, device);
                     }
                   else if (event->type == CLUTTER_MOTION)
                     {
@@ -1044,7 +1049,7 @@ _clutter_process_event_details (ClutterActor    *stage,
 
                       event->motion.source = stage;
 
-                      emit_pointer_event (event, device);
+                      emit_pointer_event (context, event, device);
                     }
 
                   break;
@@ -1085,7 +1090,7 @@ _clutter_process_event_details (ClutterActor    *stage,
               event_click_count_generate (event);
             }
 
-          emit_pointer_event (event, device);
+          emit_pointer_event (context, event, device);
           break;
         }
 
@@ -1099,7 +1104,7 @@ _clutter_process_event_details (ClutterActor    *stage,
             /* Only stage gets motion events */
             event->any.source = stage;
 
-            if (_clutter_event_process_filters (event))
+            if (clutter_context_process_event_filters (context, event))
               break;
 
             /* global grabs */
@@ -1151,7 +1156,7 @@ _clutter_process_event_details (ClutterActor    *stage,
 
                   event->touch.source = stage;
 
-                  emit_touch_event (event, device);
+                  emit_touch_event (context, event, device);
 
                   if (event->type == CLUTTER_TOUCH_END ||
                       event->type == CLUTTER_TOUCH_CANCEL)
@@ -1183,7 +1188,7 @@ _clutter_process_event_details (ClutterActor    *stage,
                         x, y,
                         event->any.source);
 
-          emit_touch_event (event, device);
+          emit_touch_event (context, event, device);
 
           if (event->type == CLUTTER_TOUCH_END ||
               event->type == CLUTTER_TOUCH_CANCEL)
@@ -1194,7 +1199,7 @@ _clutter_process_event_details (ClutterActor    *stage,
 
       case CLUTTER_PROXIMITY_IN:
       case CLUTTER_PROXIMITY_OUT:
-        if (_clutter_event_process_filters (event))
+        if (clutter_context_process_event_filters (context, event))
           break;
 
         if (!clutter_actor_event (stage, event, TRUE))
@@ -1206,14 +1211,14 @@ _clutter_process_event_details (ClutterActor    *stage,
         break;
 
       case CLUTTER_DEVICE_ADDED:
-        _clutter_event_process_filters (event);
+        clutter_context_process_event_filters (context, event);
         break;
 
       case CLUTTER_DEVICE_REMOVED:
         {
           ClutterInputDeviceType device_type;
 
-          _clutter_event_process_filters (event);
+          clutter_context_process_event_filters (context, event);
 
           device_type = clutter_input_device_get_device_type (device);
           if (device_type == CLUTTER_POINTER_DEVICE ||
@@ -1232,20 +1237,20 @@ _clutter_process_event_details (ClutterActor    *stage,
 }
 
 /*
- * _clutter_process_event
+ * clutter_context_process_event
+ * @context: a #ClutterContext
  * @event: a #ClutterEvent.
  *
  * Does the actual work of processing an event that was queued earlier
  * out of clutter_do_event().
  */
 void
-_clutter_process_event (ClutterEvent *event)
+clutter_context_process_event (ClutterContext *context,
+                               ClutterEvent   *event)
 {
-  ClutterContext *context;
   ClutterActor *stage;
   ClutterSeat *seat;
 
-  context = _clutter_context_get_default ();
   seat = clutter_backend_get_default_seat (context->backend);
 
   stage = CLUTTER_ACTOR (event->any.stage);
@@ -1262,7 +1267,7 @@ _clutter_process_event (ClutterEvent *event)
   context->current_event = g_slist_prepend (context->current_event, event);
 
   clutter_seat_handle_event_post (seat, event);
-  _clutter_process_event_details (stage, context, event);
+  process_event_details (stage, context, event);
 
   context->current_event = g_slist_delete_link (context->current_event, context->current_event);
 }
