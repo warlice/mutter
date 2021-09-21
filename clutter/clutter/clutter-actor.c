@@ -13960,15 +13960,13 @@ static void
 update_pango_context (PangoContext   *pango_context,
                       ClutterContext *context)
 {
-  ClutterSettings *settings;
   ClutterBackend *backend = clutter_context_get_backend (context);
+  ClutterSettings *settings = clutter_context_get_settings (context);
   PangoFontDescription *font_desc;
   const cairo_font_options_t *font_options;
   gchar *font_name;
   PangoDirection pango_dir;
   gdouble resolution;
-
-  settings = clutter_settings_get_default ();
 
   /* update the text direction */
   if (clutter_get_default_text_direction () == CLUTTER_TEXT_DIRECTION_RTL)
