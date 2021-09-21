@@ -151,12 +151,11 @@ clutter_backend_dispose (GObject *gobject)
 static void
 clutter_backend_real_resolution_changed (ClutterBackend *backend)
 {
-  ClutterContext *context;
-  ClutterSettings *settings;
+  ClutterContext *context = clutter_backend_get_context (backend);
+  ClutterSettings *settings = clutter_context_get_settings (context);
   gdouble resolution;
   gint dpi;
 
-  settings = clutter_settings_get_default ();
   g_object_get (settings, "font-dpi", &dpi, NULL);
 
   if (dpi < 0)
@@ -164,7 +163,6 @@ clutter_backend_real_resolution_changed (ClutterBackend *backend)
   else
     resolution = dpi / 1024.0;
 
-  context = _clutter_context_get_default ();
   if (context->font_map != NULL)
     cogl_pango_font_map_set_resolution (context->font_map, resolution);
 }
@@ -534,12 +532,14 @@ clutter_backend_get_context (ClutterBackend *backend)
 gdouble
 clutter_backend_get_resolution (ClutterBackend *backend)
 {
+  ClutterContext *context;
   ClutterSettings *settings;
   gint resolution;
 
   g_return_val_if_fail (CLUTTER_IS_BACKEND (backend), -1.0);
 
-  settings = clutter_settings_get_default ();
+  context = clutter_backend_get_context (backend);
+  settings = clutter_context_get_settings (context);
   g_object_get (settings, "font-dpi", &resolution, NULL);
 
   if (resolution < 0)
