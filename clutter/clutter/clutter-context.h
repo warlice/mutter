@@ -56,7 +56,8 @@ struct _ClutterContext
   gboolean show_fps;
 };
 
-typedef ClutterBackend * (* ClutterBackendConstructor) (gpointer user_data);
+typedef ClutterBackend * (* ClutterBackendConstructor) (ClutterContext *context,
+                                                        gpointer        user_data);
 
 #define CLUTTER_TYPE_CONTEXT (clutter_context_get_type ())
 CLUTTER_EXPORT

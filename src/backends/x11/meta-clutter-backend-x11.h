@@ -70,7 +70,8 @@ typedef MetaX11FilterReturn (*MetaX11FilterFunc) (XEvent        *xev,
                                                   ClutterEvent  *cev,
                                                   gpointer       data);
 
-MetaClutterBackendX11 * meta_clutter_backend_x11_new (MetaBackend *backend);
+MetaClutterBackendX11 * meta_clutter_backend_x11_new (MetaBackend    *backend,
+                                                      ClutterContext *clutter_context);
 
 void meta_clutter_x11_trap_x_errors (void);
 gint meta_clutter_x11_untrap_x_errors (void);

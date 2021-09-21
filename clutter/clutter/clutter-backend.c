@@ -56,6 +56,17 @@
 
 enum
 {
+  PROP_0,
+
+  PROP_CONTEXT,
+
+  N_PROPS
+};
+
+static GParamSpec *obj_props[N_PROPS];
+
+enum
+{
   RESOLUTION_CHANGED,
   FONT_CHANGED,
   SETTINGS_CHANGED,
@@ -63,9 +74,55 @@ enum
   LAST_SIGNAL
 };
 
-G_DEFINE_ABSTRACT_TYPE (ClutterBackend, clutter_backend, G_TYPE_OBJECT)
+typedef struct _ClutterBackendPrivate
+{
+  ClutterContext *context;
+} ClutterBackendPrivate;
+
+G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (ClutterBackend, clutter_backend,
+                                     G_TYPE_OBJECT)
 
 static guint backend_signals[LAST_SIGNAL] = { 0, };
+
+static void
+clutter_backend_get_property (GObject    *object,
+                              guint       prop_id,
+                              GValue     *value,
+                              GParamSpec *pspec)
+{
+  ClutterBackend *context = CLUTTER_BACKEND (object);
+  ClutterBackendPrivate *priv = clutter_backend_get_instance_private (context);
+
+  switch (prop_id)
+    {
+    case PROP_CONTEXT:
+      g_value_set_object (value, priv->context);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
+clutter_backend_set_property (GObject      *object,
+                              guint         prop_id,
+                              const GValue *value,
+                              GParamSpec   *pspec)
+{
+  ClutterBackend *context = CLUTTER_BACKEND (object);
+  ClutterBackendPrivate *priv = clutter_backend_get_instance_private (context);
+
+  switch (prop_id)
+    {
+    case PROP_CONTEXT:
+      priv->context = g_value_get_object (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
 
 static void
 clutter_backend_dispose (GObject *gobject)
@@ -300,7 +357,19 @@ clutter_backend_class_init (ClutterBackendClass *klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
 
+  gobject_class->get_property = clutter_backend_get_property;
+  gobject_class->set_property = clutter_backend_set_property;
   gobject_class->dispose = clutter_backend_dispose;
+
+  obj_props[PROP_CONTEXT] =
+    g_param_spec_object ("context",
+                         "context",
+                         "ClutterContext",
+                         CLUTTER_TYPE_CONTEXT,
+                         G_PARAM_READWRITE |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+  g_object_class_install_properties (gobject_class, N_PROPS, obj_props);
 
   /**
    * ClutterBackend::resolution-changed:
@@ -426,6 +495,20 @@ clutter_get_default_backend (void)
   clutter_context = _clutter_context_get_default ();
 
   return clutter_context->backend;
+}
+
+/**
+ * clutter_backend_get_context:
+ * @backend: the #ClutterBackend
+ *
+ * Returns: (transfer none): a pointer to the #ClutterContext
+ */
+ClutterContext *
+clutter_backend_get_context (ClutterBackend *backend)
+{
+  ClutterBackendPrivate *priv = clutter_backend_get_instance_private (backend);
+
+  return priv->context;
 }
 
 /**

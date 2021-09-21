@@ -1008,11 +1008,13 @@ static GSourceFuncs clutter_source_funcs = {
 };
 
 static ClutterBackend *
-meta_clutter_backend_constructor (gpointer user_data)
+meta_clutter_backend_constructor (ClutterContext *clutter_context,
+                                  gpointer        user_data)
 {
   MetaBackend *backend = META_BACKEND (user_data);
+  MetaBackendClass *klass = META_BACKEND_GET_CLASS (backend);
 
-  return META_BACKEND_GET_CLASS (backend)->create_clutter_backend (backend);
+  return klass->create_clutter_backend (backend, clutter_context);
 }
 
 static ClutterSeat *
