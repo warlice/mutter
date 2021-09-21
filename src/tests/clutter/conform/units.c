@@ -1,4 +1,4 @@
-#include <clutter/clutter.h>
+#include <clutter/clutter-units.h>
 
 #include "tests/clutter-test-utils.h"
 

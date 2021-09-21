@@ -85,7 +85,6 @@ clutter_headers = [
   'clutter-transition-group.h',
   'clutter-transition.h',
   'clutter-types.h',
-  'clutter-units.h',
   'clutter-virtual-input-device.h',
   'clutter-zoom-action.h',
 ]
@@ -219,6 +218,7 @@ clutter_private_headers = [
   'clutter-stage-view-private.h',
   'clutter-stage-window.h',
   'clutter-timeline-private.h',
+  'clutter-units.h',
 ]
 
 clutter_nonintrospected_sources = [

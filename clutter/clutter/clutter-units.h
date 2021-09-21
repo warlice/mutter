@@ -27,12 +27,9 @@
 #ifndef __CLUTTER_UNITS_H__
 #define __CLUTTER_UNITS_H__
 
-#if !defined(__CLUTTER_H_INSIDE__) && !defined(CLUTTER_COMPILATION)
-#error "Only <clutter/clutter.h> can be included directly."
-#endif
-
 #include <glib-object.h>
 
+#include <clutter/clutter.h>
 #include <cogl/cogl.h>
 
 G_BEGIN_DECLS
@@ -64,10 +61,6 @@ struct _ClutterUnits
 
   /* the serial coming from the backend, used to evict the cache */
   gint32 serial;
-
-  /* padding for eventual expansion */
-  gint32 __padding_1;
-  gint64 __padding_2;
 };
 
 CLUTTER_EXPORT
