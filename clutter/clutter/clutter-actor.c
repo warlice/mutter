@@ -13969,7 +13969,8 @@ update_pango_context (PangoContext   *pango_context,
   gdouble resolution;
 
   /* update the text direction */
-  if (clutter_get_default_text_direction () == CLUTTER_TEXT_DIRECTION_RTL)
+  if (clutter_context_get_text_direction (context) ==
+      CLUTTER_TEXT_DIRECTION_RTL)
     pango_dir = PANGO_DIRECTION_RTL;
   else
     pango_dir = PANGO_DIRECTION_LTR;
@@ -14682,7 +14683,11 @@ clutter_actor_get_text_direction (ClutterActor *self)
 
   /* if no direction has been set yet use the default */
   if (priv->text_direction == CLUTTER_TEXT_DIRECTION_DEFAULT)
-    priv->text_direction = clutter_get_default_text_direction ();
+    {
+      ClutterContext *context = clutter_actor_get_context (self);
+
+      priv->text_direction = clutter_context_get_text_direction (context);
+    }
 
   return priv->text_direction;
 }
