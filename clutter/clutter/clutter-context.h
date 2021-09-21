@@ -94,6 +94,14 @@ CLUTTER_EXPORT
 ClutterSettings * clutter_context_get_settings (ClutterContext *context);
 
 /**
+ * clutter_context_get_stage_manager:
+ *
+ * Returns: (transfer none): The #ClutterStageManager
+ */
+CLUTTER_EXPORT
+ClutterStageManager * clutter_context_get_stage_manager (ClutterContext *context);
+
+/**
  * clutter_context_get_pango_fontmap: (skip)
  */
 CoglPangoFontMap * clutter_context_get_pango_fontmap (ClutterContext *context);

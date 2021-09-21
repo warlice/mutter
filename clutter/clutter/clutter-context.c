@@ -83,6 +83,7 @@ clutter_context_dispose (GObject *object)
 {
   ClutterContext *context = CLUTTER_CONTEXT (object);
 
+  g_clear_object (&context->stage_manager);
   g_clear_pointer (&context->events_queue, g_async_queue_unref);
   g_clear_pointer (&context->backend, clutter_backend_destroy);
 
@@ -245,6 +246,7 @@ clutter_context_new (ClutterContextFlags         flags,
   context->settings = clutter_settings_get_default ();
   _clutter_settings_set_backend (context->settings,
                                  context->backend);
+  context->stage_manager = g_object_new (CLUTTER_TYPE_STAGE_MANAGER, NULL);
 
   context->events_queue = g_async_queue_new ();
   context->last_repaint_id = 1;
@@ -272,6 +274,12 @@ ClutterSettings *
 clutter_context_get_settings (ClutterContext *context)
 {
   return context->settings;
+}
+
+ClutterStageManager *
+clutter_context_get_stage_manager (ClutterContext *context)
+{
+  return context->stage_manager;
 }
 
 CoglPangoFontMap *
