@@ -246,6 +246,7 @@ meta_wayland_seat_new (MetaWaylandCompositor *compositor,
                     G_CALLBACK (meta_wayland_seat_devices_updated), seat);
   g_signal_connect (clutter_seat, "device-removed",
                     G_CALLBACK (meta_wayland_seat_devices_updated), seat);
+  seat->seat = clutter_seat;
 
   wl_global_create (display, &wl_seat_interface, META_WL_SEAT_VERSION, seat, bind_seat);
 
@@ -558,4 +559,10 @@ gboolean
 meta_wayland_seat_has_touch (MetaWaylandSeat *seat)
 {
   return (seat->capabilities & WL_SEAT_CAPABILITY_TOUCH) != 0;
+}
+
+ClutterSeat *
+meta_wayland_seat_get_seat (MetaWaylandSeat *seat)
+{
+  return seat->seat;
 }
