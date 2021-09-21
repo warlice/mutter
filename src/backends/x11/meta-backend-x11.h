@@ -58,6 +58,9 @@ Window meta_backend_x11_get_xwindow (MetaBackendX11 *backend);
 void meta_backend_x11_handle_event (MetaBackendX11 *x11,
                                     XEvent         *xevent);
 
+void meta_backend_x11_handle_event_clutter (MetaBackendX11 *backend_x11,
+                                            XEvent         *xevent);
+
 uint8_t meta_backend_x11_get_xkb_event_base (MetaBackendX11 *x11);
 
 void meta_backend_x11_reload_cursor (MetaBackendX11 *x11);

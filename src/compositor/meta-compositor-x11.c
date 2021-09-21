@@ -27,7 +27,6 @@
 
 #include "backends/x11/meta-backend-x11.h"
 #include "backends/x11/meta-clutter-backend-x11.h"
-#include "backends/x11/meta-event-x11.h"
 #include "compositor/meta-sync-ring.h"
 #include "compositor/meta-window-actor-x11.h"
 #include "core/display-private.h"
@@ -74,6 +73,9 @@ meta_compositor_x11_process_xevent (MetaCompositorX11 *compositor_x11,
 {
   MetaCompositor *compositor = META_COMPOSITOR (compositor_x11);
   MetaDisplay *display = meta_compositor_get_display (compositor);
+  MetaContext *context = meta_display_get_context (display);
+  MetaBackend *backend = meta_context_get_backend (context);
+  MetaBackendX11 *backend_x11 = META_BACKEND_X11 (backend);
   MetaX11Display *x11_display = display->x11_display;
   int damage_event_base;
 
@@ -104,7 +106,7 @@ meta_compositor_x11_process_xevent (MetaCompositorX11 *compositor_x11,
    * stage is invisible
    */
   if (xevent->type == MapNotify)
-    meta_x11_handle_event (xevent);
+    meta_backend_x11_handle_event_clutter (backend_x11, xevent);
 }
 
 static void

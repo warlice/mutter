@@ -25,7 +25,6 @@
 #include "backends/meta-input-settings-private.h"
 #include "backends/x11/meta-backend-x11.h"
 #include "backends/x11/meta-clutter-backend-x11.h"
-#include "backends/x11/meta-event-x11.h"
 #include "backends/x11/meta-input-device-tool-x11.h"
 #include "backends/x11/meta-input-device-x11.h"
 #include "backends/x11/meta-keymap-x11.h"

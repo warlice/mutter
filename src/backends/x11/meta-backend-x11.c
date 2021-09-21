@@ -46,11 +46,11 @@
 #include "backends/meta-keymap-utils.h"
 #include "backends/meta-stage-private.h"
 #include "backends/x11/meta-clutter-backend-x11.h"
-#include "backends/x11/meta-event-x11.h"
 #include "backends/x11/meta-seat-x11.h"
 #include "backends/x11/meta-stage-x11.h"
 #include "backends/x11/meta-renderer-x11.h"
 #include "backends/x11/meta-xkb-a11y-x11.h"
+#include "clutter/clutter-event-private.h"
 #include "clutter/clutter.h"
 #include "compositor/compositor-private.h"
 #include "core/display-private.h"
@@ -353,6 +353,56 @@ meta_backend_x11_handle_host_xevent (MetaBackendX11 *backend_x11,
   return backend_x11_class->handle_host_xevent (backend_x11, event);
 }
 
+void
+meta_backend_x11_handle_event_clutter (MetaBackendX11 *backend_x11,
+                                       XEvent         *xevent)
+{
+  MetaBackendX11Private *priv =
+    meta_backend_x11_get_instance_private (backend_x11);
+  ClutterContext *clutter_context =
+    meta_backend_get_clutter_context (META_BACKEND (backend_x11));
+  ClutterBackend *clutter_backend =
+    clutter_context_get_backend (clutter_context);
+  Display *xdisplay = priv->xdisplay;
+  ClutterEvent *event;
+  int spin = 1;
+  gboolean allocated_event;
+
+  event = clutter_event_new (CLUTTER_NOTHING);
+
+  allocated_event = XGetEventData (xdisplay, &xevent->xcookie);
+
+  if (_clutter_backend_translate_event (clutter_backend, xevent, event))
+    {
+      _clutter_event_push (event, FALSE);
+    }
+  else
+    {
+      clutter_event_free (event);
+      goto out;
+    }
+
+  /*
+   * Motion events can generate synthetic enter and leave events, so if we
+   * are processing a motion event, we need to spin the event loop at least
+   * two extra times to pump the enter/leave events through (otherwise they
+   * just get pushed down the queue and never processed).
+   */
+  if (event->type == CLUTTER_MOTION)
+    spin += 2;
+
+  while (spin > 0 && (event = clutter_event_get ()))
+    {
+      /* forward the event into clutter for emission etc. */
+      _clutter_stage_queue_event (event->any.stage, event, FALSE);
+      --spin;
+    }
+
+out:
+  if (allocated_event)
+    XFreeEventData (xdisplay, &xevent->xcookie);
+}
+
 static void
 handle_host_xevent (MetaBackend *backend,
                     XEvent      *event)
@@ -429,7 +479,7 @@ handle_host_xevent (MetaBackend *backend,
   if (!bypass_clutter)
     {
       handle_input_event (x11, event);
-      meta_x11_handle_event (event);
+      meta_backend_x11_handle_event_clutter (x11, event);
     }
 
   XFreeEventData (priv->xdisplay, &event->xcookie);

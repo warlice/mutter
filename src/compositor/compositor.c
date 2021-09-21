@@ -57,7 +57,6 @@
 #include <X11/extensions/Xcomposite.h>
 
 #include "backends/x11/meta-backend-x11.h"
-#include "backends/x11/meta-event-x11.h"
 #include "backends/x11/meta-stage-x11.h"
 #include "clutter/clutter-mutter.h"
 #include "cogl/cogl.h"
