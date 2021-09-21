@@ -112,11 +112,6 @@ clutter_backend_real_resolution_changed (ClutterBackend *backend)
     cogl_pango_font_map_set_resolution (context->font_map, resolution);
 }
 
-static void
-clutter_backend_real_font_changed (ClutterBackend *backend)
-{
-}
-
 static gboolean
 clutter_backend_do_real_create_context (ClutterBackend  *backend,
                                         CoglDriver       driver_id,
@@ -337,7 +332,7 @@ clutter_backend_class_init (ClutterBackendClass *klass)
     g_signal_new (I_("font-changed"),
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
-                  G_STRUCT_OFFSET (ClutterBackendClass, font_changed),
+                  0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
@@ -359,7 +354,6 @@ clutter_backend_class_init (ClutterBackendClass *klass)
                   G_TYPE_NONE, 0);
 
   klass->resolution_changed = clutter_backend_real_resolution_changed;
-  klass->font_changed = clutter_backend_real_font_changed;
 
   klass->create_context = clutter_backend_real_create_context;
 }

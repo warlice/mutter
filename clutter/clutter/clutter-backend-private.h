@@ -87,7 +87,6 @@ struct _ClutterBackendClass
 
   /* signals */
   void (* resolution_changed) (ClutterBackend *backend);
-  void (* font_changed)       (ClutterBackend *backend);
   void (* settings_changed)   (ClutterBackend *backend);
 };
 
