@@ -127,6 +127,7 @@ meta_backend_native_create_default_seat (MetaBackend  *backend,
                                          GError      **error)
 {
   MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   const char *seat_id;
   MetaSeatNativeFlag flags;
 
@@ -138,6 +139,7 @@ meta_backend_native_create_default_seat (MetaBackend  *backend,
     flags = META_SEAT_NATIVE_FLAG_NONE;
 
   return CLUTTER_SEAT (g_object_new (META_TYPE_SEAT_NATIVE,
+                                     "context", clutter_context,
                                      "backend", backend,
                                      "seat-id", seat_id,
                                      "flags", flags,

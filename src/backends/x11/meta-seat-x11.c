@@ -1765,9 +1765,11 @@ meta_seat_x11_new (MetaBackend *backend,
                    int          logical_pointer,
                    int          logical_keyboard)
 {
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaSeatX11 *seat_x11;
 
   seat_x11 = g_object_new (META_TYPE_SEAT_X11,
+                           "context", clutter_context,
                            "backend", backend,
                            "opcode", opcode,
                            "pointer-id", logical_pointer,
