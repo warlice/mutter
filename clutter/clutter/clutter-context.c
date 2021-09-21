@@ -268,6 +268,12 @@ clutter_context_get_backend (ClutterContext *context)
   return context->backend;
 }
 
+ClutterSettings *
+clutter_context_get_settings (ClutterContext *context)
+{
+  return context->settings;
+}
+
 CoglPangoFontMap *
 clutter_context_get_pango_fontmap (ClutterContext *context)
 {

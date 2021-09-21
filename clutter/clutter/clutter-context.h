@@ -80,10 +80,18 @@ void clutter_context_destroy (ClutterContext *context);
 /**
  * clutter_context_get_backend:
  *
- * Returns: (transfer none): The %ClutterBackend
+ * Returns: (transfer none): The #ClutterBackend
  */
 CLUTTER_EXPORT
 ClutterBackend * clutter_context_get_backend (ClutterContext *context);
+
+/**
+ * clutter_context_get_settings:
+ *
+ * Returns: (transfer none): The #ClutterSettings
+ */
+CLUTTER_EXPORT
+ClutterSettings * clutter_context_get_settings (ClutterContext *context);
 
 /**
  * clutter_context_get_pango_fontmap: (skip)
