@@ -173,6 +173,22 @@ static void clutter_stage_set_viewport (ClutterStage *stage,
 
 G_DEFINE_TYPE_WITH_PRIVATE (ClutterStage, clutter_stage, CLUTTER_TYPE_ACTOR)
 
+static ClutterBackend *
+backend_from_stage (ClutterStage *stage)
+{
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+
+  return clutter_context_get_backend (context);
+}
+
+static ClutterStageManager *
+stage_manager_from_stage (ClutterStage *stage)
+{
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+
+  return clutter_context_get_stage_manager (context);
+}
+
 static void
 clutter_stage_get_preferred_width (ClutterActor *self,
                                    gfloat        for_height,
@@ -1100,9 +1116,72 @@ static void
 clutter_stage_constructed (GObject *gobject)
 {
   ClutterStage *self = CLUTTER_STAGE (gobject);
+  cairo_rectangle_int_t geom = { 0, };
+  ClutterStagePrivate *priv;
+  ClutterStageWindow *impl;
+  ClutterBackend *backend;
   ClutterStageManager *stage_manager;
+  GError *error;
 
-  stage_manager = clutter_stage_manager_get_default ();
+  stage_manager = stage_manager_from_stage (self);
+
+  /* a stage is a top-level object */
+  CLUTTER_SET_PRIVATE_FLAGS (self, CLUTTER_IS_TOPLEVEL);
+
+  self->priv = priv = clutter_stage_get_instance_private (self);
+
+  CLUTTER_NOTE (BACKEND, "Creating stage from the default backend");
+  backend = backend_from_stage (self);
+
+  error = NULL;
+  impl = _clutter_backend_create_stage (backend, self, &error);
+
+  if (G_LIKELY (impl != NULL))
+    {
+      _clutter_stage_set_window (self, impl);
+      _clutter_stage_window_get_geometry (priv->impl, &geom);
+    }
+  else
+    {
+      if (error != NULL)
+        {
+          g_critical ("Unable to create a new stage implementation: %s",
+                      error->message);
+          g_error_free (error);
+        }
+      else
+        g_critical ("Unable to create a new stage implementation.");
+    }
+
+  priv->event_queue = g_queue_new ();
+
+  priv->throttle_motion_events = TRUE;
+  priv->motion_events_enabled = TRUE;
+
+  priv->pointer_devices =
+    g_hash_table_new_full (NULL, NULL,
+                           NULL, (GDestroyNotify) free_pointer_device_entry);
+  priv->touch_sequences =
+    g_hash_table_new_full (NULL, NULL,
+                           NULL, (GDestroyNotify) free_pointer_device_entry);
+
+  clutter_actor_set_background_color (CLUTTER_ACTOR (self),
+                                      &default_stage_color);
+
+  clutter_stage_queue_actor_relayout (self, CLUTTER_ACTOR (self));
+
+  clutter_actor_set_reactive (CLUTTER_ACTOR (self), TRUE);
+  clutter_stage_set_title (self, g_get_prgname ());
+  clutter_stage_set_key_focus (self, NULL);
+  clutter_stage_set_viewport (self, geom.width, geom.height);
+
+  priv->pending_queue_redraws =
+    g_hash_table_new_full (NULL, NULL,
+                           g_object_unref,
+                           (GDestroyNotify) free_queue_redraw_entry);
+
+  priv->paint_volume_stack =
+    g_array_new (FALSE, FALSE, sizeof (ClutterPaintVolume));
 
   /* this will take care to sinking the floating reference */
   _clutter_stage_manager_add_stage (stage_manager, self);
@@ -1193,7 +1272,7 @@ clutter_stage_dispose (GObject *object)
   priv->pending_relayouts = NULL;
 
   /* this will release the reference on the stage */
-  stage_manager = clutter_stage_manager_get_default ();
+  stage_manager = stage_manager_from_stage (stage);
   _clutter_stage_manager_remove_stage (stage_manager, stage);
 
   G_OBJECT_CLASS (clutter_stage_parent_class)->dispose (object);
@@ -1508,69 +1587,6 @@ clutter_stage_class_init (ClutterStageClass *klass)
 static void
 clutter_stage_init (ClutterStage *self)
 {
-  cairo_rectangle_int_t geom = { 0, };
-  ClutterStagePrivate *priv;
-  ClutterStageWindow *impl;
-  ClutterBackend *backend;
-  GError *error;
-
-  /* a stage is a top-level object */
-  CLUTTER_SET_PRIVATE_FLAGS (self, CLUTTER_IS_TOPLEVEL);
-
-  self->priv = priv = clutter_stage_get_instance_private (self);
-
-  CLUTTER_NOTE (BACKEND, "Creating stage from the default backend");
-  backend = clutter_get_default_backend ();
-
-  error = NULL;
-  impl = _clutter_backend_create_stage (backend, self, &error);
-
-  if (G_LIKELY (impl != NULL))
-    {
-      _clutter_stage_set_window (self, impl);
-      _clutter_stage_window_get_geometry (priv->impl, &geom);
-    }
-  else
-    {
-      if (error != NULL)
-        {
-          g_critical ("Unable to create a new stage implementation: %s",
-                      error->message);
-          g_error_free (error);
-        }
-      else
-        g_critical ("Unable to create a new stage implementation.");
-    }
-
-  priv->event_queue = g_queue_new ();
-
-  priv->throttle_motion_events = TRUE;
-  priv->motion_events_enabled = TRUE;
-
-  priv->pointer_devices =
-    g_hash_table_new_full (NULL, NULL,
-                           NULL, (GDestroyNotify) free_pointer_device_entry);
-  priv->touch_sequences =
-    g_hash_table_new_full (NULL, NULL,
-                           NULL, (GDestroyNotify) free_pointer_device_entry);
-
-  clutter_actor_set_background_color (CLUTTER_ACTOR (self),
-                                      &default_stage_color);
-
-  clutter_stage_queue_actor_relayout (self, CLUTTER_ACTOR (self));
-
-  clutter_actor_set_reactive (CLUTTER_ACTOR (self), TRUE);
-  clutter_stage_set_title (self, g_get_prgname ());
-  clutter_stage_set_key_focus (self, NULL);
-  clutter_stage_set_viewport (self, geom.width, geom.height);
-
-  priv->pending_queue_redraws =
-    g_hash_table_new_full (NULL, NULL,
-                           g_object_unref,
-                           (GDestroyNotify) free_queue_redraw_entry);
-
-  priv->paint_volume_stack =
-    g_array_new (FALSE, FALSE, sizeof (ClutterPaintVolume));
 }
 
 static void
@@ -3026,7 +3042,7 @@ clutter_stage_paint_to_buffer (ClutterStage                 *stage,
                                ClutterPaintFlag              paint_flags,
                                GError                      **error)
 {
-  ClutterBackend *clutter_backend = clutter_get_default_backend ();
+  ClutterBackend *clutter_backend = backend_from_stage (stage);
   CoglContext *cogl_context =
     clutter_backend_get_cogl_context (clutter_backend);
   int texture_width, texture_height;
@@ -3095,7 +3111,7 @@ clutter_stage_paint_to_content (ClutterStage                 *stage,
                                 ClutterPaintFlag              paint_flags,
                                 GError                      **error)
 {
-  ClutterBackend *clutter_backend = clutter_get_default_backend ();
+  ClutterBackend *clutter_backend = backend_from_stage (stage);
   CoglContext *cogl_context =
     clutter_backend_get_cogl_context (clutter_backend);
   int texture_width, texture_height;
@@ -3160,7 +3176,7 @@ clutter_stage_capture_view_into (ClutterStage          *stage,
   texture_width = roundf (rect->width * view_scale);
   texture_height = roundf (rect->height * view_scale);
 
-  backend = clutter_get_default_backend ();
+  backend = backend_from_stage (stage);
   context = clutter_backend_get_cogl_context (backend);
   bitmap = cogl_bitmap_new_for_data (context,
                                      texture_width, texture_height,
