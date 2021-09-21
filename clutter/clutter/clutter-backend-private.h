@@ -50,7 +50,6 @@ struct _ClutterBackend
 
   gchar *font_name;
 
-  gfloat units_per_em;
   gint32 units_serial;
 
   float fallback_resource_scale;
@@ -102,10 +101,6 @@ CLUTTER_EXPORT
 gboolean                _clutter_backend_translate_event                (ClutterBackend         *backend,
                                                                          gpointer                native,
                                                                          ClutterEvent           *event);
-
-gfloat                  _clutter_backend_get_units_per_em               (ClutterBackend         *backend,
-                                                                         PangoFontDescription   *font_desc);
-gint32                  _clutter_backend_get_units_serial               (ClutterBackend         *backend);
 
 void                    clutter_set_allowed_drivers                     (const char             *drivers);
 
