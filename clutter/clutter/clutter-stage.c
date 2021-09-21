@@ -2383,19 +2383,6 @@ _clutter_stage_get_window (ClutterStage *stage)
   return CLUTTER_STAGE_WINDOW (stage->priv->impl);
 }
 
-ClutterStageWindow *
-_clutter_stage_get_default_window (void)
-{
-  ClutterStageManager *manager = clutter_stage_manager_get_default ();
-  ClutterStage *stage;
-
-  stage = clutter_stage_manager_get_default_stage (manager);
-  if (stage == NULL)
-    return NULL;
-
-  return _clutter_stage_get_window (stage);
-}
-
 /**
  * clutter_stage_set_throttle_motion_events:
  * @stage: a #ClutterStage
