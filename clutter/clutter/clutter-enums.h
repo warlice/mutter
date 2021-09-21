@@ -1161,29 +1161,6 @@ typedef enum
   CLUTTER_TIMELINE_BACKWARD
 } ClutterTimelineDirection;
 
-/**
- * ClutterUnitType:
- * @CLUTTER_UNIT_PIXEL: Unit expressed in pixels (with subpixel precision)
- * @CLUTTER_UNIT_EM: Unit expressed in em
- * @CLUTTER_UNIT_MM: Unit expressed in millimeters
- * @CLUTTER_UNIT_POINT: Unit expressed in points
- * @CLUTTER_UNIT_CM: Unit expressed in centimeters
- *
- * The type of unit in which a value is expressed
- *
- * This enumeration might be expanded at later date
- *
- * Since: 1.0
- */
-typedef enum /*< prefix=CLUTTER_UNIT >*/
-{
-  CLUTTER_UNIT_PIXEL,
-  CLUTTER_UNIT_EM,
-  CLUTTER_UNIT_MM,
-  CLUTTER_UNIT_POINT,
-  CLUTTER_UNIT_CM
-} ClutterUnitType;
-
 #define CLUTTER_PATH_RELATIVE           (32)
 
 /**
