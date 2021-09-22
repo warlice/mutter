@@ -14664,7 +14664,7 @@ _clutter_actor_set_has_key_focus (ClutterActor *self,
  * Retrieves the value set using clutter_actor_set_text_direction()
  *
  * If no text direction has been previously set, the default text
- * direction, as returned by clutter_get_default_text_direction(), will
+ * direction, as returned by clutter_context_get_text_direction(), will
  * be returned instead
  *
  * Return value: the #ClutterTextDirection for the actor
