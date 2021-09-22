@@ -31,7 +31,9 @@
 
 #include "meta/meta-wayland-client.h"
 
+#include <fcntl.h>
 #include <gio/gio.h>
+#include <gio/gunixfdmessage.h>
 #include <glib-object.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -134,6 +136,122 @@ meta_wayland_client_new (GSubprocessLauncher  *launcher,
   return client;
 }
 
+typedef struct {
+  GSocketControlMessage **control_messages;
+  gint num_control_messages;
+} InputMessage;
+
+static void
+input_message_free (InputMessage *message)
+{
+  for (gint i = 0; i < message->num_control_messages; i++)
+    g_object_unref (message->control_messages[i]);
+  g_free (message->control_messages);
+}
+
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (InputMessage, input_message_free)
+
+static gboolean
+meta_wayland_client_socket_cb (GSocket      *socket,
+                               GIOCondition  condition,
+                               gpointer      user_data)
+{
+  MetaWaylandClient *client = META_WAYLAND_CLIENT (user_data);
+  MetaWaylandCompositor *compositor;
+  g_autoptr (GError) error = NULL;
+  g_auto (InputMessage) message = { NULL, 0 };
+  gssize message_count;
+  GUnixFDList *fd_list = NULL;
+  int client_fd;
+
+  if (!(condition & G_IO_IN))
+    return FALSE;
+
+  message_count = g_socket_receive_message (socket, NULL, NULL, 0,
+                                            &message.control_messages,
+                                            &message.num_control_messages,
+                                            NULL, NULL, &error);
+  if (message_count < 0)
+    {
+      g_warning ("Failed to receive wayland client socket message: %s",
+                 error->message);
+      return FALSE;
+    }
+
+  if (message_count < 1 || message.num_control_messages < 1
+      || !G_IS_UNIX_FD_MESSAGE (message.control_messages[0]))
+    {
+      g_warning ("Didn't receive unix fd message for wayland client socket");
+      return FALSE;
+    }
+
+  fd_list = g_unix_fd_message_get_fd_list (G_UNIX_FD_MESSAGE (message.control_messages[0]));
+  if (g_unix_fd_list_get_length (fd_list) < 1)
+    {
+      g_warning ("Didn't receive unix fd for wayland client socket");
+      return FALSE;
+    }
+
+  client_fd = g_unix_fd_list_get (fd_list, 0, &error);
+  if (client_fd < 0)
+    {
+      g_warning ("Failed to get unix fd for wayland client socket: %s",
+                 error->message);
+      return FALSE;
+    }
+
+  compositor = meta_wayland_compositor_get_default ();
+  client->wayland_client =
+    wl_client_create (compositor->wayland_display, client_fd);
+  if (client->wayland_client == NULL)
+    {
+      g_warning ("Failed to create wayland client");
+      close (client_fd);
+    }
+  return FALSE;
+}
+
+#define WAYLAND_FD_REPORT_SOCKET 3
+
+static void
+meta_wayland_client_child_setup (gpointer data)
+{
+  int client_fds[2];
+  struct msghdr msg = { 0 };
+  struct cmsghdr *cmsg;
+  char iobuf[1];
+  struct iovec io = {
+    .iov_base = iobuf,
+    .iov_len = sizeof iobuf
+  };
+  union {
+    char buf[CMSG_SPACE (sizeof (int))];
+    struct cmsghdr align;
+  } u;
+
+  if (socketpair (AF_UNIX, SOCK_STREAM, 0, client_fds) < 0)
+    _exit (1);
+
+  msg.msg_iov = &io;
+  msg.msg_iovlen = 1;
+  msg.msg_control = u.buf;
+  msg.msg_controllen = sizeof u.buf;
+  cmsg = CMSG_FIRSTHDR (&msg);
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = SCM_RIGHTS;
+  cmsg->cmsg_len = CMSG_LEN (sizeof (int));
+  memcpy (CMSG_DATA (cmsg), &client_fds[0], sizeof (int));
+
+  if (sendmsg (WAYLAND_FD_REPORT_SOCKET, &msg, 0) < 0)
+    _exit (1);
+  if (close (client_fds[0]) < 0)
+    _exit (1);
+  if (dup2 (client_fds[1], WAYLAND_FD_REPORT_SOCKET) < 0)
+    _exit (1);
+  if (close (client_fds[1]) < 0)
+    _exit (1);
+}
+
 /**
  * meta_wayland_client_spawnv:
  * @client: a #MetaWaylandClient
@@ -155,10 +273,10 @@ meta_wayland_client_spawnv (MetaWaylandClient   *client,
                             const char * const  *argv,
                             GError             **error)
 {
-  int client_fd[2];
+  int report_fds[2];
   GSubprocess *subprocess;
-  struct wl_client *wayland_client;
-  MetaWaylandCompositor *compositor;
+  g_autoptr (GSocket) socket = NULL;
+  g_autoptr (GSource) source = NULL;
 
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
   g_return_val_if_fail (argv != NULL &&
@@ -184,7 +302,7 @@ meta_wayland_client_spawnv (MetaWaylandClient   *client,
       return NULL;
     }
 
-  if (socketpair (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, client_fd) < 0)
+  if (socketpair (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, report_fds) < 0)
     {
       g_set_error (error,
                    G_IO_ERROR,
@@ -193,10 +311,30 @@ meta_wayland_client_spawnv (MetaWaylandClient   *client,
       return NULL;
     }
 
-  compositor = meta_wayland_compositor_get_default ();
-  g_subprocess_launcher_take_fd (client->launcher, client_fd[1], 3);
-  g_subprocess_launcher_setenv (client->launcher, "WAYLAND_SOCKET", "3", TRUE);
-  wayland_client = wl_client_create (compositor->wayland_display, client_fd[0]);
+  socket = g_socket_new_from_fd (report_fds[0], error);
+  if (socket == NULL) {
+    close (report_fds[0]);
+    close (report_fds[1]);
+    return NULL;
+  }
+
+  g_socket_set_blocking (socket, FALSE);
+  source = g_socket_create_source (socket, G_IO_IN, NULL);
+  g_source_set_name (source, "[mutter] meta_wayland_client_spawnv");
+  g_source_set_callback (source, G_SOURCE_FUNC (meta_wayland_client_socket_cb),
+                         g_object_ref (client), g_object_unref);
+  g_source_attach (source, NULL);
+
+  g_subprocess_launcher_take_fd (client->launcher, report_fds[1],
+                                 WAYLAND_FD_REPORT_SOCKET);
+  g_subprocess_launcher_setenv (client->launcher, "WAYLAND_SOCKET",
+                                G_STRINGIFY (WAYLAND_FD_REPORT_SOCKET), TRUE);
+  g_subprocess_launcher_setenv (client->launcher,
+                                "GDK_BACKEND", "wayland", TRUE);
+  g_subprocess_launcher_set_child_setup (client->launcher,
+                                         meta_wayland_client_child_setup,
+                                         NULL,
+                                         NULL);
   subprocess = g_subprocess_launcher_spawnv (client->launcher, argv, error);
   g_clear_object (&client->launcher);
   client->process_launched = TRUE;
@@ -205,7 +343,6 @@ meta_wayland_client_spawnv (MetaWaylandClient   *client,
     return NULL;
 
   client->subprocess = subprocess;
-  client->wayland_client = wayland_client;
   client->process_running = TRUE;
   client->died_cancellable = g_cancellable_new ();
   g_subprocess_wait_async (client->subprocess,
