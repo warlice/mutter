@@ -83,8 +83,22 @@ clutter_context_dispose (GObject *object)
 {
   ClutterContext *context = CLUTTER_CONTEXT (object);
 
+  if (context->events_queue)
+    {
+      ClutterEvent *event;
+      g_autoptr (GAsyncQueue) events_queue = NULL;
+
+      g_async_queue_lock (context->events_queue);
+
+      while ((event = g_async_queue_try_pop_unlocked (context->events_queue)))
+        clutter_event_free (event);
+
+      events_queue = g_steal_pointer (&context->events_queue);
+
+      g_async_queue_unlock (events_queue);
+    }
+
   g_clear_object (&context->stage_manager);
-  g_clear_pointer (&context->events_queue, g_async_queue_unref);
   g_clear_pointer (&context->backend, clutter_backend_destroy);
 
   G_OBJECT_CLASS (clutter_context_parent_class)->dispose (object);

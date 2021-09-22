@@ -18,9 +18,6 @@ CLUTTER_EXPORT
 gboolean        clutter_context_process_event_filters   (ClutterContext     *context,
                                                          ClutterEvent       *event);
 
-/* clears the event queue inside the main context */
-void            _clutter_clear_events_queue             (void);
-
 CLUTTER_EXPORT
 void            _clutter_event_set_platform_data        (ClutterEvent       *event,
                                                          gpointer            data);

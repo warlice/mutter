@@ -1253,8 +1253,6 @@ clutter_stage_dispose (GObject *object)
 
   clutter_actor_hide (CLUTTER_ACTOR (object));
 
-  _clutter_clear_events_queue ();
-
   if (priv->impl != NULL)
     {
       CLUTTER_NOTE (BACKEND, "Disposing of the stage implementation");

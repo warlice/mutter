@@ -1536,33 +1536,6 @@ clutter_get_default_text_direction (void)
   return clutter_context_get_text_direction (ClutterCntx);;
 }
 
-/*< private >
- * clutter_clear_events_queue:
- *
- * Clears the events queue stored in the main context.
- */
-void
-_clutter_clear_events_queue (void)
-{
-  ClutterContext *context = _clutter_context_get_default ();
-  ClutterEvent *event;
-  GAsyncQueue *events_queue;
-
-  if (!context->events_queue)
-    return;
-
-  g_async_queue_lock (context->events_queue);
-
-  while ((event = g_async_queue_try_pop_unlocked (context->events_queue)))
-    clutter_event_free (event);
-
-  events_queue = context->events_queue;
-  context->events_queue = NULL;
-
-  g_async_queue_unlock (events_queue);
-  g_async_queue_unref (events_queue);
-}
-
 /**
  * clutter_add_debug_flags: (skip)
  *
