@@ -53,6 +53,9 @@ META_EXPORT
 MetaContext * meta_backend_get_context (MetaBackend *backend);
 
 META_EXPORT
+ClutterContext * meta_backend_get_clutter_context (MetaBackend *backend);
+
+META_EXPORT
 ClutterActor *meta_backend_get_stage (MetaBackend *backend);
 
 META_EXPORT
