@@ -11653,18 +11653,24 @@ clutter_actor_set_child_above_sibling (ClutterActor *self,
   if (sibling != NULL && child->priv->prev_sibling == sibling)
     return;
 
-  /* we don't want to change the state of child, or emit signals, or
+  /* we don't want to change the state of child, or emit all signals, or
    * regenerate ChildMeta instances here, but we still want to follow
    * the correct sequence of steps encoded in remove_child() and
    * add_child(), so that correctness is ensured, and we only go
    * through one known code path.
+   * The only signals we care about are the first/last-child notifications,
+   * but we only emit them after the children are reordered so that we won't
+   * emit something while the child is temporarily unparented.
    */
   g_object_ref (child);
-  clutter_actor_remove_child_internal (self, child, 0);
+  g_object_freeze_notify (G_OBJECT (child));
+  clutter_actor_remove_child_internal (self, child,
+                                       REMOVE_CHILD_NOTIFY_FIRST_LAST);
   clutter_actor_add_child_internal (self, child,
                                     ADD_CHILD_NOTIFY_FIRST_LAST,
                                     insert_child_above,
                                     sibling);
+  g_object_thaw_notify (G_OBJECT (child));
   g_object_unref(child);
 
   clutter_actor_queue_relayout (self);
@@ -11713,11 +11719,14 @@ clutter_actor_set_child_below_sibling (ClutterActor *self,
 
   /* see the comment in set_child_above_sibling() */
   g_object_ref (child);
-  clutter_actor_remove_child_internal (self, child, 0);
+  g_object_freeze_notify (G_OBJECT (child));
+  clutter_actor_remove_child_internal (self, child,
+                                       REMOVE_CHILD_NOTIFY_FIRST_LAST);
   clutter_actor_add_child_internal (self, child,
                                     ADD_CHILD_NOTIFY_FIRST_LAST,
                                     insert_child_below,
                                     sibling);
+  g_object_thaw_notify (G_OBJECT (child));
   g_object_unref(child);
 
   clutter_actor_queue_relayout (self);
@@ -11753,11 +11762,14 @@ clutter_actor_set_child_at_index (ClutterActor *self,
     return;
 
   g_object_ref (child);
-  clutter_actor_remove_child_internal (self, child, 0);
+  g_object_freeze_notify (G_OBJECT (child));
+  clutter_actor_remove_child_internal (self, child,
+                                       REMOVE_CHILD_NOTIFY_FIRST_LAST);
   clutter_actor_add_child_internal (self, child,
                                     ADD_CHILD_NOTIFY_FIRST_LAST,
                                     insert_child_at_index,
                                     GINT_TO_POINTER (index_));
+  g_object_thaw_notify (G_OBJECT (child));
   g_object_unref (child);
 
   clutter_actor_queue_relayout (self);
