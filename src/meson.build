@@ -266,8 +266,6 @@ mutter_sources = [
   'backends/x11/meta-cursor-renderer-x11.h',
   'backends/x11/meta-cursor-tracker-x11.c',
   'backends/x11/meta-cursor-tracker-x11.h',
-  'backends/x11/meta-event-x11.c',
-  'backends/x11/meta-event-x11.h',
   'backends/x11/meta-gpu-xrandr.c',
   'backends/x11/meta-gpu-xrandr.h',
   'backends/x11/meta-input-device-x11.c',

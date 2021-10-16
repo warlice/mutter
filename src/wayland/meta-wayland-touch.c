@@ -396,7 +396,12 @@ queue_frame_event_cb (MetaWaylandTouch *touch)
 static void
 send_or_queue_frame_event (MetaWaylandTouch *touch)
 {
-  if (clutter_events_pending ())
+  MetaWaylandSeat *seat =
+    meta_wayland_input_device_get_seat (META_WAYLAND_INPUT_DEVICE (touch));
+  ClutterSeat *clutter_seat = meta_wayland_seat_get_seat (seat);
+  ClutterContext *clutter_context = clutter_seat_get_context (clutter_seat);
+
+  if (clutter_context_events_pending (clutter_context))
     {
       if (touch->queued_frame_id == 0)
         {

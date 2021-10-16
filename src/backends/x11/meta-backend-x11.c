@@ -46,11 +46,11 @@
 #include "backends/meta-keymap-utils.h"
 #include "backends/meta-stage-private.h"
 #include "backends/x11/meta-clutter-backend-x11.h"
-#include "backends/x11/meta-event-x11.h"
 #include "backends/x11/meta-seat-x11.h"
 #include "backends/x11/meta-stage-x11.h"
 #include "backends/x11/meta-renderer-x11.h"
 #include "backends/x11/meta-xkb-a11y-x11.h"
+#include "clutter/clutter-event-private.h"
 #include "clutter/clutter.h"
 #include "compositor/compositor-private.h"
 #include "core/display-private.h"
@@ -61,8 +61,10 @@ struct _MetaBackendX11Private
 {
   /* The host X11 display */
   Display *xdisplay;
+  Screen *xscreen;
   xcb_connection_t *xcb;
   GSource *source;
+  Window root_window;
 
   int xsync_event_base;
   int xsync_error_base;
@@ -351,6 +353,56 @@ meta_backend_x11_handle_host_xevent (MetaBackendX11 *backend_x11,
   return backend_x11_class->handle_host_xevent (backend_x11, event);
 }
 
+void
+meta_backend_x11_handle_event_clutter (MetaBackendX11 *backend_x11,
+                                       XEvent         *xevent)
+{
+  MetaBackendX11Private *priv =
+    meta_backend_x11_get_instance_private (backend_x11);
+  ClutterContext *clutter_context =
+    meta_backend_get_clutter_context (META_BACKEND (backend_x11));
+  ClutterBackend *clutter_backend =
+    clutter_context_get_backend (clutter_context);
+  Display *xdisplay = priv->xdisplay;
+  ClutterEvent *event;
+  int spin = 1;
+  gboolean allocated_event;
+
+  event = clutter_event_new (CLUTTER_NOTHING);
+
+  allocated_event = XGetEventData (xdisplay, &xevent->xcookie);
+
+  if (_clutter_backend_translate_event (clutter_backend, xevent, event))
+    {
+      clutter_context_push_event (clutter_context, event, FALSE);
+    }
+  else
+    {
+      clutter_event_free (event);
+      goto out;
+    }
+
+  /*
+   * Motion events can generate synthetic enter and leave events, so if we
+   * are processing a motion event, we need to spin the event loop at least
+   * two extra times to pump the enter/leave events through (otherwise they
+   * just get pushed down the queue and never processed).
+   */
+  if (event->type == CLUTTER_MOTION)
+    spin += 2;
+
+  while (spin > 0 && (event = clutter_context_get_event (clutter_context)))
+    {
+      /* forward the event into clutter for emission etc. */
+      _clutter_stage_queue_event (event->any.stage, event, FALSE);
+      --spin;
+    }
+
+out:
+  if (allocated_event)
+    XFreeEventData (xdisplay, &xevent->xcookie);
+}
+
 static void
 handle_host_xevent (MetaBackend *backend,
                     XEvent      *event)
@@ -427,7 +479,7 @@ handle_host_xevent (MetaBackend *backend,
   if (!bypass_clutter)
     {
       handle_input_event (x11, event);
-      meta_x11_handle_event (event);
+      meta_backend_x11_handle_event_clutter (x11, event);
     }
 
   XFreeEventData (priv->xdisplay, &event->xcookie);
@@ -618,9 +670,11 @@ meta_backend_x11_post_init (MetaBackend *backend)
 }
 
 static ClutterBackend *
-meta_backend_x11_create_clutter_backend (MetaBackend *backend)
+meta_backend_x11_create_clutter_backend (MetaBackend    *backend,
+                                         ClutterContext *clutter_context)
 {
-  return g_object_new (META_TYPE_CLUTTER_BACKEND_X11, NULL);
+  return CLUTTER_BACKEND (meta_clutter_backend_x11_new (backend,
+                                                        clutter_context));
 }
 
 static ClutterSeat *
@@ -653,7 +707,8 @@ meta_backend_x11_create_default_seat (MetaBackend  *backend,
       return NULL;
     }
 
-  seat_x11 = meta_seat_x11_new (event_base,
+  seat_x11 = meta_seat_x11_new (backend,
+                                event_base,
                                 META_VIRTUAL_CORE_POINTER_ID,
                                 META_VIRTUAL_CORE_KEYBOARD_ID);
   return CLUTTER_SEAT (seat_x11);
@@ -866,8 +921,9 @@ meta_backend_x11_initable_init (GInitable    *initable,
     }
 
   priv->xdisplay = xdisplay;
+  priv->xscreen = DefaultScreenOfDisplay (xdisplay);
   priv->xcb = XGetXCBConnection (priv->xdisplay);
-  meta_clutter_x11_set_display (xdisplay);
+  priv->root_window = DefaultRootWindow (xdisplay);
 
   init_xkb_state (x11);
 
@@ -953,6 +1009,23 @@ meta_backend_x11_get_xdisplay (MetaBackendX11 *x11)
   return priv->xdisplay;
 }
 
+Screen *
+meta_backend_x11_get_xscreen (MetaBackendX11 *x11)
+{
+  MetaBackendX11Private *priv = meta_backend_x11_get_instance_private (x11);
+
+  return priv->xscreen;
+}
+
+Window
+meta_backend_x11_get_root_xwindow (MetaBackendX11 *backend_x11)
+{
+  MetaBackendX11Private *priv =
+    meta_backend_x11_get_instance_private (backend_x11);
+
+  return priv->root_window;
+}
+
 Window
 meta_backend_x11_get_xwindow (MetaBackendX11 *x11)
 {
@@ -974,6 +1047,7 @@ void
 meta_backend_x11_sync_pointer (MetaBackendX11 *backend_x11)
 {
   MetaBackend *backend = META_BACKEND (backend_x11);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
   ClutterInputDevice *pointer = clutter_seat_get_pointer (seat);
@@ -991,6 +1065,6 @@ meta_backend_x11_sync_pointer (MetaBackendX11 *backend_x11)
   clutter_event_set_source_device (event, NULL);
   clutter_event_set_stage (event, stage);
 
-  clutter_event_put (event);
+  clutter_context_put_event (clutter_context, event);
   clutter_event_free (event);
 }

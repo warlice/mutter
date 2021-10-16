@@ -380,6 +380,7 @@ input_cb (ClutterActor *actor,
 G_MODULE_EXPORT int
 test_events_main (int argc, char *argv[])
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage, *actor, *focus_box, *group;
 
   clutter_test_init (&argc, &argv);
@@ -390,12 +391,12 @@ test_events_main (int argc, char *argv[])
   g_signal_connect (stage, "destroy", G_CALLBACK (clutter_test_quit), NULL);
   g_signal_connect (stage, "event", G_CALLBACK (input_cb), (char *) "stage");
 
-  focus_box = clutter_actor_new ();
+  focus_box = clutter_actor_new (context);
   clutter_actor_set_background_color (focus_box, CLUTTER_COLOR_Black);
   clutter_actor_set_name (focus_box, "Focus Box");
   clutter_container_add (CLUTTER_CONTAINER(stage), focus_box, NULL);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_background_color (actor, CLUTTER_COLOR_Red);
   clutter_actor_set_name (actor, "Red Box");
   clutter_actor_set_size (actor, 100, 100);
@@ -411,7 +412,7 @@ test_events_main (int argc, char *argv[])
 
   clutter_stage_set_key_focus (CLUTTER_STAGE (stage), actor);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_background_color (actor, CLUTTER_COLOR_Green);
   clutter_actor_set_name (actor, "Green Box");
   clutter_actor_set_size (actor, 100, 100);
@@ -424,7 +425,7 @@ test_events_main (int argc, char *argv[])
   g_signal_connect (actor, "captured-event", G_CALLBACK (capture_cb), NULL);
 
   /* non reactive */
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_background_color (actor, CLUTTER_COLOR_Black);
   clutter_actor_set_name (actor, "Black Box");
   clutter_actor_set_size (actor, 400, 50);
@@ -437,7 +438,7 @@ test_events_main (int argc, char *argv[])
 		    focus_box);
 
   /* non reactive group, with reactive child */
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_background_color (actor, CLUTTER_COLOR_Yellow);
   clutter_actor_set_name (actor, "Yellow Box");
   clutter_actor_set_size (actor, 100, 100);
@@ -446,13 +447,13 @@ test_events_main (int argc, char *argv[])
   g_signal_connect (actor, "event", G_CALLBACK (input_cb), (char *) "yellow box");
 
   /* note group not reactive */
-  group = clutter_actor_new ();
+  group = clutter_actor_new (context);
   clutter_container_add (CLUTTER_CONTAINER (group), actor, NULL);
   clutter_container_add (CLUTTER_CONTAINER (stage), group, NULL);
   clutter_actor_set_position (group, 100, 350);
 
   /* border actor */
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_background_color (actor, CLUTTER_COLOR_Magenta);
   clutter_actor_set_name (actor, "Border Box");
   clutter_actor_set_size (actor, 100, 100);

@@ -158,6 +158,8 @@ static GParamSpec *obj_props[PROP_LAST];
 
 struct _ClutterScriptPrivate
 {
+  ClutterContext *context;
+
   GHashTable *objects;
 
   guint last_merge_id;
@@ -421,9 +423,14 @@ clutter_script_init (ClutterScript *script)
  * Since: 0.6
  */
 ClutterScript *
-clutter_script_new (void)
+clutter_script_new (ClutterContext *context)
 {
-  return g_object_new (CLUTTER_TYPE_SCRIPT, NULL);
+  ClutterScript *script;
+
+  script = g_object_new (CLUTTER_TYPE_SCRIPT, NULL);
+  script->priv->context = context;
+
+  return script;
 }
 
 /**
@@ -1385,4 +1392,12 @@ _clutter_script_add_object_info (ClutterScript *script,
 
   g_hash_table_steal (priv->objects, oinfo->id);
   g_hash_table_insert (priv->objects, oinfo->id, oinfo);
+}
+
+ClutterContext *
+clutter_script_get_context (ClutterScript *script)
+{
+  ClutterScriptPrivate *priv = script->priv;
+
+  return priv->context;
 }

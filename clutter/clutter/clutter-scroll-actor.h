@@ -77,7 +77,7 @@ CLUTTER_EXPORT
 GType clutter_scroll_actor_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterActor *          clutter_scroll_actor_new                (void);
+ClutterActor *          clutter_scroll_actor_new                (ClutterContext *context);
 
 CLUTTER_EXPORT
 void                    clutter_scroll_actor_set_scroll_mode    (ClutterScrollActor *actor,

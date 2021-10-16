@@ -51,6 +51,7 @@ static guint signals[N_SIGNALS] = { 0 };
 enum
 {
   PROP_0,
+  PROP_CONTEXT,
   PROP_TOUCH_MODE,
   N_PROPS
 };
@@ -61,6 +62,8 @@ typedef struct _ClutterSeatPrivate ClutterSeatPrivate;
 
 struct _ClutterSeatPrivate
 {
+  ClutterContext *context;
+
   unsigned int inhibit_unfocus_count;
 
   /* Pointer a11y */
@@ -75,8 +78,14 @@ clutter_seat_set_property (GObject      *object,
                            const GValue *value,
                            GParamSpec   *pspec)
 {
+  ClutterSeat *seat = CLUTTER_SEAT (object);
+  ClutterSeatPrivate *priv = clutter_seat_get_instance_private (seat);
+
   switch (prop_id)
     {
+    case PROP_CONTEXT:
+      priv->context = g_value_get_object (value);
+      break;
     case PROP_TOUCH_MODE:
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -89,8 +98,14 @@ clutter_seat_get_property (GObject    *object,
                            GValue     *value,
                            GParamSpec *pspec)
 {
+  ClutterSeat *seat = CLUTTER_SEAT (object);
+  ClutterSeatPrivate *priv = clutter_seat_get_instance_private (seat);
+
   switch (prop_id)
     {
+    case PROP_CONTEXT:
+      g_value_set_object (value, priv->context);
+      break;
     case PROP_TOUCH_MODE:
       g_value_set_boolean (value, FALSE);
       break;
@@ -264,6 +279,15 @@ clutter_seat_class_init (ClutterSeatClass *klass)
                   0, NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
+
+  props[PROP_CONTEXT] =
+    g_param_spec_object ("context",
+                         "Context",
+                         "Context",
+                         CLUTTER_TYPE_CONTEXT,
+                         G_PARAM_READWRITE |
+                         G_PARAM_STATIC_STRINGS |
+                         G_PARAM_CONSTRUCT_ONLY);
   /**
    * ClutterSeat:touch-mode:
    *
@@ -283,6 +307,23 @@ clutter_seat_class_init (ClutterSeatClass *klass)
 static void
 clutter_seat_init (ClutterSeat *seat)
 {
+}
+
+/**
+ * clutter_seat_get_context:
+ * @seat: a #ClutterSeat
+ *
+ * Returns: (transfer none): a #ClutterContext
+ */
+ClutterContext *
+clutter_seat_get_context (ClutterSeat *seat)
+{
+  ClutterSeatPrivate *priv;
+
+  g_return_val_if_fail (CLUTTER_IS_SEAT (seat), NULL);
+
+  priv = clutter_seat_get_instance_private (seat);
+  return priv->context;
 }
 
 /**

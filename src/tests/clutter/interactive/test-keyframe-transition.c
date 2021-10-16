@@ -39,6 +39,7 @@ test_keyframe_transition_describe (void)
 G_MODULE_EXPORT int
 test_keyframe_transition_main (int argc, char *argv[])
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage;
   int i;
 
@@ -64,7 +65,7 @@ test_keyframe_transition_main (int argc, char *argv[])
 
       name = g_strdup_printf ("rect%02d", i);
 
-      rect = clutter_actor_new ();
+      rect = clutter_actor_new (context);
 
       clutter_actor_set_name (rect, name);
       clutter_actor_set_background_color (rect, &colors[i]);

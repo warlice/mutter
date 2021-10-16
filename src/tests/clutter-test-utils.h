@@ -120,6 +120,9 @@ void            clutter_test_add_data_full      (const char     *test_path,
 CLUTTER_EXPORT
 ClutterActor *  clutter_test_get_stage          (void);
 
+CLUTTER_EXPORT
+ClutterContext * clutter_test_get_context       (void);
+
 #define clutter_test_assert_actor_at_point(stage,point,actor) \
 G_STMT_START { \
   const graphene_point_t *__p = (point); \

@@ -261,23 +261,29 @@ on_activate (KeyGroup     *key_group,
 static void
 binding_pool (void)
 {
-  KeyGroup *key_group = g_object_new (TYPE_KEY_GROUP, NULL);
+  ClutterContext *context = clutter_test_get_context ();
+  KeyGroup *key_group = g_object_new (TYPE_KEY_GROUP,
+                                      "context", context,
+                                      NULL);
   g_object_ref_sink (key_group);
 
   clutter_actor_add_child (CLUTTER_ACTOR (key_group),
                            g_object_new (CLUTTER_TYPE_ACTOR,
+                                         "context", context,
                                          "width", 50.0,
                                          "height", 50.0,
                                          "x", 0.0, "y", 0.0,
                                          NULL));
   clutter_actor_add_child (CLUTTER_ACTOR (key_group),
                            g_object_new (CLUTTER_TYPE_ACTOR,
+                                         "context", context,
                                          "width", 50.0,
                                          "height", 50.0,
                                          "x", 75.0, "y", 0.0,
                                          NULL));
   clutter_actor_add_child (CLUTTER_ACTOR (key_group),
                            g_object_new (CLUTTER_TYPE_ACTOR,
+                                         "context", context,
                                          "width", 50.0,
                                          "height", 50.0,
                                          "x", 150.0, "y", 0.0,

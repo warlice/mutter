@@ -190,6 +190,7 @@ cyan_press_cb (ClutterActor    *actor,
 G_MODULE_EXPORT int
 test_grab_main (int argc, char *argv[])
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor   *stage, *actor;
   ClutterColor    rcol = { 0xff, 0, 0, 0xff}, 
                   bcol = { 0, 0, 0xff, 0xff },
@@ -211,7 +212,7 @@ test_grab_main (int argc, char *argv[])
   g_signal_connect (stage, "event",
                     G_CALLBACK (debug_event_cb), (char *) "stage");
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_background_color (actor, &rcol);
   clutter_actor_set_size (actor, 100, 100);
   clutter_actor_set_position (actor, 100, 100);
@@ -223,7 +224,7 @@ test_grab_main (int argc, char *argv[])
   g_signal_connect (actor, "button-release-event",
                     G_CALLBACK (red_release_cb), NULL);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_background_color (actor, &ycol);
   clutter_actor_set_size (actor, 100, 100);
   clutter_actor_set_position (actor, 100, 300);
@@ -233,7 +234,7 @@ test_grab_main (int argc, char *argv[])
   g_signal_connect (actor, "button-press-event",
                     G_CALLBACK (toggle_grab_pointer_cb), NULL);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_background_color (actor, &bcol);
   clutter_actor_set_size (actor, 100, 100);
   clutter_actor_set_position (actor, 300, 100);
@@ -246,7 +247,7 @@ test_grab_main (int argc, char *argv[])
   g_signal_connect (actor, "button-release-event",
                     G_CALLBACK (blue_release_cb), NULL);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_background_color (actor, &gcol);
   clutter_actor_set_size (actor, 100, 100);
   clutter_actor_set_position (actor, 300, 300);
@@ -258,7 +259,7 @@ test_grab_main (int argc, char *argv[])
                     G_CALLBACK (green_press_cb), NULL);
 
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_background_color (actor, &ccol);
   clutter_actor_set_size (actor, 100, 100);
   clutter_actor_set_position (actor, 500, 100);

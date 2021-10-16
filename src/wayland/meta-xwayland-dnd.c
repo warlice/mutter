@@ -550,6 +550,8 @@ meta_x11_drag_dest_update (MetaWaylandDataDevice *data_device,
                            MetaWaylandSurface    *surface)
 {
   MetaWaylandCompositor *compositor = meta_wayland_compositor_get_default ();
+  MetaBackend *backend = meta_context_get_backend (compositor->context);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaXWaylandDnd *dnd = compositor->xwayland_manager.dnd;
   MetaWaylandSeat *seat = compositor->seat;
   graphene_point_t pos;
@@ -557,7 +559,7 @@ meta_x11_drag_dest_update (MetaWaylandDataDevice *data_device,
   clutter_seat_query_state (clutter_input_device_get_seat (seat->pointer->device),
                             seat->pointer->device, NULL, &pos, NULL);
   xdnd_send_position (dnd, dnd->dnd_dest,
-                      clutter_get_current_event_time (),
+                      clutter_context_get_current_event_time (clutter_context),
                       pos.x, pos.y);
 }
 

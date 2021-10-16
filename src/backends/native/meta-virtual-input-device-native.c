@@ -160,12 +160,16 @@ release_device_in_impl (GTask *task)
   ImplState *impl_state = g_task_get_task_data (task);
   MetaInputDeviceNative *device_native;
   MetaSeatImpl *seat_impl;
+  ClutterSeat *seat;
+  ClutterContext *clutter_context;
   int code;
   uint64_t time_us;
   ClutterEvent *device_event;
 
   device_native = META_INPUT_DEVICE_NATIVE (impl_state->device);
   seat_impl = meta_input_device_native_get_seat_impl (device_native);
+  seat = CLUTTER_SEAT (seat_impl->seat_native);
+  clutter_context = clutter_seat_get_context (seat);
   time_us = g_get_monotonic_time ();
 
   meta_topic (META_DEBUG_INPUT,
@@ -201,7 +205,7 @@ release_device_in_impl (GTask *task)
 
   device_event = clutter_event_new (CLUTTER_DEVICE_REMOVED);
   clutter_event_set_device (device_event, impl_state->device);
-  _clutter_event_push (device_event, FALSE);
+  clutter_context_push_event (clutter_context, device_event, FALSE);
 
   g_clear_object (&impl_state->device);
   g_task_return_boolean (task, TRUE);
@@ -1010,6 +1014,9 @@ meta_virtual_input_device_native_constructed (GObject *object)
     CLUTTER_VIRTUAL_INPUT_DEVICE (object);
   MetaVirtualInputDeviceNative *virtual_evdev =
     META_VIRTUAL_INPUT_DEVICE_NATIVE (object);
+  MetaSeatImpl *seat_impl = virtual_evdev->seat->impl;
+  ClutterSeat *seat = CLUTTER_SEAT (seat_impl->seat_native);
+  ClutterContext *clutter_context = clutter_seat_get_context (seat);
   ClutterInputDeviceType device_type;
   ClutterEvent *device_event = NULL;
 
@@ -1027,7 +1034,7 @@ meta_virtual_input_device_native_constructed (GObject *object)
 
   device_event = clutter_event_new (CLUTTER_DEVICE_ADDED);
   clutter_event_set_device (device_event, virtual_evdev->impl_state->device);
-  _clutter_event_push (device_event, FALSE);
+  clutter_context_push_event (clutter_context, device_event, FALSE);
 }
 
 static void

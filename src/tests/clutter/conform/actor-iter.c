@@ -6,12 +6,13 @@
 static void
 actor_iter_traverse_children (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActorIter iter;
   ClutterActor *actor;
   ClutterActor *child;
   int i, n_actors;
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_name (actor, "root");
   g_object_ref_sink (actor);
 
@@ -21,7 +22,7 @@ actor_iter_traverse_children (void)
       char *name;
 
       name = g_strdup_printf ("actor%d", i);
-      child = clutter_actor_new ();
+      child = clutter_actor_new (context);
       clutter_actor_set_name (child, name);
 
       clutter_actor_add_child (actor, child);
@@ -81,12 +82,13 @@ actor_iter_traverse_children (void)
 static void
 actor_iter_traverse_remove (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActorIter iter;
   ClutterActor *actor;
   ClutterActor *child;
   int i, n_actors;
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_name (actor, "root");
   g_object_ref_sink (actor);
 
@@ -96,7 +98,7 @@ actor_iter_traverse_remove (void)
       char *name;
 
       name = g_strdup_printf ("actor%d", i);
-      child = clutter_actor_new ();
+      child = clutter_actor_new (context);
       clutter_actor_set_name (child, name);
 
       clutter_actor_add_child (actor, child);
@@ -137,12 +139,13 @@ actor_iter_traverse_remove (void)
 static void
 actor_iter_assignment (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActorIter iter_a, iter_b;
   ClutterActor *actor;
   ClutterActor *child;
   int i, n_actors;
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   clutter_actor_set_name (actor, "root");
   g_object_ref_sink (actor);
 
@@ -152,7 +155,7 @@ actor_iter_assignment (void)
       char *name;
 
       name = g_strdup_printf ("actor[%02d]", i);
-      child = clutter_actor_new ();
+      child = clutter_actor_new (context);
       clutter_actor_set_name (child, name);
 
       clutter_actor_add_child (actor, child);

@@ -6,8 +6,8 @@
     {
       "id" : "child-1",
       "type" : "ClutterActor",
-      "width" : "3 em",
-      "height" : "3 em"
+      "width" : "3 px",
+      "height" : "3 px"
     }
   ]
 }

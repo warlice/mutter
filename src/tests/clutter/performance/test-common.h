@@ -77,6 +77,7 @@ static void wrap (gfloat *value, gfloat min, gfloat max)
 static gboolean perf_fake_mouse_cb (gpointer stage)
 {
   ClutterEvent *event = clutter_event_new (CLUTTER_MOTION);
+  ClutterContext *context = clutter_test_get_context ();
   static ClutterInputDevice *device = NULL;
   int i;
   static float x = 0.0;
@@ -111,7 +112,7 @@ static gboolean perf_fake_mouse_cb (gpointer stage)
 
       clutter_event_set_device (event2, device);
 
-      clutter_event_put (event2);
+      clutter_context_put_event (context, event2);
       clutter_event_free (event2);
       inited = TRUE;
     }
@@ -126,7 +127,7 @@ static gboolean perf_fake_mouse_cb (gpointer stage)
       event->motion.x = x;
       event->motion.y = y;
 
-      clutter_event_put (event);
+      clutter_context_put_event (context, event);
 
       x += xd;
       y += yd;

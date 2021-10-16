@@ -59,7 +59,8 @@ struct _MetaBackendClass
 {
   GObjectClass parent_class;
 
-  ClutterBackend * (* create_clutter_backend) (MetaBackend *backend);
+  ClutterBackend * (* create_clutter_backend) (MetaBackend    *backend,
+                                               ClutterContext *clutter_context);
 
   void (* post_init) (MetaBackend *backend);
 

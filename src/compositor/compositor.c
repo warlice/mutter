@@ -57,7 +57,6 @@
 #include <X11/extensions/Xcomposite.h>
 
 #include "backends/x11/meta-backend-x11.h"
-#include "backends/x11/meta-event-x11.h"
 #include "backends/x11/meta-stage-x11.h"
 #include "clutter/clutter-mutter.h"
 #include "cogl/cogl.h"
@@ -145,6 +144,15 @@ on_presented (ClutterStage     *stage,
 static void
 on_top_window_actor_destroyed (MetaWindowActor *window_actor,
                                MetaCompositor  *compositor);
+
+static ClutterContext *
+clutter_context_from_compositor (MetaCompositor *compositor)
+{
+  MetaCompositorPrivate *priv =
+    meta_compositor_get_instance_private (compositor);
+
+  return meta_backend_get_clutter_context (priv->backend);
+}
 
 static gboolean
 is_modal (MetaDisplay *display)
@@ -582,6 +590,8 @@ meta_compositor_add_window (MetaCompositor    *compositor,
 {
   MetaCompositorPrivate *priv =
     meta_compositor_get_instance_private (compositor);
+  ClutterContext *clutter_context =
+    meta_backend_get_clutter_context (priv->backend);
   MetaWindowActor *window_actor;
   ClutterActor *window_group;
   GType window_actor_type = G_TYPE_INVALID;
@@ -603,6 +613,7 @@ meta_compositor_add_window (MetaCompositor    *compositor,
     }
 
   window_actor = g_object_new (window_actor_type,
+                               "context", clutter_context,
                                "meta-window", window,
                                "show-on-set-parent", FALSE,
                                NULL);
@@ -1362,7 +1373,7 @@ meta_compositor_flash_display (MetaCompositor *compositor,
   stage = meta_get_stage_for_display (display);
   clutter_actor_get_size (stage, &width, &height);
 
-  flash = clutter_actor_new ();
+  flash = clutter_actor_new (clutter_context_from_compositor (compositor));
   clutter_actor_set_background_color (flash, CLUTTER_COLOR_Black);
   clutter_actor_set_size (flash, width, height);
   clutter_actor_set_opacity (flash, 0);
@@ -1401,7 +1412,7 @@ meta_compositor_flash_window (MetaCompositor *compositor,
   ClutterActor *flash;
   ClutterTransition *transition;
 
-  flash = clutter_actor_new ();
+  flash = clutter_actor_new (clutter_context_from_compositor (compositor));
   clutter_actor_set_background_color (flash, CLUTTER_COLOR_Black);
   clutter_actor_set_size (flash, window->rect.width, window->rect.height);
   clutter_actor_set_position (flash,

@@ -33,6 +33,7 @@ int
 main (int argc, char *argv[])
 {
   ClutterActor *stage = NULL;
+  ClutterContext *context;
   ClutterActor *button1 = NULL;
   ClutterActor *button2 = NULL;
   ClutterActor *button3 = NULL;
@@ -43,6 +44,7 @@ main (int argc, char *argv[])
   cally_util_a11y_init (&argc, &argv);
 
   stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
 
   clutter_stage_set_title (CLUTTER_STAGE (stage), "Cally - AtkComponent Test");
   clutter_actor_set_background_color (CLUTTER_ACTOR (stage), CLUTTER_COLOR_White);
@@ -50,16 +52,16 @@ main (int argc, char *argv[])
 
   g_signal_connect (stage, "destroy", G_CALLBACK (clutter_test_quit), NULL);
 
-  button1 = clutter_actor_new ();
+  button1 = clutter_actor_new (context);
   clutter_actor_set_background_color (button1, CLUTTER_COLOR_Yellow);
   clutter_actor_set_size (button1, SIZE, SIZE);
 
-  button2 = clutter_actor_new ();
+  button2 = clutter_actor_new (context);
   clutter_actor_set_background_color (button2, CLUTTER_COLOR_Green);
   clutter_actor_set_position (button2, 2 * SIZE, 0);
   clutter_actor_set_size (button2, SIZE, SIZE);
 
-  button3 = clutter_actor_new ();
+  button3 = clutter_actor_new (context);
   clutter_actor_set_background_color (button3, CLUTTER_COLOR_Blue);
   clutter_actor_set_position (button3, 0, 2 * SIZE);
   clutter_actor_set_size (button3, SIZE, SIZE);
@@ -67,13 +69,13 @@ main (int argc, char *argv[])
 
   /* a nested hierarchy, to check that the relative positions are
      computed properly */
-  button4 = clutter_actor_new ();
+  button4 = clutter_actor_new (context);
   clutter_actor_set_background_color (button4, CLUTTER_COLOR_Magenta);
   clutter_actor_set_position (button4, SIZE / 2, SIZE / 2);
   clutter_actor_set_size (button4, SIZE, SIZE);
 
   for (i = 0; i < 4; i++) {
-    group[i] = clutter_actor_new ();
+    group[i] = clutter_actor_new (context);
     clutter_actor_set_position (group[i], SIZE / 2, SIZE / 2);
     clutter_actor_set_size (group[i], SIZE, SIZE);
 

@@ -61,6 +61,9 @@ CLUTTER_EXPORT
 ClutterBackend *                clutter_get_default_backend             (void);
 
 CLUTTER_EXPORT
+ClutterContext *                clutter_backend_get_context             (ClutterBackend             *backend);
+
+CLUTTER_EXPORT
 gdouble                         clutter_backend_get_resolution          (ClutterBackend             *backend);
 
 CLUTTER_EXPORT

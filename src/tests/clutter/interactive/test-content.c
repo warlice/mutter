@@ -186,7 +186,7 @@ test_content_main (int argc, char *argv[])
   g_signal_connect (stage, "destroy", G_CALLBACK (clutter_test_quit), NULL);
   clutter_actor_show (stage);
 
-  grid = clutter_actor_new ();
+  grid = clutter_actor_new (clutter_test_get_context ());
   clutter_actor_set_name (grid, "Grid");
   clutter_actor_set_margin_top (grid, 12);
   clutter_actor_set_margin_right (grid, 12);
@@ -205,7 +205,7 @@ test_content_main (int argc, char *argv[])
   n_rects = g_random_int_range (12, 24);
   for (i = 0; i < n_rects; i++)
     {
-      ClutterActor *box = clutter_actor_new ();
+      ClutterActor *box = clutter_actor_new (clutter_test_get_context ());
       ClutterColor bg_color = {
         g_random_int_range (0, 255),
         g_random_int_range (0, 255),

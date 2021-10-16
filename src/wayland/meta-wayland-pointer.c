@@ -944,10 +944,18 @@ meta_wayland_pointer_set_focus (MetaWaylandPointer *pointer,
 
       focus_window = meta_wayland_surface_get_window (pointer->focus_surface);
       if (focus_window)
-        meta_window_handle_enter (focus_window,
-                                  /* XXX -- can we reliably get a timestamp for setting focus? */
-                                  clutter_get_current_event_time (),
-                                  pos.x, pos.y);
+        {
+          ClutterContext *clutter_context =
+            meta_backend_get_clutter_context (backend);
+          uint32_t current_event_time_ms;
+
+          /* XXX -- can we reliably get a timestamp for setting focus? */
+          current_event_time_ms =
+            clutter_context_get_current_event_time (clutter_context);
+          meta_window_handle_enter (focus_window,
+                                    current_event_time_ms,
+                                    pos.x, pos.y);
+        }
 
       pointer->focus_client =
         meta_wayland_pointer_get_pointer_client (pointer, client);

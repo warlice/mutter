@@ -9,6 +9,7 @@
 static void
 actor_pivot (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage, *actor_implicit, *actor_explicit;
   graphene_matrix_t transform, result_implicit, result_explicit;
   ClutterActorBox allocation = CLUTTER_ACTOR_BOX_INIT (0, 0, 90, 30);
@@ -16,8 +17,8 @@ actor_pivot (void)
 
   stage = clutter_test_get_stage ();
 
-  actor_implicit = clutter_actor_new ();
-  actor_explicit = clutter_actor_new ();
+  actor_implicit = clutter_actor_new (context);
+  actor_explicit = clutter_actor_new (context);
 
   clutter_actor_add_child (stage, actor_implicit);
   clutter_actor_add_child (stage, actor_explicit);

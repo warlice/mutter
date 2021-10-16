@@ -70,7 +70,7 @@ interval_transform (void)
 static void
 interval_from_script (void)
 {
-  ClutterScript *script = clutter_script_new ();
+  ClutterScript *script = clutter_script_new (clutter_test_get_context ());
   ClutterInterval *interval;
   gchar *test_file;
   GError *error = NULL;

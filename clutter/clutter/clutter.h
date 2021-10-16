@@ -59,7 +59,6 @@
 #include "clutter-enums.h"
 #include "clutter-enum-types.h"
 #include "clutter-event.h"
-#include "clutter-feature.h"
 #include "clutter-fixed-layout.h"
 #include "clutter-flow-layout.h"
 #include "clutter-frame-clock.h"
@@ -105,7 +104,6 @@
 #include "clutter-timeline.h"
 #include "clutter-transition-group.h"
 #include "clutter-transition.h"
-#include "clutter-units.h"
 #include "clutter-virtual-input-device.h"
 #include "clutter-zoom-action.h"
 

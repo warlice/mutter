@@ -275,7 +275,10 @@ static void
 queue_event (MetaSeatImpl *seat_impl,
              ClutterEvent *event)
 {
-  _clutter_event_push (event, FALSE);
+  ClutterSeat *seat = CLUTTER_SEAT (seat_impl->seat_native);
+  ClutterContext *clutter_context = clutter_seat_get_context (seat);
+
+  clutter_context_push_event (clutter_context, event, FALSE);
 }
 
 static int

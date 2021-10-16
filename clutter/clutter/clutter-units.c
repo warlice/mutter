@@ -45,8 +45,8 @@
  *
  *   pspec = clutter_param_spec_units ("active-width",
  *                                     "Width",
- *                                     "Width of the active area, in millimeters",
- *                                     CLUTTER_UNIT_MM,
+ *                                     "Width of the active area, in pixels",
+ *                                     CLUTTER_UNIT_PX,
  *                                     0.0, 12.0,
  *                                     12.0,
  *                                     G_PARAM_READWRITE);
@@ -69,7 +69,6 @@
 #include <glib-object.h>
 #include <gobject/gvaluecollector.h>
 
-#include "clutter-backend-private.h"
 #include "clutter-interval.h"
 #include "clutter-private.h"
 #include "clutter-units.h"
@@ -77,200 +76,6 @@
 #define DPI_FALLBACK    (96.0)
 
 #define FLOAT_EPSILON   (1e-30)
-
-static gfloat
-units_mm_to_pixels (gfloat mm)
-{
-  ClutterBackend *backend;
-  gdouble dpi;
-
-  backend = clutter_get_default_backend ();
-  dpi = clutter_backend_get_resolution (backend);
-  if (dpi < 0)
-    dpi = DPI_FALLBACK;
-
-  return mm * dpi / 25.4;
-}
-
-static gfloat
-units_cm_to_pixels (gfloat cm)
-{
-  return units_mm_to_pixels (cm * 10);
-}
-
-static gfloat
-units_pt_to_pixels (gfloat pt)
-{
-  ClutterBackend *backend;
-  gdouble dpi;
-
-  backend = clutter_get_default_backend ();
-  dpi = clutter_backend_get_resolution (backend);
-  if (dpi < 0)
-    dpi = DPI_FALLBACK;
-
-  return pt * dpi / 72.0;
-}
-
-static gfloat
-units_em_to_pixels (const gchar *font_name,
-                    gfloat       em)
-{
-  ClutterBackend *backend = clutter_get_default_backend ();
-
-  if (font_name == NULL || *font_name == '\0')
-    return em * _clutter_backend_get_units_per_em (backend, NULL);
-  else
-    {
-      PangoFontDescription *font_desc;
-      gfloat res;
-
-      font_desc = pango_font_description_from_string (font_name);
-      if (font_desc == NULL)
-        res = -1.0;
-      else
-        {
-          res = em * _clutter_backend_get_units_per_em (backend, font_desc);
-
-          pango_font_description_free (font_desc);
-        }
-
-      return res;
-    }
-}
-
-/**
- * clutter_units_from_mm:
- * @units: (out caller-allocates): a #ClutterUnits
- * @mm: millimeters
- *
- * Stores a value in millimiters inside @units
- *
- * Since: 1.0
- */
-void
-clutter_units_from_mm (ClutterUnits *units,
-                       gfloat        mm)
-{
-  ClutterBackend *backend;
-
-  g_return_if_fail (units != NULL);
-
-  backend = clutter_get_default_backend ();
-
-  units->unit_type  = CLUTTER_UNIT_MM;
-  units->value      = mm;
-  units->pixels     = units_mm_to_pixels (mm);
-  units->pixels_set = TRUE;
-  units->serial     = _clutter_backend_get_units_serial (backend);
-}
-
-/**
- * clutter_units_from_cm:
- * @units: (out caller-allocates): a #ClutterUnits
- * @cm: centimeters
- *
- * Stores a value in centimeters inside @units
- *
- * Since: 1.2
- */
-void
-clutter_units_from_cm (ClutterUnits *units,
-                       gfloat        cm)
-{
-  ClutterBackend *backend;
-
-  g_return_if_fail (units != NULL);
-
-  backend = clutter_get_default_backend ();
-
-  units->unit_type  = CLUTTER_UNIT_CM;
-  units->value      = cm;
-  units->pixels     = units_cm_to_pixels (cm);
-  units->pixels_set = TRUE;
-  units->serial     = _clutter_backend_get_units_serial (backend);
-}
-
-/**
- * clutter_units_from_pt:
- * @units: (out caller-allocates): a #ClutterUnits
- * @pt: typographic points
- *
- * Stores a value in typographic points inside @units
- *
- * Since: 1.0
- */
-void
-clutter_units_from_pt (ClutterUnits *units,
-                       gfloat        pt)
-{
-  ClutterBackend *backend;
-
-  g_return_if_fail (units != NULL);
-
-  backend = clutter_get_default_backend ();
-
-  units->unit_type  = CLUTTER_UNIT_POINT;
-  units->value      = pt;
-  units->pixels     = units_pt_to_pixels (pt);
-  units->pixels_set = TRUE;
-  units->serial     = _clutter_backend_get_units_serial (backend);
-}
-
-/**
- * clutter_units_from_em:
- * @units: (out caller-allocates): a #ClutterUnits
- * @em: em
- *
- * Stores a value in em inside @units, using the default font
- * name as returned by clutter_backend_get_font_name()
- *
- * Since: 1.0
- */
-void
-clutter_units_from_em (ClutterUnits *units,
-                       gfloat        em)
-{
-  ClutterBackend *backend;
-
-  g_return_if_fail (units != NULL);
-
-  backend = clutter_get_default_backend ();
-
-  units->unit_type  = CLUTTER_UNIT_EM;
-  units->value      = em;
-  units->pixels     = units_em_to_pixels (NULL, em);
-  units->pixels_set = TRUE;
-  units->serial     = _clutter_backend_get_units_serial (backend);
-}
-
-/**
- * clutter_units_from_em_for_font:
- * @units: (out caller-allocates): a #ClutterUnits
- * @font_name: (allow-none): the font name and size
- * @em: em
- *
- * Stores a value in em inside @units using @font_name
- *
- * Since: 1.0
- */
-void
-clutter_units_from_em_for_font (ClutterUnits *units,
-                                const gchar  *font_name,
-                                gfloat        em)
-{
-  ClutterBackend *backend;
-
-  g_return_if_fail (units != NULL);
-
-  backend = clutter_get_default_backend ();
-
-  units->unit_type  = CLUTTER_UNIT_EM;
-  units->value      = em;
-  units->pixels     = units_em_to_pixels (font_name, em);
-  units->pixels_set = TRUE;
-  units->serial     = _clutter_backend_get_units_serial (backend);
-}
 
 /**
  * clutter_units_from_pixels:
@@ -283,19 +88,14 @@ clutter_units_from_em_for_font (ClutterUnits *units,
  */
 void
 clutter_units_from_pixels (ClutterUnits *units,
-                           gint          px)
+                           int           px)
 {
-  ClutterBackend *backend;
-
   g_return_if_fail (units != NULL);
-
-  backend = clutter_get_default_backend ();
 
   units->unit_type  = CLUTTER_UNIT_PIXEL;
   units->value      = px;
   units->pixels     = px;
   units->pixels_set = TRUE;
-  units->serial     = _clutter_backend_get_units_serial (backend);
 }
 
 /**
@@ -386,43 +186,19 @@ clutter_units_free (ClutterUnits *units)
 gfloat
 clutter_units_to_pixels (ClutterUnits *units)
 {
-  ClutterBackend *backend;
-
   g_return_val_if_fail (units != NULL, 0.0);
-
-  /* if the backend settings changed we evict the cached value */
-  backend = clutter_get_default_backend ();
-  if (units->serial != _clutter_backend_get_units_serial (backend))
-    units->pixels_set = FALSE;
 
   if (units->pixels_set)
     return units->pixels;
 
   switch (units->unit_type)
     {
-    case CLUTTER_UNIT_MM:
-      units->pixels = units_mm_to_pixels (units->value);
-      break;
-
-    case CLUTTER_UNIT_CM:
-      units->pixels = units_cm_to_pixels (units->value);
-      break;
-
-    case CLUTTER_UNIT_POINT:
-      units->pixels = units_pt_to_pixels (units->value);
-      break;
-
-    case CLUTTER_UNIT_EM:
-      units->pixels = units_em_to_pixels (NULL, units->value);
-      break;
-
     case CLUTTER_UNIT_PIXEL:
       units->pixels = units->value;
       break;
     }
 
   units->pixels_set = TRUE;
-  units->serial = _clutter_backend_get_units_serial (backend);
 
   return units->pixels;
 }
@@ -439,7 +215,7 @@ clutter_units_to_pixels (ClutterUnits *units)
  * |[
  *   units: wsp* unit-value wsp* unit-name? wsp*
  *   unit-value: number
- *   unit-name: 'px' | 'pt' | 'mm' | 'em' | 'cm'
+ *   unit-name: 'px'
  *   number: digit+
  *           | digit* sep digit+
  *   sep: '.' | ','
@@ -451,16 +227,14 @@ clutter_units_to_pixels (ClutterUnits *units)
  *
  * |[
  *   10 px
- *   5.1 em
- *   24 pt
- *   12.6 mm
- *   .3 cm
+ *   .3
  * ]|
  *
  * While these are not:
  *
  * |[
  *   42 cats
+ *   2 cm
  *   omg!1!ponies
  * ]|
  *
@@ -473,9 +247,8 @@ clutter_units_to_pixels (ClutterUnits *units)
  */
 gboolean
 clutter_units_from_string (ClutterUnits *units,
-                           const gchar  *str)
+                           const char   *str)
 {
-  ClutterBackend *backend;
   ClutterUnitType unit_type;
   gfloat value;
 
@@ -514,26 +287,6 @@ clutter_units_from_string (ClutterUnits *units,
   /* assume pixels by default, if no unit is specified */
   if (*str == '\0')
     unit_type = CLUTTER_UNIT_PIXEL;
-  else if (strncmp (str, "em", 2) == 0)
-    {
-      unit_type = CLUTTER_UNIT_EM;
-      str += 2;
-    }
-  else if (strncmp (str, "mm", 2) == 0)
-    {
-      unit_type = CLUTTER_UNIT_MM;
-      str += 2;
-    }
-  else if (strncmp (str, "cm", 2) == 0)
-    {
-      unit_type = CLUTTER_UNIT_CM;
-      str += 2;
-    }
-  else if (strncmp (str, "pt", 2) == 0)
-    {
-      unit_type = CLUTTER_UNIT_POINT;
-      str += 2;
-    }
   else if (strncmp (str, "px", 2) == 0)
     {
       unit_type = CLUTTER_UNIT_PIXEL;
@@ -548,12 +301,9 @@ clutter_units_from_string (ClutterUnits *units,
   if (*str != '\0')
     return FALSE;
 
-  backend = clutter_get_default_backend ();
-
   units->unit_type = unit_type;
   units->value = value;
   units->pixels_set = FALSE;
-  units->serial = _clutter_backend_get_units_serial (backend);
 
   return TRUE;
 }
@@ -563,18 +313,6 @@ clutter_unit_type_name (ClutterUnitType unit_type)
 {
   switch (unit_type)
     {
-    case CLUTTER_UNIT_MM:
-      return "mm";
-
-    case CLUTTER_UNIT_CM:
-      return "cm";
-
-    case CLUTTER_UNIT_POINT:
-      return "pt";
-
-    case CLUTTER_UNIT_EM:
-      return "em";
-
     case CLUTTER_UNIT_PIXEL:
       return "px";
     }
@@ -618,26 +356,6 @@ clutter_units_to_string (const ClutterUnits *units)
      */
     case CLUTTER_UNIT_PIXEL:
       return g_strdup_printf ("%d px", (int) units->value);
-
-    case CLUTTER_UNIT_MM:
-      unit_name = "mm";
-      fmt = "%.2f";
-      break;
-
-    case CLUTTER_UNIT_CM:
-      unit_name = "cm";
-      fmt = "%.2f";
-      break;
-
-    case CLUTTER_UNIT_POINT:
-      unit_name = "pt";
-      fmt = "%.1f";
-      break;
-
-    case CLUTTER_UNIT_EM:
-      unit_name = "em";
-      fmt = "%.2f";
-      break;
 
     default:
       g_assert_not_reached ();

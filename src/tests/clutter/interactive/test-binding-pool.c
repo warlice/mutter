@@ -253,6 +253,7 @@ on_key_group_activate (KeyGroup     *group,
 G_MODULE_EXPORT int
 test_binding_pool_main (int argc, char *argv[])
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage, *key_group;
   gint group_x, group_y;
 
@@ -271,6 +272,7 @@ test_binding_pool_main (int argc, char *argv[])
   /* add three rectangles to the key group */
   clutter_container_add (CLUTTER_CONTAINER (key_group),
                          g_object_new (CLUTTER_TYPE_ACTOR,
+                                       "context", context,
                                        "background-color", CLUTTER_COLOR_Red,
                                        "name", "Red Rectangle",
                                        "width", 100.0,
@@ -279,6 +281,7 @@ test_binding_pool_main (int argc, char *argv[])
                                        "y", 0.0,
                                        NULL),
                          g_object_new (CLUTTER_TYPE_ACTOR,
+                                       "context", context,
                                        "background-color", CLUTTER_COLOR_Green,
                                        "name", "Green Rectangle",
                                        "width", 100.0,
@@ -287,6 +290,7 @@ test_binding_pool_main (int argc, char *argv[])
                                        "y", 0.0,
                                        NULL),
                          g_object_new (CLUTTER_TYPE_ACTOR,
+                                       "context", context,
                                        "background-color", CLUTTER_COLOR_Blue,
                                        "name", "Blue Rectangle",
                                        "width", 100.0,

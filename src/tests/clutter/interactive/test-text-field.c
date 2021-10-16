@@ -201,7 +201,8 @@ static ClutterActor *
 create_label (const ClutterColor *color,
               const gchar        *text)
 {
-  ClutterActor *retval = clutter_text_new ();
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterActor *retval = clutter_text_new (context);
 
   clutter_text_set_color (CLUTTER_TEXT (retval), color);
   clutter_text_set_markup (CLUTTER_TEXT (retval), text);
@@ -220,7 +221,8 @@ create_entry (const ClutterColor *color,
               gunichar            password_char,
               gint                max_length)
 {
-  ClutterActor *retval = clutter_text_new_full (NULL, text, color);
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterActor *retval = clutter_text_new_full (context, NULL, text, color);
   ClutterColor selection = { 0, };
   ClutterColor selected_text = { 0x00, 0x00, 0xff, 0xff };
 
@@ -254,6 +256,7 @@ G_MODULE_EXPORT gint
 test_text_field_main (gint    argc,
                       gchar **argv)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage;
   ClutterActor *box, *label, *entry;
   ClutterLayoutManager *grid;
@@ -270,7 +273,7 @@ test_text_field_main (gint    argc,
   clutter_grid_layout_set_column_spacing (CLUTTER_GRID_LAYOUT (grid), 6);
   clutter_grid_layout_set_row_spacing (CLUTTER_GRID_LAYOUT (grid), 6);
 
-  box = clutter_actor_new ();
+  box = clutter_actor_new (context);
   clutter_actor_set_layout_manager (box, grid);
   clutter_actor_add_constraint (box, clutter_bind_constraint_new (stage, CLUTTER_BIND_WIDTH, -24.0));
   clutter_actor_add_constraint (box, clutter_bind_constraint_new (stage, CLUTTER_BIND_HEIGHT, -24.0));
