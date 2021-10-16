@@ -27,6 +27,8 @@
 #include "backends/native/meta-backend-native-types.h"
 #include "backends/native/meta-drm-buffer-private.h"
 
+#include "wayland/meta-wayland-buffer.h"
+
 #define META_TYPE_DRM_BUFFER_GBM (meta_drm_buffer_gbm_get_type ())
 G_DECLARE_FINAL_TYPE (MetaDrmBufferGbm,
                       meta_drm_buffer_gbm,
@@ -39,10 +41,11 @@ MetaDrmBufferGbm * meta_drm_buffer_gbm_new_lock_front (MetaDeviceFile      *devi
                                                        GError             **error);
 
 
-MetaDrmBufferGbm * meta_drm_buffer_gbm_new_take (MetaDeviceFile  *device_file,
-                                                 struct gbm_bo   *gbm_bo,
-                                                 gboolean         use_modifiers,
-                                                 GError         **error);
+MetaDrmBufferGbm * meta_drm_buffer_gbm_new_take (MetaDeviceFile    *device_file,
+                                                 MetaWaylandBuffer *wayland_buffer,
+                                                 struct gbm_bo     *gbm_bo,
+                                                 gboolean           use_modifiers,
+                                                 GError           **error);
 
 struct gbm_bo * meta_drm_buffer_gbm_get_bo (MetaDrmBufferGbm *buffer_gbm);
 

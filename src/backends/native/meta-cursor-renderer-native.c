@@ -1293,7 +1293,8 @@ load_cursor_sprite_gbm_buffer_for_gpu (MetaCursorRendererNative *native,
           return;
         }
 
-      buffer_gbm = meta_drm_buffer_gbm_new_take (device_file, bo, FALSE, &error);
+      buffer_gbm = meta_drm_buffer_gbm_new_take (device_file, NULL, bo, FALSE,
+                                                 &error);
       if (!buffer_gbm)
         {
           meta_warning ("Failed to create DRM buffer wrapper: %s",
@@ -1584,8 +1585,6 @@ realize_cursor_sprite_from_wl_buffer_for_gpu (MetaCursorRenderer      *renderer,
       MetaDevicePool *device_pool =
         meta_backend_native_get_device_pool (backend_native);
       g_autoptr (MetaDeviceFile) device_file = NULL;
-      struct gbm_device *gbm_device;
-      struct gbm_bo *bo;
       g_autoptr (GError) error = NULL;
       MetaDrmBufferGbm *buffer_gbm;
 
@@ -1601,44 +1600,49 @@ realize_cursor_sprite_from_wl_buffer_for_gpu (MetaCursorRenderer      *renderer,
           return;
         }
 
-      /* HW cursors have a predefined size (at least 64x64), which usually is
-       * bigger than cursor theme size, so themed cursors must be padded with
-       * transparent pixels to fill the overlay. This is trivial if we have CPU
-       * access to the data, but it's not possible if the buffer is in GPU
-       * memory (and possibly tiled too), so if we don't get the right size, we
-       * fallback to GL. */
-      cursor_width = (uint64_t) cursor_renderer_gpu_data->cursor_width;
-      cursor_height = (uint64_t) cursor_renderer_gpu_data->cursor_height;
-
-      texture = meta_cursor_sprite_get_cogl_texture (cursor_sprite);
-      width = cogl_texture_get_width (texture);
-      height = cogl_texture_get_height (texture);
-
-      if (width != cursor_width || height != cursor_height)
+      if (!buffer->gbm_bo)
         {
-          meta_warning ("Invalid cursor size (must be 64x64), falling back to software (GL) cursors");
-          return;
-        }
+          struct gbm_device *gbm_device;
 
-      gbm_device = meta_gbm_device_from_gpu (gpu_kms);
-      bo = gbm_bo_import (gbm_device,
-                          GBM_BO_IMPORT_WL_BUFFER,
-                          buffer,
-                          GBM_BO_USE_CURSOR);
-      if (!bo)
-        {
-          meta_warning ("Importing HW cursor from wl_buffer failed");
-          return;
+          /* HW cursors have a predefined size (at least 64x64), which usually is
+           * bigger than cursor theme size, so themed cursors must be padded with
+           * transparent pixels to fill the overlay. This is trivial if we have CPU
+           * access to the data, but it's not possible if the buffer is in GPU
+           * memory (and possibly tiled too), so if we don't get the right size, we
+           * fallback to GL. */
+          cursor_width = (uint64_t) cursor_renderer_gpu_data->cursor_width;
+          cursor_height = (uint64_t) cursor_renderer_gpu_data->cursor_height;
+
+          texture = meta_cursor_sprite_get_cogl_texture (cursor_sprite);
+          width = cogl_texture_get_width (texture);
+          height = cogl_texture_get_height (texture);
+
+          if (width != cursor_width || height != cursor_height)
+            {
+              meta_warning ("Invalid cursor size (must be 64x64), falling back to software (GL) cursors");
+              return;
+            }
+
+          gbm_device = meta_gbm_device_from_gpu (gpu_kms);
+          buffer->gbm_bo = gbm_bo_import (gbm_device,
+                                          GBM_BO_IMPORT_WL_BUFFER,
+                                          buffer,
+                                          GBM_BO_USE_CURSOR);
+          if (!buffer->gbm_bo)
+            {
+              meta_warning ("Importing HW cursor from wl_buffer failed");
+              return;
+            }
         }
 
       unset_can_preprocess (cursor_sprite);
 
-      buffer_gbm = meta_drm_buffer_gbm_new_take (device_file, bo, FALSE, &error);
+      buffer_gbm = meta_drm_buffer_gbm_new_take (device_file, buffer, NULL, FALSE,
+                                                 &error);
       if (!buffer_gbm)
         {
           meta_warning ("Failed to create DRM buffer wrapper: %s",
                         error->message);
-          gbm_bo_destroy (bo);
           return;
         }
 
