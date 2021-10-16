@@ -23,6 +23,7 @@ G_MODULE_EXPORT gint
 test_text_main (gint    argc,
                 gchar **argv)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage;
   ClutterActor *text, *text2;
   ClutterColor  text_color = { 0x33, 0xff, 0x33, 0xff };
@@ -38,7 +39,7 @@ test_text_main (gint    argc,
 
   buffer = clutter_text_buffer_new_with_text ("·", -1);
 
-  text = clutter_text_new_with_buffer (buffer);
+  text = clutter_text_new_with_buffer (context, buffer);
   clutter_text_set_font_name (CLUTTER_TEXT (text), FONT);
   clutter_text_set_color (CLUTTER_TEXT (text), &text_color);
 
@@ -55,7 +56,7 @@ test_text_main (gint    argc,
   clutter_text_set_cursor_color (CLUTTER_TEXT (text), &cursor_color);
   clutter_text_set_selected_text_color (CLUTTER_TEXT (text), CLUTTER_COLOR_Blue);
 
-  text2 = clutter_text_new_with_buffer (buffer);
+  text2 = clutter_text_new_with_buffer (context, buffer);
   clutter_text_set_color (CLUTTER_TEXT (text2), &text_color);
   clutter_container_add (CLUTTER_CONTAINER (stage), text2, NULL);
   clutter_actor_set_position (text2, 40, 300);

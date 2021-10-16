@@ -897,30 +897,6 @@ typedef enum /*< prefix=CLUTTER_SCROLL >*/
 } ClutterScrollDirection;
 
 /**
- * ClutterFeatureFlags:
- * @CLUTTER_FEATURE_STAGE_STATIC: Set if stage size if fixed (i.e framebuffer)
- * @CLUTTER_FEATURE_STAGE_CURSOR: Set if stage has a graphical cursor.
- * @CLUTTER_FEATURE_SHADERS_GLSL: Set if the backend supports GLSL shaders.
- * @CLUTTER_FEATURE_OFFSCREEN: Set if the backend supports offscreen rendering.
- * @CLUTTER_FEATURE_STAGE_MULTIPLE: Set if multiple stages are supported.
- * @CLUTTER_FEATURE_SWAP_EVENTS: Set if the GLX_INTEL_swap_event is supported.
- *
- * Runtime flags indicating specific features available via Clutter window
- * system and graphics backend.
- *
- * Since: 0.4
- */
-typedef enum
-{
-  CLUTTER_FEATURE_STAGE_STATIC           = (1 << 6),
-  CLUTTER_FEATURE_STAGE_CURSOR           = (1 << 8),
-  CLUTTER_FEATURE_SHADERS_GLSL           = (1 << 9),
-  CLUTTER_FEATURE_OFFSCREEN              = (1 << 10),
-  CLUTTER_FEATURE_STAGE_MULTIPLE         = (1 << 11),
-  CLUTTER_FEATURE_SWAP_EVENTS            = (1 << 12)
-} ClutterFeatureFlags;
-
-/**
  * ClutterFlowOrientation:
  * @CLUTTER_FLOW_HORIZONTAL: Arrange the children of the flow layout
  *   horizontally first
@@ -1184,29 +1160,6 @@ typedef enum
   CLUTTER_TIMELINE_FORWARD,
   CLUTTER_TIMELINE_BACKWARD
 } ClutterTimelineDirection;
-
-/**
- * ClutterUnitType:
- * @CLUTTER_UNIT_PIXEL: Unit expressed in pixels (with subpixel precision)
- * @CLUTTER_UNIT_EM: Unit expressed in em
- * @CLUTTER_UNIT_MM: Unit expressed in millimeters
- * @CLUTTER_UNIT_POINT: Unit expressed in points
- * @CLUTTER_UNIT_CM: Unit expressed in centimeters
- *
- * The type of unit in which a value is expressed
- *
- * This enumeration might be expanded at later date
- *
- * Since: 1.0
- */
-typedef enum /*< prefix=CLUTTER_UNIT >*/
-{
-  CLUTTER_UNIT_PIXEL,
-  CLUTTER_UNIT_EM,
-  CLUTTER_UNIT_MM,
-  CLUTTER_UNIT_POINT,
-  CLUTTER_UNIT_CM
-} ClutterUnitType;
 
 #define CLUTTER_PATH_RELATIVE           (32)
 

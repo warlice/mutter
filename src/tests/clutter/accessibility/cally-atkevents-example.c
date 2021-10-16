@@ -84,6 +84,7 @@ window_event_listener (GSignalInvocationHint * signal_hint,
 static void
 make_ui (ClutterActor *stage)
 {
+  ClutterContext *clutter_context = clutter_actor_get_context (stage);
   gint             i             = 0;
   ClutterActor    *editable      = NULL;
   ClutterActor    *rectangle     = NULL;
@@ -102,13 +103,15 @@ make_ui (ClutterActor *stage)
   for (i = 0; i < NUM_ENTRIES; i++)
     {
       /* label */
-      label = clutter_text_new_full ("Sans Bold 32px",
+      label = clutter_text_new_full (clutter_context,
+                                     "Sans Bold 32px",
                                      "Entry",
                                      &color_label);
       clutter_actor_set_position (label, 0, label_geom_y);
 
       /* editable */
-      editable = clutter_text_new_full ("Sans Bold 32px",
+      editable = clutter_text_new_full (clutter_context,
+                                        "Sans Bold 32px",
                                         "ddd",
                                         CLUTTER_COLOR_Red);
       clutter_actor_set_position (editable, 150, editable_geom_y);
@@ -121,7 +124,7 @@ make_ui (ClutterActor *stage)
       clutter_actor_set_reactive (editable, TRUE);
 
       /* rectangle: to create a entry "feeling" */
-      rectangle = clutter_actor_new ();
+      rectangle = clutter_actor_new (clutter_context);
       clutter_actor_set_background_color (rectangle, &color_rect);
       clutter_actor_set_position (rectangle, 150, editable_geom_y);
       clutter_actor_set_size (rectangle, 500, 75);
@@ -178,15 +181,12 @@ main (int argc, char *argv[])
 
   clutter_actor_show (stage_main);
 
-  if (clutter_feature_available (CLUTTER_FEATURE_STAGE_MULTIPLE))
-    {
-      stage = clutter_test_get_stage ();
-      clutter_stage_set_title (CLUTTER_STAGE (stage), "Cally - AtkEvents/2");
-      g_signal_connect (stage, "destroy", G_CALLBACK (clutter_test_quit), NULL);
+  stage = clutter_test_get_stage ();
+  clutter_stage_set_title (CLUTTER_STAGE (stage), "Cally - AtkEvents/2");
+  g_signal_connect (stage, "destroy", G_CALLBACK (clutter_test_quit), NULL);
 
-      make_ui (stage);
-      clutter_actor_show (stage);
-    }
+  make_ui (stage);
+  clutter_actor_show (stage);
 
   clutter_test_main ();
 

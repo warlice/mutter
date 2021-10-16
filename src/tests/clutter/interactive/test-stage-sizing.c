@@ -31,6 +31,7 @@ expand_clicked_cb (ClutterActor *stage)
 G_MODULE_EXPORT int
 test_stage_sizing_main (int argc, char *argv[])
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage, *rect, *label, *box;
   ClutterMargin margin = { 12.f, 12.f, 6.f, 6.f };
 
@@ -40,12 +41,12 @@ test_stage_sizing_main (int argc, char *argv[])
   clutter_stage_set_title (CLUTTER_STAGE (stage), "Stage Sizing");
   g_signal_connect (stage, "destroy", G_CALLBACK (clutter_test_quit), NULL);
 
-  box = clutter_actor_new ();
+  box = clutter_actor_new (context);
   clutter_actor_set_layout_manager (box, clutter_box_layout_new ());
   clutter_actor_add_constraint (box, clutter_align_constraint_new (stage, CLUTTER_ALIGN_BOTH, 0.5));
   clutter_actor_add_child (stage, box);
 
-  rect = clutter_actor_new ();
+  rect = clutter_actor_new (context);
   clutter_actor_set_layout_manager (rect,
                                     clutter_bin_layout_new (CLUTTER_BIN_ALIGNMENT_CENTER,
                                                             CLUTTER_BIN_ALIGNMENT_CENTER));
@@ -53,12 +54,12 @@ test_stage_sizing_main (int argc, char *argv[])
   clutter_actor_set_reactive (rect, TRUE);
   g_signal_connect_swapped (rect, "button-press-event",
                             G_CALLBACK (shrink_clicked_cb), stage);
-  label = clutter_text_new_with_text ("Sans 16", "Shrink");
+  label = clutter_text_new_with_text (context, "Sans 16", "Shrink");
   clutter_actor_set_margin (label, &margin);
   clutter_actor_add_child (rect, label);
   clutter_actor_add_child (box, rect);
 
-  rect = clutter_actor_new ();
+  rect = clutter_actor_new (context);
   clutter_actor_set_layout_manager (rect,
                                     clutter_bin_layout_new (CLUTTER_BIN_ALIGNMENT_CENTER,
                                                             CLUTTER_BIN_ALIGNMENT_CENTER));
@@ -66,14 +67,10 @@ test_stage_sizing_main (int argc, char *argv[])
   clutter_actor_set_reactive (rect, TRUE);
   g_signal_connect_swapped (rect, "button-press-event",
                             G_CALLBACK (expand_clicked_cb), stage);
-  label = clutter_text_new_with_text ("Sans 16", "Expand");
+  label = clutter_text_new_with_text (context, "Sans 16", "Expand");
   clutter_actor_set_margin (label, &margin);
   clutter_actor_add_child (rect, label);
   clutter_actor_add_child (box, rect);
-
-  clutter_stage_set_minimum_size (CLUTTER_STAGE (stage),
-                                  clutter_actor_get_width (box),
-                                  clutter_actor_get_height (box));
 
   clutter_actor_show (stage);
 

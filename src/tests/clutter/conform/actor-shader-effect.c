@@ -204,7 +204,7 @@ make_actor (GType shader_type)
   ClutterActor *rect;
   const ClutterColor white = { 0xff, 0xff, 0xff, 0xff };
 
-  rect = clutter_actor_new ();
+  rect = clutter_actor_new (clutter_test_get_context ());
   clutter_actor_set_background_color (rect, &white);
   clutter_actor_set_size (rect, 50, 50);
 
@@ -258,9 +258,6 @@ actor_shader_effect (void)
   ClutterActor *rect;
   gboolean was_painted;
   GList *actors = NULL;
-
-  if (!clutter_feature_available (CLUTTER_FEATURE_SHADERS_GLSL))
-    return;
 
   stage = clutter_test_get_stage ();
 

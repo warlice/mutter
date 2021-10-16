@@ -319,7 +319,7 @@ timeline_base (void)
 static void
 timeline_markers_from_script (void)
 {
-  ClutterScript *script = clutter_script_new ();
+  ClutterScript *script = clutter_script_new (clutter_test_get_context ());
   ClutterTimeline *timeline;
   GError *error = NULL;
   gchar *test_file;

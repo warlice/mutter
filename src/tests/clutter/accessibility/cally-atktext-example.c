@@ -171,6 +171,7 @@ button_press_cb (ClutterActor *actor,
 static void
 make_ui (ClutterActor *stage)
 {
+  ClutterContext *clutter_context = clutter_actor_get_context (stage);
   ClutterColor  color_stage = { 0x00, 0x00, 0x00, 0xff };
   ClutterColor  color_text  = { 0xff, 0x00, 0x00, 0xff };
   ClutterColor  color_sel   = { 0x00, 0xff, 0x00, 0x55 };
@@ -184,7 +185,8 @@ make_ui (ClutterActor *stage)
   clutter_actor_set_size (stage, WIDTH, HEIGHT);
 
   /* text */
-  text_actor = clutter_text_new_full ("Sans Bold 32px",
+  text_actor = clutter_text_new_full (clutter_context,
+                                      "Sans Bold 32px",
                                       "",
                                       &color_text);
   clutter_text_set_markup (CLUTTER_TEXT(text_actor),
@@ -193,7 +195,8 @@ make_ui (ClutterActor *stage)
   dump_actor_default_atk_attributes (text_actor);
 
   /* text_editable */
-  text_editable_actor = clutter_text_new_full ("Sans Bold 32px",
+  text_editable_actor = clutter_text_new_full (clutter_context,
+                                               "Sans Bold 32px",
                                                "consectetur adipisicing elit",
                                                &color_text);
   clutter_actor_set_position (text_editable_actor, 20, 100);
@@ -209,12 +212,13 @@ make_ui (ClutterActor *stage)
   clutter_container_add_actor (CLUTTER_CONTAINER (stage), text_editable_actor);
 
   /* test button */
-  button = clutter_actor_new ();
-  rectangle = clutter_actor_new ();
+  button = clutter_actor_new (clutter_context);
+  rectangle = clutter_actor_new (clutter_context);
   clutter_actor_set_background_color (rectangle, &color_rect);
   clutter_actor_set_size (rectangle, 75, 35);
 
-  label = clutter_text_new_full ("Sans Bold 32px",
+  label = clutter_text_new_full (clutter_context,
+                                 "Sans Bold 32px",
                                  "Test", &color_label);
   clutter_actor_set_position (button, 100, 200);
   clutter_container_add_actor (CLUTTER_CONTAINER (button), rectangle);

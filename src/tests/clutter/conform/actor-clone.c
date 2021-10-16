@@ -21,19 +21,21 @@ actor_clone_unmapped (void)
   ClutterActor *actor;
   ClutterActor *clone;
   ClutterActor *stage;
+  ClutterContext *context;
   gboolean was_presented;
 
   stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
 
-  container = clutter_actor_new ();
+  container = clutter_actor_new (context);
   g_object_ref_sink (container);
   g_object_add_weak_pointer (G_OBJECT (container), (gpointer *) &container);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 
-  clone = clutter_clone_new (actor);
+  clone = clutter_clone_new (context, actor);
   g_object_ref_sink (clone);
   g_object_add_weak_pointer (G_OBJECT (clone), (gpointer *) &clone);
 

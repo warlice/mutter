@@ -31,6 +31,7 @@ typedef struct _ClutterInputMethodPrivate ClutterInputMethodPrivate;
 
 struct _ClutterInputMethodPrivate
 {
+  ClutterContext *context;
   ClutterInputFocus *focus;
   ClutterInputContentHintFlags content_hints;
   ClutterInputContentPurpose content_purpose;
@@ -50,6 +51,7 @@ enum
 enum
 {
   PROP_0,
+  PROP_CONTEXT,
   PROP_CONTENT_HINTS,
   PROP_CONTENT_PURPOSE,
   PROP_CAN_SHOW_PREEDIT,
@@ -100,8 +102,17 @@ clutter_input_method_set_property (GObject      *object,
                                    const GValue *value,
                                    GParamSpec   *pspec)
 {
+  ClutterInputMethodPrivate *priv;
+  ClutterInputMethod *im;
+
+  im = CLUTTER_INPUT_METHOD (object);
+  priv = clutter_input_method_get_instance_private (im);
+
   switch (prop_id)
     {
+    case PROP_CONTEXT:
+      priv->context = g_value_get_object (value);
+      break;
     case PROP_CONTENT_HINTS:
       set_content_hints (CLUTTER_INPUT_METHOD (object),
                          g_value_get_flags (value));
@@ -134,6 +145,9 @@ clutter_input_method_get_property (GObject    *object,
 
   switch (prop_id)
     {
+    case PROP_CONTEXT:
+      g_value_set_object (value, priv->context);
+      break;
     case PROP_CONTENT_HINTS:
       g_value_set_flags (value, priv->content_hints);
       break;
@@ -189,6 +203,14 @@ clutter_input_method_class_init (ClutterInputMethodClass *klass)
                   0, NULL, NULL, NULL,
                   G_TYPE_NONE, 1, GRAPHENE_TYPE_RECT);
 
+  pspecs[PROP_CONTEXT] =
+    g_param_spec_object ("context",
+                         P_("Context"),
+                         P_("Context"),
+                         CLUTTER_TYPE_CONTEXT,
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_READWRITE |
+                         G_PARAM_STATIC_STRINGS);
   pspecs[PROP_CONTENT_HINTS] =
     g_param_spec_flags ("content-hints",
                         P_("Content hints"),
@@ -285,12 +307,14 @@ clutter_input_method_put_im_event (ClutterInputMethod      *im,
                                    uint32_t                 len,
                                    ClutterPreeditResetMode  mode)
 {
+  ClutterInputMethodPrivate *priv;
   ClutterInputDevice *keyboard;
   ClutterSeat *seat;
   ClutterStageManager *stage_manager;
   ClutterStage *stage;
   ClutterEvent *event;
 
+  priv = clutter_input_method_get_instance_private (im);
   seat = clutter_backend_get_default_seat (clutter_get_default_backend ());
   keyboard = clutter_seat_get_keyboard (seat);
   stage_manager = clutter_stage_manager_get_default ();
@@ -307,7 +331,7 @@ clutter_input_method_put_im_event (ClutterInputMethod      *im,
 
   clutter_event_set_stage (event, stage);
 
-  clutter_event_put (event);
+  clutter_context_put_event (priv->context, event);
   clutter_event_free (event);
 }
 
@@ -371,6 +395,8 @@ clutter_input_method_notify_key_event (ClutterInputMethod *im,
 {
   if (!filtered)
     {
+      ClutterInputMethodPrivate *priv =
+        clutter_input_method_get_instance_private (im);
       ClutterEvent *copy;
 
       /* XXX: we rely on the IM implementation to notify back of
@@ -380,7 +406,7 @@ clutter_input_method_notify_key_event (ClutterInputMethod *im,
       clutter_event_set_flags (copy, clutter_event_get_flags (event) |
                                CLUTTER_EVENT_FLAG_INPUT_METHOD);
       clutter_event_set_source_device (copy, clutter_event_get_device (copy));
-      clutter_event_put (copy);
+      clutter_context_put_event (priv->context, copy);
       clutter_event_free (copy);
     }
 }
@@ -508,6 +534,6 @@ clutter_input_method_forward_key (ClutterInputMethod *im,
   clutter_event_set_source_device (event, keyboard);
   clutter_event_set_stage (event, stage);
 
-  clutter_event_put (event);
+  clutter_context_put_event (priv->context, event);
   clutter_event_free (event);
 }

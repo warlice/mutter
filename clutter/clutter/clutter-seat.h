@@ -29,7 +29,6 @@
 
 #include "clutter/clutter-types.h"
 #include "clutter/clutter-keymap.h"
-#include "clutter/clutter-virtual-input-device.h"
 
 #define CLUTTER_TYPE_SEAT (clutter_seat_get_type ())
 
@@ -103,6 +102,8 @@ struct _ClutterSeatClass
   ClutterVirtualDeviceType (* get_supported_virtual_device_types) (ClutterSeat *seat);
 };
 
+CLUTTER_EXPORT
+ClutterContext * clutter_seat_get_context (ClutterSeat *seat);
 CLUTTER_EXPORT
 ClutterInputDevice * clutter_seat_get_pointer  (ClutterSeat *seat);
 CLUTTER_EXPORT

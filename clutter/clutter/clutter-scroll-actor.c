@@ -270,9 +270,11 @@ clutter_animatable_iface_init (ClutterAnimatableInterface *iface)
  * Since: 1.12
  */
 ClutterActor *
-clutter_scroll_actor_new (void)
+clutter_scroll_actor_new (ClutterContext *context)
 {
-  return g_object_new (CLUTTER_TYPE_SCROLL_ACTOR, NULL);
+  return g_object_new (CLUTTER_TYPE_SCROLL_ACTOR,
+                       "context", context,
+                       NULL);
 }
 
 /**

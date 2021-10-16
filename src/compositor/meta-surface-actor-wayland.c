@@ -31,10 +31,12 @@
 #include "backends/meta-backend-private.h"
 #include "backends/meta-logical-monitor.h"
 #include "cogl/cogl-wayland-server.h"
+#include "compositor/compositor-private.h"
 #include "compositor/meta-shaped-texture-private.h"
 #include "compositor/region-utils.h"
 #include "wayland/meta-wayland-buffer.h"
 #include "wayland/meta-wayland-private.h"
+#include "wayland/meta-wayland-surface.h"
 #include "wayland/meta-window-wayland.h"
 
 struct _MetaSurfaceActorWayland
@@ -180,10 +182,16 @@ meta_surface_actor_wayland_init (MetaSurfaceActorWayland *self)
 MetaSurfaceActor *
 meta_surface_actor_wayland_new (MetaWaylandSurface *surface)
 {
-  MetaSurfaceActorWayland *self = g_object_new (META_TYPE_SURFACE_ACTOR_WAYLAND, NULL);
+  MetaSurfaceActorWayland *self;
+  MetaContext *context = surface->compositor->context;
+  MetaBackend *backend = meta_context_get_backend (context);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
 
   g_assert (meta_is_wayland_compositor ());
 
+  self = g_object_new (META_TYPE_SURFACE_ACTOR_WAYLAND,
+                       "context", clutter_context,
+                       NULL);
   self->surface = surface;
   g_object_add_weak_pointer (G_OBJECT (self->surface),
                              (gpointer *) &self->surface);

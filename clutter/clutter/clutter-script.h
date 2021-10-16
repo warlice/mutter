@@ -149,7 +149,7 @@ CLUTTER_EXPORT
 GType clutter_script_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterScript * clutter_script_new                      (void);
+ClutterScript * clutter_script_new                      (ClutterContext            *context);
 CLUTTER_EXPORT
 guint           clutter_script_load_from_file           (ClutterScript             *script,
                                                          const gchar               *filename,

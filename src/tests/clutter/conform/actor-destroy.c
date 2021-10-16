@@ -110,9 +110,29 @@ test_destroy_destroy (ClutterActor *self)
 }
 
 static void
+test_destroy_constructed (GObject *object)
+{
+  TestDestroy *self = TEST_DESTROY (object);
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (self));
+
+  self->bg =
+    clutter_actor_new (context);
+  clutter_container_add_actor (CLUTTER_CONTAINER (self), self->bg);
+  clutter_actor_set_name (self->bg, "Background");
+
+  self->label = clutter_text_new (context);
+  clutter_container_add_actor (CLUTTER_CONTAINER (self), self->label);
+  clutter_actor_set_name (self->label, "Label");
+  G_OBJECT_CLASS (test_destroy_parent_class)->constructed (object);
+}
+
+static void
 test_destroy_class_init (TestDestroyClass *klass)
 {
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
   ClutterActorClass *actor_class = CLUTTER_ACTOR_CLASS (klass);
+
+  object_class->constructed = test_destroy_constructed;
 
   actor_class->destroy = test_destroy_destroy;
 }
@@ -120,13 +140,6 @@ test_destroy_class_init (TestDestroyClass *klass)
 static void
 test_destroy_init (TestDestroy *self)
 {
-  self->bg = clutter_actor_new ();
-  clutter_container_add_actor (CLUTTER_CONTAINER (self), self->bg);
-  clutter_actor_set_name (self->bg, "Background");
-
-  self->label = clutter_text_new ();
-  clutter_container_add_actor (CLUTTER_CONTAINER (self), self->label);
-  clutter_actor_set_name (self->label, "Label");
 }
 
 static void
@@ -163,11 +176,21 @@ on_notify (ClutterActor *actor,
 static void
 actor_destruction (void)
 {
-  ClutterActor *test = g_object_new (TEST_TYPE_DESTROY, NULL);
-  ClutterActor *child = clutter_actor_new ();
+  ClutterActor *stage;
+  ClutterContext *context;
+  ClutterActor *test;
+  ClutterActor *child;
   gboolean destroy_called = FALSE;
   gboolean parent_set_called = FALSE;
   gboolean property_changed = FALSE;
+
+  stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
+
+  test = g_object_new (TEST_TYPE_DESTROY,
+                       "context", context,
+                       NULL);
+  child = clutter_actor_new (context);
 
   g_object_ref_sink (test);
 

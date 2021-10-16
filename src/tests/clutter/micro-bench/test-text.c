@@ -46,6 +46,7 @@ queue_redraw (gpointer stage)
 int
 main (int argc, char *argv[])
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor    *stage;
   ClutterActor    *group;
 
@@ -59,7 +60,7 @@ main (int argc, char *argv[])
   clutter_actor_set_background_color (CLUTTER_ACTOR (stage), CLUTTER_COLOR_Black);
   clutter_stage_set_title (CLUTTER_STAGE (stage), "Text");
 
-  group = clutter_actor_new ();
+  group = clutter_actor_new (context);
   clutter_actor_set_size (group, STAGE_WIDTH, STAGE_WIDTH);
   clutter_container_add_actor (CLUTTER_CONTAINER (stage), group);
 
@@ -99,7 +100,7 @@ main (int argc, char *argv[])
               scale = 1.0;
             }
 
-          label = clutter_text_new_with_text (font_name, text);
+          label = clutter_text_new_with_text (context, font_name, text);
           clutter_text_set_color (CLUTTER_TEXT (label), CLUTTER_COLOR_White);
           clutter_actor_set_position (label, (1.0*STAGE_WIDTH/COLS)*col,
                                              (1.0*STAGE_HEIGHT/ROWS)*row);

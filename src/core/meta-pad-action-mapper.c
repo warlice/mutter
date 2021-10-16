@@ -451,6 +451,8 @@ emulate_modifiers (ClutterVirtualInputDevice *device,
                    ClutterModifierType        mods,
                    ClutterKeyState            state)
 {
+  ClutterSeat *seat = clutter_virtual_input_device_get_seat (device);
+  ClutterContext *clutter_context = clutter_seat_get_context (seat);
   guint i;
   struct {
     ClutterModifierType mod;
@@ -463,11 +465,14 @@ emulate_modifiers (ClutterVirtualInputDevice *device,
 
   for (i = 0; i < G_N_ELEMENTS (mod_map); i++)
     {
+      uint32_t event_time_ms;
+
       if ((mods & mod_map[i].mod) == 0)
         continue;
 
+      event_time_ms = clutter_context_get_current_event_time (clutter_context);
       clutter_virtual_input_device_notify_keyval (device,
-                                                  clutter_get_current_event_time (),
+                                                  event_time_ms,
                                                   mod_map[i].keyval, state);
     }
 }
@@ -477,8 +482,10 @@ meta_pad_action_mapper_emulate_keybinding (MetaPadActionMapper *mapper,
                                            const char          *accel,
                                            gboolean             is_press)
 {
+  ClutterContext *clutter_context = clutter_seat_get_context (mapper->seat);
   ClutterKeyState state;
   guint key, mods;
+  uint32_t event_time_ms;
 
   if (!accel || !*accel)
     return;
@@ -488,14 +495,8 @@ meta_pad_action_mapper_emulate_keybinding (MetaPadActionMapper *mapper,
 
   if (!mapper->virtual_pad_keyboard)
     {
-      ClutterBackend *backend;
-      ClutterSeat *seat;
-
-      backend = clutter_get_default_backend ();
-      seat = clutter_backend_get_default_seat (backend);
-
       mapper->virtual_pad_keyboard =
-        clutter_seat_create_virtual_device (seat,
+        clutter_seat_create_virtual_device (mapper->seat,
                                             CLUTTER_KEYBOARD_DEVICE);
     }
 
@@ -504,8 +505,9 @@ meta_pad_action_mapper_emulate_keybinding (MetaPadActionMapper *mapper,
   if (is_press)
     emulate_modifiers (mapper->virtual_pad_keyboard, mods, state);
 
+  event_time_ms = clutter_context_get_current_event_time (clutter_context);
   clutter_virtual_input_device_notify_keyval (mapper->virtual_pad_keyboard,
-                                              clutter_get_current_event_time (),
+                                              event_time_ms,
                                               key, state);
   if (!is_press)
     emulate_modifiers (mapper->virtual_pad_keyboard, mods, state);

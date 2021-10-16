@@ -186,6 +186,7 @@ make_bouncer (gfloat width,
   g_signal_connect (canvas, "draw", G_CALLBACK (draw_bouncer), NULL);
 
   retval = g_object_new (CLUTTER_TYPE_ACTOR,
+                         "context", clutter_test_get_context (),
                          "content", canvas,
                          NULL);
   clutter_actor_set_name (retval, "bouncer");
@@ -201,6 +202,7 @@ make_bouncer (gfloat width,
 G_MODULE_EXPORT int
 test_easing_main (int argc, char *argv[])
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage, *rect, *label;
   gchar *text;
   gfloat stage_width, stage_height;
@@ -225,7 +227,7 @@ test_easing_main (int argc, char *argv[])
                           current_mode + 1,
                           n_easing_modes);
 
-  label = clutter_text_new ();
+  label = clutter_text_new (context);
   clutter_container_add_actor (CLUTTER_CONTAINER (stage), label);
   clutter_text_set_text (CLUTTER_TEXT (label), text);
   clutter_actor_add_constraint (label, clutter_align_constraint_new (stage, CLUTTER_ALIGN_X_AXIS, 0.95));

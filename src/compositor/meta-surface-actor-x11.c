@@ -379,11 +379,17 @@ reset_texture (MetaSurfaceActorX11 *self)
 MetaSurfaceActor *
 meta_surface_actor_x11_new (MetaWindow *window)
 {
-  MetaSurfaceActorX11 *self = g_object_new (META_TYPE_SURFACE_ACTOR_X11, NULL);
+  MetaSurfaceActorX11 *self;
   MetaDisplay *display = meta_window_get_display (window);
+  MetaContext *context = meta_display_get_context (display);
+  MetaBackend *backend = meta_context_get_backend (context);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
 
   g_assert (!meta_is_wayland_compositor ());
 
+  self = g_object_new (META_TYPE_SURFACE_ACTOR_X11,
+                       "context", clutter_context,
+                       NULL);
   self->window = window;
   self->display = display;
 

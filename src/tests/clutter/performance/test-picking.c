@@ -49,6 +49,7 @@ static gboolean queue_redraw (gpointer data)
 int
 main (int argc, char **argv)
 {
+  ClutterContext *context = clutter_test_get_context ();
   glong i;
   gdouble angle;
   ClutterColor color = { 0x00, 0x00, 0x00, 0xff };
@@ -82,7 +83,7 @@ main (int argc, char **argv)
                    fmod ((i + (n_actors/3.0)), n_actors)))) /
                    (gdouble)(n_actors/4.0) - 1.0)) * 255.0;
 
-      rect = clutter_actor_new ();
+      rect = clutter_actor_new (context);
       clutter_actor_set_background_color (rect, &color);
       clutter_actor_set_size (rect, 100, 100);
       clutter_actor_set_translation (rect, -50.f, -50.f, 0.f);

@@ -246,11 +246,15 @@ trigger_slow_keys (gpointer data)
 {
   SlowKeysEventPending *slow_keys_event = data;
   MetaInputDeviceNative *device = slow_keys_event->device;
+  ClutterSeat *seat =
+    clutter_input_device_get_seat (CLUTTER_INPUT_DEVICE (device));
+  ClutterContext *clutter_context =
+    clutter_seat_get_context (seat);
   ClutterKeyEvent *key_event = (ClutterKeyEvent *) slow_keys_event->event;
 
   /* Alter timestamp and emit the event */
   key_event->time = us2ms (g_get_monotonic_time ());
-  _clutter_event_push (slow_keys_event->event, TRUE);
+  clutter_context_push_event (clutter_context, slow_keys_event->event, TRUE);
 
   /* Then remote the pending event */
   device->slow_keys_list = g_list_remove (device->slow_keys_list, slow_keys_event);

@@ -318,7 +318,9 @@ test_coglbox_class_init (TestCoglboxClass *klass)
 static ClutterActor*
 test_coglbox_new (void)
 {
-  return g_object_new (TEST_TYPE_COGLBOX, NULL);
+  return g_object_new (TEST_TYPE_COGLBOX,
+                       "context", clutter_test_get_context (),
+                       NULL);
 }
 
 G_MODULE_EXPORT int

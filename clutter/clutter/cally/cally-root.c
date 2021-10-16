@@ -149,9 +149,11 @@ cally_root_finalize (GObject *object)
 
   stage_manager = atk_gobject_accessible_get_object (ATK_GOBJECT_ACCESSIBLE (root));
 
-  g_clear_signal_handler (&root->priv->stage_added_id, stage_manager);
-
-  g_clear_signal_handler (&root->priv->stage_removed_id, stage_manager);
+  if (stage_manager)
+    {
+      g_clear_signal_handler (&root->priv->stage_added_id, stage_manager);
+      g_clear_signal_handler (&root->priv->stage_removed_id, stage_manager);
+    }
 
   G_OBJECT_CLASS (cally_root_parent_class)->finalize (object);
 }

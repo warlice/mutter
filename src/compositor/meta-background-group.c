@@ -56,11 +56,13 @@ meta_background_group_init (MetaBackgroundGroup *self)
 }
 
 ClutterActor *
-meta_background_group_new (void)
+meta_background_group_new (ClutterContext *clutter_context)
 {
   MetaBackgroundGroup *background_group;
 
-  background_group = g_object_new (META_TYPE_BACKGROUND_GROUP, NULL);
+  background_group = g_object_new (META_TYPE_BACKGROUND_GROUP,
+                                   "context", clutter_context,
+                                   NULL);
 
   return CLUTTER_ACTOR (background_group);
 }

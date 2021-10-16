@@ -27,15 +27,27 @@
 #ifndef __CLUTTER_UNITS_H__
 #define __CLUTTER_UNITS_H__
 
-#if !defined(__CLUTTER_H_INSIDE__) && !defined(CLUTTER_COMPILATION)
-#error "Only <clutter/clutter.h> can be included directly."
-#endif
-
 #include <glib-object.h>
 
+#include <clutter/clutter.h>
 #include <cogl/cogl.h>
 
 G_BEGIN_DECLS
+
+/**
+ * ClutterUnitType:
+ * @CLUTTER_UNIT_PIXEL: Unit expressed in pixels (with subpixel precision)
+ *
+ * The type of unit in which a value is expressed
+ *
+ * This enumeration might be expanded at later date
+ *
+ * Since: 1.0
+ */
+typedef enum /*< prefix=CLUTTER_UNIT >*/
+{
+  CLUTTER_UNIT_PIXEL,
+} ClutterUnitType;
 
 /**
  * ClutterUnits:
@@ -61,13 +73,6 @@ struct _ClutterUnits
 
   /* whether the :pixels field is set */
   guint pixels_set;
-
-  /* the serial coming from the backend, used to evict the cache */
-  gint32 serial;
-
-  /* padding for eventual expansion */
-  gint32 __padding_1;
-  gint64 __padding_2;
 };
 
 CLUTTER_EXPORT
@@ -86,23 +91,6 @@ CLUTTER_EXPORT
 void            clutter_units_from_pixels      (ClutterUnits       *units,
                                                 gint                px);
 CLUTTER_EXPORT
-void            clutter_units_from_em          (ClutterUnits       *units,
-                                                gfloat              em);
-CLUTTER_EXPORT
-void            clutter_units_from_em_for_font (ClutterUnits       *units,
-                                                const gchar        *font_name,
-                                                gfloat              em);
-CLUTTER_EXPORT
-void            clutter_units_from_mm          (ClutterUnits       *units,
-                                                gfloat              mm);
-CLUTTER_EXPORT
-void            clutter_units_from_cm          (ClutterUnits       *units,
-                                                gfloat              cm);
-CLUTTER_EXPORT
-void            clutter_units_from_pt          (ClutterUnits       *units,
-                                                gfloat              pt);
-
-CLUTTER_EXPORT
 gfloat          clutter_units_to_pixels        (ClutterUnits       *units);
 
 CLUTTER_EXPORT
@@ -113,11 +101,6 @@ gchar *         clutter_units_to_string        (const ClutterUnits *units);
 
 /* shorthands for the constructors */
 #define clutter_units_pixels            clutter_units_from_pixels
-#define clutter_units_em                clutter_units_from_em
-#define clutter_units_em_for_font       clutter_units_from_em_for_font
-#define clutter_units_mm                clutter_units_from_mm
-#define clutter_units_cm                clutter_units_from_cm
-#define clutter_units_pt                clutter_units_from_pt
 
 #define CLUTTER_TYPE_UNITS                 (clutter_units_get_type ())
 #define CLUTTER_TYPE_PARAM_UNITS           (clutter_param_units_get_type ())

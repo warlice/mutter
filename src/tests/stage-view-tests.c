@@ -146,6 +146,7 @@ static void
 meta_test_actor_stage_views (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   ClutterActor *stage, *container, *test_actor;
   GList *stage_views;
   gboolean stage_views_changed_container = FALSE;
@@ -158,11 +159,11 @@ meta_test_actor_stage_views (void)
   stage = meta_backend_get_stage (backend);
   stage_views = clutter_stage_peek_stage_views (CLUTTER_STAGE (stage));
 
-  container = clutter_actor_new ();
+  container = clutter_actor_new (clutter_context);
   clutter_actor_set_size (container, 100, 100);
   clutter_actor_add_child (stage, container);
 
-  test_actor = clutter_actor_new ();
+  test_actor = clutter_actor_new (clutter_context);
   clutter_actor_set_size (test_actor, 50, 50);
   clutter_actor_add_child (container, test_actor);
 
@@ -236,13 +237,14 @@ static void
 meta_test_actor_stage_views_relayout (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   ClutterActor *stage, *actor;
   ClutterTransition *transition;
   GMainLoop *main_loop;
 
   stage = meta_backend_get_stage (backend);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (clutter_context);
   clutter_actor_set_size (actor, 100, 100);
   clutter_actor_set_easing_duration (actor, 100);
   clutter_actor_add_child (stage, actor);
@@ -271,6 +273,7 @@ static void
 meta_test_actor_stage_views_reparent (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   ClutterActor *stage, *container, *test_actor;
   GList *stage_views;
   gboolean stage_views_changed_container = FALSE;
@@ -283,12 +286,12 @@ meta_test_actor_stage_views_reparent (void)
   stage = meta_backend_get_stage (backend);
   stage_views = clutter_stage_peek_stage_views (CLUTTER_STAGE (stage));
 
-  container = clutter_actor_new ();
+  container = clutter_actor_new (clutter_context);
   clutter_actor_set_size (container, 100, 100);
   clutter_actor_set_x (container, 1020);
   clutter_actor_add_child (stage, container);
 
-  test_actor = clutter_actor_new ();
+  test_actor = clutter_actor_new (clutter_context);
   clutter_actor_set_size (test_actor, 20, 20);
   clutter_actor_add_child (container, test_actor);
 
@@ -378,6 +381,7 @@ static void
 meta_test_actor_stage_views_hide_parent (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   ClutterActor *stage, *outer_container, *inner_container, *test_actor;
   GList *stage_views;
   gboolean stage_views_changed_outer_container = FALSE;
@@ -393,13 +397,13 @@ meta_test_actor_stage_views_hide_parent (void)
   stage = meta_backend_get_stage (backend);
   stage_views = clutter_stage_peek_stage_views (CLUTTER_STAGE (stage));
 
-  outer_container = clutter_actor_new ();
+  outer_container = clutter_actor_new (clutter_context);
   clutter_actor_add_child (stage, outer_container);
 
-  inner_container = clutter_actor_new ();
+  inner_container = clutter_actor_new (clutter_context);
   clutter_actor_add_child (outer_container, inner_container);
 
-  test_actor = clutter_actor_new ();
+  test_actor = clutter_actor_new (clutter_context);
   clutter_actor_set_size (test_actor, 20, 20);
   clutter_actor_add_child (inner_container, test_actor);
 
@@ -509,6 +513,7 @@ static void
 meta_test_actor_stage_views_hot_plug (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaMonitorManagerTest *monitor_manager_test =
@@ -526,12 +531,12 @@ meta_test_actor_stage_views_hot_plug (void)
   assert_is_stage_view (stage_views->data, 0, 0, 1024, 768);
   assert_is_stage_view (stage_views->next->data, 1024, 0, 1024, 768);
 
-  actor_1 = clutter_actor_new ();
+  actor_1 = clutter_actor_new (clutter_context);
   clutter_actor_set_size (actor_1, 100, 100);
   clutter_actor_set_position (actor_1, 100, 100);
   clutter_actor_add_child (stage, actor_1);
 
-  actor_2 = clutter_actor_new ();
+  actor_2 = clutter_actor_new (clutter_context);
   clutter_actor_set_size (actor_2, 100, 100);
   clutter_actor_set_position (actor_2, 1100, 100);
   clutter_actor_add_child (stage, actor_2);
@@ -577,6 +582,7 @@ static void
 meta_test_actor_stage_views_frame_clock (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaMonitorManagerTest *monitor_manager_test =
@@ -609,17 +615,17 @@ meta_test_actor_stage_views_frame_clock (void)
                      ==,
                      30.0);
 
-  actor_1 = clutter_actor_new ();
+  actor_1 = clutter_actor_new (clutter_context);
   clutter_actor_set_size (actor_1, 100, 100);
   clutter_actor_set_position (actor_1, 100, 100);
   clutter_actor_add_child (stage, actor_1);
 
-  actor_2 = clutter_actor_new ();
+  actor_2 = clutter_actor_new (clutter_context);
   clutter_actor_set_size (actor_2, 100, 100);
   clutter_actor_set_position (actor_2, 1100, 100);
   clutter_actor_add_child (stage, actor_2);
 
-  actor_3 = clutter_actor_new ();
+  actor_3 = clutter_actor_new (clutter_context);
   clutter_actor_set_size (actor_3, 100, 100);
   clutter_actor_set_position (actor_3, 1000, 400);
   clutter_actor_add_child (stage, actor_3);
@@ -720,6 +726,7 @@ meta_test_actor_stage_views_timeline (void)
 {
   TimelineTest test = { 0 };
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaMonitorManagerTest *monitor_manager_test =
@@ -754,7 +761,7 @@ meta_test_actor_stage_views_timeline (void)
   g_assert_nonnull (test.frame_clock_1);
   g_assert_nonnull (test.frame_clock_2);
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (clutter_context);
   clutter_actor_set_size (actor, 100, 100);
   clutter_actor_set_position (actor, 800, 100);
   clutter_actor_add_child (stage, actor);
@@ -800,6 +807,7 @@ static void
 meta_test_actor_stage_views_parent_views_rebuilt (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaMonitorManagerTest *monitor_manager_test =
@@ -826,12 +834,12 @@ meta_test_actor_stage_views_parent_views_rebuilt (void)
   stage_views = clutter_stage_peek_stage_views (CLUTTER_STAGE (stage));
   g_assert_cmpint (g_list_length (stage_views), ==, 1);
 
-  container = clutter_actor_new ();
+  container = clutter_actor_new (clutter_context);
   clutter_actor_set_size (container, 100, 100);
   clutter_actor_set_position (container, 0, 0);
   clutter_actor_add_child (stage, container);
 
-  test_actor = clutter_actor_new ();
+  test_actor = clutter_actor_new (clutter_context);
   clutter_actor_set_size (test_actor, 0, 0);
   clutter_actor_add_child (container, test_actor);
 
@@ -884,6 +892,7 @@ static void
 meta_test_actor_stage_views_parent_views_changed (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaMonitorManagerTest *monitor_manager_test =
@@ -907,12 +916,12 @@ meta_test_actor_stage_views_parent_views_changed (void)
   stage_views = clutter_stage_peek_stage_views (CLUTTER_STAGE (stage));
   g_assert_cmpint (g_list_length (stage_views), ==, 2);
 
-  container = clutter_actor_new ();
+  container = clutter_actor_new (clutter_context);
   clutter_actor_set_size (container, 100, 100);
   clutter_actor_set_position (container, 0, 0);
   clutter_actor_add_child (stage, container);
 
-  test_actor = clutter_actor_new ();
+  test_actor = clutter_actor_new (clutter_context);
   clutter_actor_set_size (test_actor, 0, 0);
   clutter_actor_add_child (container, test_actor);
 
@@ -959,6 +968,7 @@ static void
 meta_test_actor_stage_views_and_frame_clocks_freed (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   MetaMonitorManagerTest *monitor_manager_test =
@@ -986,12 +996,12 @@ meta_test_actor_stage_views_and_frame_clocks_freed (void)
   /* Create two actors, one on the first stage view, another one on the
    * second view.
    */
-  actor_1 = clutter_actor_new ();
+  actor_1 = clutter_actor_new (clutter_context);
   clutter_actor_set_size (actor_1, 100, 100);
   clutter_actor_set_position (actor_1, 100, 100);
   clutter_actor_add_child (stage, actor_1);
 
-  actor_2 = clutter_actor_new ();
+  actor_2 = clutter_actor_new (clutter_context);
   clutter_actor_set_size (actor_2, 100, 100);
   clutter_actor_set_position (actor_2, 1100, 100);
   clutter_actor_add_child (stage, actor_2);
@@ -1198,6 +1208,7 @@ static void
 meta_test_timeline_actor_destroyed (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   ClutterActor *stage;
   GList *stage_views;
   ClutterActor *persistent_actor;
@@ -1210,7 +1221,7 @@ meta_test_timeline_actor_destroyed (void)
   stage = meta_backend_get_stage (backend);
   clutter_actor_show (stage);
 
-  persistent_actor = clutter_actor_new ();
+  persistent_actor = clutter_actor_new (clutter_context);
   clutter_actor_add_child (stage, persistent_actor);
 
   stage_views = clutter_stage_peek_stage_views (CLUTTER_STAGE (stage));
@@ -1219,7 +1230,7 @@ meta_test_timeline_actor_destroyed (void)
   g_assert_null (stage_views);
   g_assert_null (clutter_actor_pick_frame_clock (stage, NULL));
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (clutter_context);
   clutter_actor_add_child (stage, actor);
   g_assert_null (clutter_actor_pick_frame_clock (actor, NULL));
 

@@ -618,19 +618,22 @@ CLUTTER_EXPORT
 GType clutter_event_sequence_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-gboolean                clutter_events_pending                  (void);
+gboolean                clutter_context_events_pending          (ClutterContext         *context);
 CLUTTER_EXPORT
-ClutterEvent *          clutter_event_get                       (void);
+ClutterEvent *          clutter_context_get_event               (ClutterContext         *context);
 CLUTTER_EXPORT
-void                    clutter_event_put                       (const ClutterEvent     *event);
+void                    clutter_context_put_event               (ClutterContext         *context,
+                                                                 const ClutterEvent     *event);
 
 CLUTTER_EXPORT
-guint                   clutter_event_add_filter                (ClutterStage          *stage,
-                                                                 ClutterEventFilterFunc func,
-                                                                 GDestroyNotify         notify,
-                                                                 gpointer               user_data);
+guint                   clutter_context_add_event_filter        (ClutterContext         *context,
+                                                                 ClutterStage           *stage,
+                                                                 ClutterEventFilterFunc  func,
+                                                                 GDestroyNotify          notify,
+                                                                 gpointer                user_data);
 CLUTTER_EXPORT
-void                    clutter_event_remove_filter             (guint                  id);
+void                    clutter_context_remove_event_filter     (ClutterContext         *context,
+                                                                 guint                   id);
 
 CLUTTER_EXPORT
 ClutterEvent *          clutter_event_new                       (ClutterEventType        type);
@@ -769,9 +772,9 @@ CLUTTER_EXPORT
 guint                   clutter_unicode_to_keysym               (guint32                 wc);
 
 CLUTTER_EXPORT
-guint32                 clutter_get_current_event_time          (void);
+guint32                 clutter_context_get_current_event_time  (ClutterContext         *context);
 CLUTTER_EXPORT
-const ClutterEvent *    clutter_get_current_event               (void);
+const ClutterEvent *    clutter_context_get_current_event       (ClutterContext         *context);
 
 CLUTTER_EXPORT
 guint                   clutter_event_get_touchpad_gesture_finger_count (const ClutterEvent  *event);

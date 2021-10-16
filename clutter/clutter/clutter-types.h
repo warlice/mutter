@@ -43,6 +43,8 @@ G_BEGIN_DECLS
 #define CLUTTER_TYPE_PAINT_VOLUME       (clutter_paint_volume_get_type ())
 #define CLUTTER_TYPE_PERSPECTIVE        (clutter_perspective_get_type ())
 
+typedef struct _ClutterContext                  ClutterContext;
+
 typedef struct _ClutterActor                    ClutterActor;
 
 typedef struct _ClutterStage                    ClutterStage;

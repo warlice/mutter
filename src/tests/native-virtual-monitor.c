@@ -33,6 +33,7 @@ static void
 meta_test_virtual_monitor_create (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaMonitorManager *monitor_manager = meta_backend_get_monitor_manager (backend);
   MetaMonitorConfigManager *config_manager =
     meta_monitor_manager_get_config_manager (monitor_manager);
@@ -103,7 +104,7 @@ meta_test_virtual_monitor_create (void)
                                  meta_ref_test_determine_ref_test_flag ());
     }
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (clutter_context);
   clutter_actor_set_position (actor, 10, 10);
   clutter_actor_set_size (actor, 40, 40);
   clutter_actor_set_background_color (actor, CLUTTER_COLOR_LightSkyBlue);
