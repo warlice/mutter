@@ -1,6 +1,8 @@
 #include <clutter/clutter.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 
+#include "clutter-test-utils.h"
+
 static inline ClutterActor *
 clutter_test_utils_create_texture_from_file (const char  *filename,
                                              GError     **error)
@@ -25,6 +27,7 @@ clutter_test_utils_create_texture_from_file (const char  *filename,
     return NULL;
 
   return g_object_new (CLUTTER_TYPE_ACTOR,
+                       "context", clutter_test_get_context (),
                        "content", image,
                        NULL);
 }

@@ -72,7 +72,8 @@ insert_unichar (ClutterText *text, gunichar unichar, int position)
 static void
 text_set_empty (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
   g_object_ref_sink (text);
 
   g_assert_cmpstr (clutter_text_get_text (text), ==, "");
@@ -90,7 +91,8 @@ text_set_empty (void)
 static void
 text_set_text (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
   g_object_ref_sink (text);
 
   clutter_text_set_text (text, "abcdef");
@@ -112,7 +114,8 @@ text_set_text (void)
 static void
 text_append_some (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
   int i;
 
   g_object_ref_sink (text);
@@ -140,7 +143,8 @@ text_append_some (void)
 static void
 text_prepend_some (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
   int i;
 
   g_object_ref_sink (text);
@@ -174,7 +178,8 @@ text_prepend_some (void)
 static void
 text_insert (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
   int i;
 
   g_object_ref_sink (text);
@@ -201,7 +206,8 @@ text_insert (void)
 static void
 text_delete_chars (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
   int i;
 
   g_object_ref_sink (text);
@@ -246,7 +252,8 @@ text_delete_chars (void)
 static void
 text_get_chars (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
   gchar *chars;
 
   g_object_ref_sink (text);
@@ -278,7 +285,8 @@ text_get_chars (void)
 static void
 text_delete_text (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
   int i;
 
   g_object_ref_sink (text);
@@ -310,7 +318,8 @@ text_delete_text (void)
 static void
 text_password_char (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
 
   g_object_ref_sink (text);
 
@@ -369,7 +378,8 @@ send_unichar (ClutterText *text, gunichar unichar)
 static void
 text_cursor (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
   int i;
 
   g_object_ref_sink (text);
@@ -417,7 +427,8 @@ text_cursor (void)
 static void
 text_event (void)
 {
-  ClutterText *text = CLUTTER_TEXT (clutter_text_new ());
+  ClutterContext *context = clutter_test_get_context ();
+  ClutterText *text = CLUTTER_TEXT (clutter_text_new (context));
   int i;
 
   g_object_ref_sink (text);
@@ -495,6 +506,7 @@ validate_markup_attributes (ClutterText   *text,
 static void
 text_idempotent_use_markup (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterText *text;
   const char *contents = "foo <b>bar</b>";
   const char *display = "foo bar";
@@ -506,7 +518,9 @@ text_idempotent_use_markup (void)
     g_print ("text: '%s' -> use-markup: TRUE\n", contents);
 
   text = g_object_new (CLUTTER_TYPE_TEXT,
-                       "text", contents, "use-markup", TRUE,
+                       "context", context,
+                       "text", contents,
+                       "use-markup", TRUE,
                        NULL);
   g_object_ref_sink (text);
 
@@ -529,7 +543,9 @@ text_idempotent_use_markup (void)
     g_print ("use-markup: TRUE -> text: '%s'\n", contents);
 
   text = g_object_new (CLUTTER_TYPE_TEXT,
-                       "use-markup", TRUE, "text", contents,
+                       "context", context,
+                       "use-markup", TRUE,
+                       "text", contents,
                        NULL);
 
   if (!g_test_quiet ())

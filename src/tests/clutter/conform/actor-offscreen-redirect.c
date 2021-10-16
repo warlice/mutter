@@ -410,26 +410,31 @@ run_verify (gpointer user_data)
 static void
 actor_offscreen_redirect (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   Data data = { 0 };
 
   data.stage = clutter_test_get_stage ();
-  data.parent_container = clutter_actor_new ();
+  data.parent_container = clutter_actor_new (context);
   clutter_actor_set_background_color (data.parent_container,
                                       &(ClutterColor) { 255, 255, 255, 255 });
 
-  data.container = g_object_new (foo_group_get_type (), NULL);
-  data.foo_actor = g_object_new (foo_actor_get_type (), NULL);
+  data.container = g_object_new (foo_group_get_type (),
+                                 "context", context,
+                                 NULL);
+  data.foo_actor = g_object_new (foo_actor_get_type (),
+                                 "context", context,
+                                 NULL);
   clutter_actor_set_size (CLUTTER_ACTOR (data.foo_actor), 100, 100);
 
   clutter_actor_add_child (data.container, CLUTTER_ACTOR (data.foo_actor));
   clutter_actor_add_child (data.parent_container, data.container);
   clutter_actor_add_child (data.stage, data.parent_container);
 
-  data.child = clutter_actor_new ();
+  data.child = clutter_actor_new (context);
   clutter_actor_set_size (data.child, 1, 1);
   clutter_actor_add_child (data.container, data.child);
 
-  data.unrelated_actor = clutter_actor_new ();
+  data.unrelated_actor = clutter_actor_new (context);
   clutter_actor_set_size (data.child, 1, 1);
   clutter_actor_add_child (data.stage, data.unrelated_actor);
 

@@ -186,7 +186,7 @@ test_bind_constraint_main (int argc, char *argv[])
 
   /* main rectangle */
   clutter_color_from_string (&rect_color, "#3465a4");
-  rect = clutter_actor_new ();
+  rect = clutter_actor_new (clutter_test_get_context ());
   g_signal_connect (rect, "button-release-event",
                     G_CALLBACK (on_button_release),
                     NULL);
@@ -228,7 +228,7 @@ test_bind_constraint_main (int argc, char *argv[])
 
       clutter_color_from_string (&rect_color, colors[i]);
 
-      rect = clutter_actor_new ();
+      rect = clutter_actor_new (clutter_test_get_context ());
       clutter_actor_set_background_color (rect, &rect_color);
       clutter_actor_set_opacity (rect, 0);
       clutter_actor_set_name (rect, names[i]);

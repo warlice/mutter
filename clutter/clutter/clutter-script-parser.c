@@ -1502,6 +1502,16 @@ clutter_script_construct_parameters (ClutterScript  *script,
 
   unparsed = NULL;
 
+  if (g_type_is_a (gtype, CLUTTER_TYPE_ACTOR))
+    {
+      GValue value = G_VALUE_INIT;
+
+      g_value_init (&value, CLUTTER_TYPE_CONTEXT);
+      g_value_set_object (&value, clutter_script_get_context (script));
+      g_ptr_array_add (*construct_param_names, g_strdup ("context"));
+      g_array_append_val (*construct_param_values, value);
+    }
+
   for (l = properties; l != NULL; l = l->next)
     {
       PropertyInfo *pinfo = l->data;

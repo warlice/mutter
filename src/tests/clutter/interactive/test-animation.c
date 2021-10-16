@@ -98,7 +98,7 @@ test_animation_main (int argc, char *argv[])
   clutter_stage_set_title (CLUTTER_STAGE (stage), "Animation");
   g_signal_connect (stage, "destroy", G_CALLBACK (clutter_test_quit), NULL);
 
-  rect = clutter_actor_new ();
+  rect = clutter_actor_new (clutter_test_get_context ());
   clutter_actor_set_background_color (rect, CLUTTER_COLOR_LightOrange);
   clutter_actor_add_child (stage, rect);
   clutter_actor_set_size (rect, 50, 50);

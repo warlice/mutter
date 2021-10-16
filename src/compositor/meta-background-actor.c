@@ -24,7 +24,9 @@
 #include "compositor/meta-background-actor-private.h"
 #include "compositor/meta-background-content-private.h"
 
+#include "backends/meta-backend-private.h"
 #include "compositor/meta-cullable.h"
+#include "meta/meta-context.h"
 
 enum
 {
@@ -157,9 +159,13 @@ ClutterActor *
 meta_background_actor_new (MetaDisplay *display,
                            int          monitor)
 {
+  MetaContext *context = meta_display_get_context (display);
+  MetaBackend *backend = meta_context_get_backend (context);
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   MetaBackgroundActor *self;
 
   self = g_object_new (META_TYPE_BACKGROUND_ACTOR,
+                       "context", clutter_context,
                        "meta-display", display,
                        "monitor", monitor,
                        NULL);

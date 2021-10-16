@@ -37,9 +37,10 @@ test_rotate_zoom_describe (void);
 static ClutterActor *
 create_hand (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file (TESTS_DATADIR G_DIR_SEPARATOR_S "redhand.png", NULL);
   ClutterContent *image = clutter_image_new ();
-  ClutterActor *actor = clutter_actor_new ();
+  ClutterActor *actor = clutter_actor_new (context);
 
   clutter_image_set_data (CLUTTER_IMAGE (image),
                           gdk_pixbuf_get_pixels (pixbuf),

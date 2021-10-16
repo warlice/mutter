@@ -100,16 +100,19 @@ CLUTTER_EXPORT
 GType clutter_text_get_type (void) G_GNUC_CONST;
 
 CLUTTER_EXPORT
-ClutterActor *        clutter_text_new                  (void);
+ClutterActor *        clutter_text_new                  (ClutterContext       *context);
 CLUTTER_EXPORT
-ClutterActor *        clutter_text_new_full             (const gchar          *font_name,
+ClutterActor *        clutter_text_new_full             (ClutterContext       *context,
+                                                         const gchar          *font_name,
                                                          const gchar          *text,
                                                          const ClutterColor   *color);
 CLUTTER_EXPORT
-ClutterActor *        clutter_text_new_with_text        (const gchar          *font_name,
+ClutterActor *        clutter_text_new_with_text        (ClutterContext       *context,
+                                                         const gchar          *font_name,
                                                          const gchar          *text);
 CLUTTER_EXPORT
-ClutterActor *        clutter_text_new_with_buffer      (ClutterTextBuffer    *buffer);
+ClutterActor *        clutter_text_new_with_buffer      (ClutterContext       *context,
+                                                         ClutterTextBuffer    *buffer);
 CLUTTER_EXPORT
 ClutterTextBuffer *   clutter_text_get_buffer           (ClutterText          *self);
 CLUTTER_EXPORT

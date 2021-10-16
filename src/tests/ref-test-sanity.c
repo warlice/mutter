@@ -82,6 +82,7 @@ static void
 meta_test_ref_test_sanity (void)
 {
   MetaBackend *backend = meta_get_backend ();
+  ClutterContext *clutter_context = meta_backend_get_clutter_context (backend);
   ClutterActor *stage = meta_backend_get_stage (backend);
   ClutterActor *actor1;
   ClutterActor *actor2;
@@ -90,7 +91,7 @@ meta_test_ref_test_sanity (void)
                              g_test_get_path (), 0,
                              meta_ref_test_determine_ref_test_flag ());
 
-  actor1 = clutter_actor_new ();
+  actor1 = clutter_actor_new (clutter_context);
   clutter_actor_set_position (actor1, 10, 10);
   clutter_actor_set_size (actor1, 50, 50);
   clutter_actor_set_background_color (actor1, CLUTTER_COLOR_Orange);
@@ -100,7 +101,7 @@ meta_test_ref_test_sanity (void)
                              g_test_get_path (), 1,
                              meta_ref_test_determine_ref_test_flag ());
 
-  actor2 = clutter_actor_new ();
+  actor2 = clutter_actor_new (clutter_context);
   clutter_actor_set_position (actor2, 20, 20);
   clutter_actor_set_size (actor2, 50, 50);
   clutter_actor_set_background_color (actor2, CLUTTER_COLOR_SkyBlue);

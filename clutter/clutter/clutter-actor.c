@@ -72,7 +72,7 @@
  * clutter_actor_destroy().
  *
  * |[<!-- language="C" -->
- *  ClutterActor *actor = clutter_actor_new ();
+ *  ClutterActor *actor = clutter_actor_new (context);
  *
  *  // set the bounding box of the actor
  *  clutter_actor_set_position (actor, 0, 0);
@@ -82,7 +82,7 @@
  *  clutter_actor_set_background_color (actor, CLUTTER_COLOR_Orange);
  *
  *  // set the bounding box of the child, relative to the parent
- *  ClutterActor *child = clutter_actor_new ();
+ *  ClutterActor *child = clutter_actor_new (context);
  *  clutter_actor_set_position (child, 20, 20);
  *  clutter_actor_set_size (child, 80, 240);
  *
@@ -124,7 +124,7 @@
  * #ClutterActorClass.paint_node() virtual function.
  *
  * |[<!-- language="C" -->
- * ClutterActor *actor = clutter_actor_new ();
+ * ClutterActor *actor = clutter_actor_new (context);
  *
  * // set the bounding box
  * clutter_actor_set_position (actor, 50, 50);
@@ -671,6 +671,8 @@ typedef enum
 
 struct _ClutterActorPrivate
 {
+  ClutterContext *context;
+
   /* request mode */
   ClutterRequestMode request_mode;
 
@@ -847,6 +849,8 @@ struct _ClutterActorPrivate
 enum
 {
   PROP_0,
+
+  PROP_CONTEXT,
 
   PROP_NAME,
 
@@ -1099,6 +1103,14 @@ G_DEFINE_TYPE_WITH_CODE (ClutterActor,
                                                 clutter_animatable_iface_init)
                          G_IMPLEMENT_INTERFACE (ATK_TYPE_IMPLEMENTOR,
                                                 atk_implementor_iface_init));
+
+static ClutterBackend *
+backend_from_actor (ClutterActor *actor)
+{
+  g_return_val_if_fail (actor->priv->context, NULL);
+
+  return clutter_context_get_backend (actor->priv->context);
+}
 
 /*< private >
  * clutter_actor_get_debug_name:
@@ -3111,7 +3123,7 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
   graphene_point3d_t line_ends[12 * 2];
   int n_vertices;
   CoglContext *ctx =
-    clutter_backend_get_cogl_context (clutter_get_default_backend ());
+    clutter_backend_get_cogl_context (backend_from_actor (self));
   CoglColor cogl_color;
 
   if (outline == NULL)
@@ -4763,6 +4775,10 @@ clutter_actor_set_property (GObject      *object,
 
   switch (prop_id)
     {
+    case PROP_CONTEXT:
+      priv->context = g_value_get_object (value);
+      break;
+
     case PROP_X:
       clutter_actor_set_x (actor, g_value_get_float (value));
       break;
@@ -5056,6 +5072,10 @@ clutter_actor_get_property (GObject    *object,
 
   switch (prop_id)
     {
+    case PROP_CONTEXT:
+      g_value_set_object (value, priv->context);
+      break;
+
     case PROP_X:
       g_value_set_float (value, clutter_actor_get_x (actor));
       break;
@@ -5499,7 +5519,7 @@ clutter_actor_dispose (GObject *object)
 {
   ClutterActor *self = CLUTTER_ACTOR (object);
   ClutterActorPrivate *priv = self->priv;
-  ClutterBackend *backend = clutter_get_default_backend ();
+  ClutterBackend *backend = backend_from_actor (self);
 
   CLUTTER_NOTE (MISC, "Dispose actor (name='%s', ref_count:%d) of type '%s'",
 		_clutter_actor_get_debug_name (self),
@@ -5885,6 +5905,16 @@ clutter_actor_constructor (GType gtype,
 }
 
 static void
+clutter_actor_constructed (GObject *object)
+{
+  ClutterActor *actor = CLUTTER_ACTOR (object);
+
+  g_warn_if_fail (actor->priv->context);
+
+  G_OBJECT_CLASS (clutter_actor_parent_class)->constructed (object);
+}
+
+static void
 clutter_actor_class_init (ClutterActorClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -5906,6 +5936,7 @@ clutter_actor_class_init (ClutterActorClass *klass)
   quark_im = g_quark_from_static_string ("im");
 
   object_class->constructor = clutter_actor_constructor;
+  object_class->constructed = clutter_actor_constructed;
   object_class->set_property = clutter_actor_set_property;
   object_class->get_property = clutter_actor_get_property;
   object_class->dispose = clutter_actor_dispose;
@@ -5929,6 +5960,23 @@ clutter_actor_class_init (ClutterActorClass *klass)
   klass->calculate_resource_scale = clutter_actor_real_calculate_resource_scale;
   klass->paint = clutter_actor_real_paint;
   klass->destroy = clutter_actor_real_destroy;
+
+  /**
+   * ClutterActor:context:
+   *
+   * The %ClutterContext of the actor
+   *
+   * Since: 0.2
+   */
+  obj_props[PROP_CONTEXT] =
+    g_param_spec_object ("context",
+                         P_("Context"),
+                         P_("The context of the actor"),
+                         CLUTTER_TYPE_CONTEXT,
+                         G_PARAM_READWRITE |
+                         G_PARAM_STATIC_STRINGS |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_EXPLICIT_NOTIFY);
 
   /**
    * ClutterActor:x:
@@ -7937,9 +7985,13 @@ clutter_actor_init (ClutterActor *self)
  * Since: 1.10
  */
 ClutterActor *
-clutter_actor_new (void)
+clutter_actor_new (ClutterContext *context)
 {
-  return g_object_new (CLUTTER_TYPE_ACTOR, NULL);
+  g_warn_if_fail (context);
+
+  return g_object_new (CLUTTER_TYPE_ACTOR,
+                       "context", context,
+                       NULL);
 }
 
 /**
@@ -9454,14 +9506,11 @@ clutter_actor_set_min_width (ClutterActor *self,
   ClutterActorBox old = { 0, };
   ClutterLayoutInfo *info;
 
-  /* if we are setting the size on a top-level actor and the
-   * backend only supports static top-levels (e.g. framebuffers)
-   * then we ignore the passed value and we override it with
-   * the stage implementation's preferred size.
-   */
-  if (CLUTTER_ACTOR_IS_TOPLEVEL (self) &&
-      clutter_feature_available (CLUTTER_FEATURE_STAGE_STATIC))
-    return;
+  if (CLUTTER_ACTOR_IS_TOPLEVEL (self))
+    {
+      g_warning ("Can't set the minimal width of a stage");
+      return;
+    }
 
   info = _clutter_actor_get_layout_info (self);
 
@@ -9492,14 +9541,11 @@ clutter_actor_set_min_height (ClutterActor *self,
   ClutterActorBox old = { 0, };
   ClutterLayoutInfo *info;
 
-  /* if we are setting the size on a top-level actor and the
-   * backend only supports static top-levels (e.g. framebuffers)
-   * then we ignore the passed value and we override it with
-   * the stage implementation's preferred size.
-   */
-  if (CLUTTER_ACTOR_IS_TOPLEVEL (self) &&
-      clutter_feature_available (CLUTTER_FEATURE_STAGE_STATIC))
-    return;
+  if (CLUTTER_ACTOR_IS_TOPLEVEL (self))
+    {
+      g_warning ("Can't set the minimal height of a stage");
+      return;
+    }
 
   info = _clutter_actor_get_layout_info (self);
 
@@ -9529,15 +9575,6 @@ clutter_actor_set_natural_width (ClutterActor *self,
   ClutterActorBox old = { 0, };
   ClutterLayoutInfo *info;
 
-  /* if we are setting the size on a top-level actor and the
-   * backend only supports static top-levels (e.g. framebuffers)
-   * then we ignore the passed value and we override it with
-   * the stage implementation's preferred size.
-   */
-  if (CLUTTER_ACTOR_IS_TOPLEVEL (self) &&
-      clutter_feature_available (CLUTTER_FEATURE_STAGE_STATIC))
-    return;
-
   info = _clutter_actor_get_layout_info (self);
 
   if (priv->natural_width_set && natural_width == info->natural.width)
@@ -9565,15 +9602,6 @@ clutter_actor_set_natural_height (ClutterActor *self,
   ClutterActorPrivate *priv = self->priv;
   ClutterActorBox old = { 0, };
   ClutterLayoutInfo *info;
-
-  /* if we are setting the size on a top-level actor and the
-   * backend only supports static top-levels (e.g. framebuffers)
-   * then we ignore the passed value and we override it with
-   * the stage implementation's preferred size.
-   */
-  if (CLUTTER_ACTOR_IS_TOPLEVEL (self) &&
-      clutter_feature_available (CLUTTER_FEATURE_STAGE_STATIC))
-    return;
 
   info = _clutter_actor_get_layout_info (self);
 
@@ -13568,6 +13596,18 @@ clutter_actor_get_stage (ClutterActor *actor)
 }
 
 /**
+ * clutter_actor_get_context:
+ * @actor: a #ClutterActor
+ *
+ * Returns: (transfer none) (type Clutter.Context): the Clutter context
+ */
+ClutterContext *
+clutter_actor_get_context (ClutterActor *actor)
+{
+  return actor->priv->context;
+}
+
+/**
  * clutter_actor_allocate_available_size:
  * @self: a #ClutterActor
  * @x: the actor's X coordinate
@@ -13917,25 +13957,25 @@ clutter_actor_grab_key_focus (ClutterActor *self)
 }
 
 static void
-update_pango_context (ClutterBackend *backend,
-                      PangoContext   *context)
+update_pango_context (PangoContext   *pango_context,
+                      ClutterContext *context)
 {
-  ClutterSettings *settings;
+  ClutterBackend *backend = clutter_context_get_backend (context);
+  ClutterSettings *settings = clutter_context_get_settings (context);
   PangoFontDescription *font_desc;
   const cairo_font_options_t *font_options;
   gchar *font_name;
   PangoDirection pango_dir;
   gdouble resolution;
 
-  settings = clutter_settings_get_default ();
-
   /* update the text direction */
-  if (clutter_get_default_text_direction () == CLUTTER_TEXT_DIRECTION_RTL)
+  if (clutter_context_get_text_direction (context) ==
+      CLUTTER_TEXT_DIRECTION_RTL)
     pango_dir = PANGO_DIRECTION_RTL;
   else
     pango_dir = PANGO_DIRECTION_LTR;
 
-  pango_context_set_base_dir (context, pango_dir);
+  pango_context_set_base_dir (pango_context, pango_dir);
 
   g_object_get (settings, "font-name", &font_name, NULL);
 
@@ -13948,12 +13988,19 @@ update_pango_context (ClutterBackend *backend,
   if (resolution < 0)
     resolution = 96.0; /* fall back */
 
-  pango_context_set_font_description (context, font_desc);
-  pango_cairo_context_set_font_options (context, font_options);
-  pango_cairo_context_set_resolution (context, resolution);
+  pango_context_set_font_description (pango_context, font_desc);
+  pango_cairo_context_set_font_options (pango_context, font_options);
+  pango_cairo_context_set_resolution (pango_context, resolution);
 
   pango_font_description_free (font_desc);
   g_free (font_name);
+}
+
+static void
+pango_context_invalidated (ClutterBackend *backend,
+                           ClutterActor   *self)
+{
+  update_pango_context (self->priv->pango_context, self->priv->context);
 }
 
 /**
@@ -13982,7 +14029,7 @@ PangoContext *
 clutter_actor_get_pango_context (ClutterActor *self)
 {
   ClutterActorPrivate *priv;
-  ClutterBackend *backend = clutter_get_default_backend ();
+  ClutterBackend *backend = backend_from_actor (self);
 
   g_return_val_if_fail (CLUTTER_IS_ACTOR (self), NULL);
 
@@ -13994,13 +14041,15 @@ clutter_actor_get_pango_context (ClutterActor *self)
 
       priv->resolution_changed_id =
         g_signal_connect_object (backend, "resolution-changed",
-                                 G_CALLBACK (update_pango_context), priv->pango_context, 0);
+                                 G_CALLBACK (pango_context_invalidated), self, 0);
       priv->font_changed_id =
         g_signal_connect_object (backend, "font-changed",
-                                 G_CALLBACK (update_pango_context), priv->pango_context, 0);
+                                 G_CALLBACK (pango_context_invalidated), self, 0);
     }
   else
-    update_pango_context (backend, priv->pango_context);
+    {
+      pango_context_invalidated (backend, self);
+    }
 
   return priv->pango_context;
 }
@@ -14025,15 +14074,15 @@ PangoContext *
 clutter_actor_create_pango_context (ClutterActor *self)
 {
   CoglPangoFontMap *font_map;
-  PangoContext *context;
+  PangoContext *pango_context;
 
   font_map = COGL_PANGO_FONT_MAP (clutter_get_font_map ());
 
-  context = cogl_pango_font_map_create_context (font_map);
-  update_pango_context (clutter_get_default_backend (), context);
-  pango_context_set_language (context, pango_language_get_default ());
+  pango_context = cogl_pango_font_map_create_context (font_map);
+  update_pango_context (pango_context, self->priv->context);
+  pango_context_set_language (pango_context, pango_language_get_default ());
 
-  return context;
+  return pango_context;
 }
 
 /**
@@ -14634,7 +14683,11 @@ clutter_actor_get_text_direction (ClutterActor *self)
 
   /* if no direction has been set yet use the default */
   if (priv->text_direction == CLUTTER_TEXT_DIRECTION_DEFAULT)
-    priv->text_direction = clutter_get_default_text_direction ();
+    {
+      ClutterContext *context = clutter_actor_get_context (self);
+
+      priv->text_direction = clutter_context_get_text_direction (context);
+    }
 
   return priv->text_direction;
 }
@@ -15723,7 +15776,7 @@ clutter_actor_get_real_resource_scale (ClutterActor *self)
     }
   else
     {
-      ClutterBackend *backend = clutter_get_default_backend ();
+      ClutterBackend *backend = backend_from_actor (self);
 
       guessed_scale = clutter_backend_get_fallback_resource_scale (backend);
     }

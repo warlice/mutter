@@ -31,9 +31,6 @@
 
 G_BEGIN_DECLS
 
-/* stage */
-ClutterStageWindow *_clutter_stage_get_default_window    (void);
-
 CLUTTER_EXPORT
 void                clutter_stage_paint_view             (ClutterStage          *stage,
                                                           ClutterStageView      *view,

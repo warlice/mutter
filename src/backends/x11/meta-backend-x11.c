@@ -61,8 +61,10 @@ struct _MetaBackendX11Private
 {
   /* The host X11 display */
   Display *xdisplay;
+  Screen *xscreen;
   xcb_connection_t *xcb;
   GSource *source;
+  Window root_window;
 
   int xsync_event_base;
   int xsync_error_base;
@@ -618,9 +620,11 @@ meta_backend_x11_post_init (MetaBackend *backend)
 }
 
 static ClutterBackend *
-meta_backend_x11_create_clutter_backend (MetaBackend *backend)
+meta_backend_x11_create_clutter_backend (MetaBackend    *backend,
+                                         ClutterContext *clutter_context)
 {
-  return g_object_new (META_TYPE_CLUTTER_BACKEND_X11, NULL);
+  return CLUTTER_BACKEND (meta_clutter_backend_x11_new (backend,
+                                                        clutter_context));
 }
 
 static ClutterSeat *
@@ -653,7 +657,8 @@ meta_backend_x11_create_default_seat (MetaBackend  *backend,
       return NULL;
     }
 
-  seat_x11 = meta_seat_x11_new (event_base,
+  seat_x11 = meta_seat_x11_new (backend,
+                                event_base,
                                 META_VIRTUAL_CORE_POINTER_ID,
                                 META_VIRTUAL_CORE_KEYBOARD_ID);
   return CLUTTER_SEAT (seat_x11);
@@ -866,8 +871,9 @@ meta_backend_x11_initable_init (GInitable    *initable,
     }
 
   priv->xdisplay = xdisplay;
+  priv->xscreen = DefaultScreenOfDisplay (xdisplay);
   priv->xcb = XGetXCBConnection (priv->xdisplay);
-  meta_clutter_x11_set_display (xdisplay);
+  priv->root_window = DefaultRootWindow (xdisplay);
 
   init_xkb_state (x11);
 
@@ -951,6 +957,23 @@ meta_backend_x11_get_xdisplay (MetaBackendX11 *x11)
   MetaBackendX11Private *priv = meta_backend_x11_get_instance_private (x11);
 
   return priv->xdisplay;
+}
+
+Screen *
+meta_backend_x11_get_xscreen (MetaBackendX11 *x11)
+{
+  MetaBackendX11Private *priv = meta_backend_x11_get_instance_private (x11);
+
+  return priv->xscreen;
+}
+
+Window
+meta_backend_x11_get_root_xwindow (MetaBackendX11 *backend_x11)
+{
+  MetaBackendX11Private *priv =
+    meta_backend_x11_get_instance_private (backend_x11);
+
+  return priv->root_window;
 }
 
 Window

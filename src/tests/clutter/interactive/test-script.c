@@ -88,7 +88,7 @@ test_script_main (int argc, char *argv[])
 
   clutter_test_init (&argc, &argv);
 
-  script = clutter_script_new ();
+  script = clutter_script_new (clutter_test_get_context ());
   g_assert (CLUTTER_IS_SCRIPT (script));
 
   clutter_script_load_from_data (script, test_behaviour, -1, &error);

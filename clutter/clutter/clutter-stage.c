@@ -28,14 +28,6 @@
  * #ClutterStage is a top level 'window' on which child actors are placed
  * and manipulated.
  *
- * Backends might provide support for multiple stages. The support for this
- * feature can be checked at run-time using the clutter_feature_available()
- * function and the %CLUTTER_FEATURE_STAGE_MULTIPLE flag. If the backend used
- * supports multiple stages, new #ClutterStage instances can be created
- * using clutter_stage_new(). These stages must be managed by the developer
- * using clutter_actor_destroy(), which will take care of destroying all the
- * actors contained inside them.
- *
  * #ClutterStage is a proxy actor, wrapping the backend-specific implementation
  * (a #StageWindow) of the windowing system. It is possible to subclass
  * #ClutterStage, as long as every overridden virtual function chains up to the
@@ -136,7 +128,6 @@ struct _ClutterStagePrivate
   GHashTable *touch_sequences;
 
   guint throttle_motion_events : 1;
-  guint min_size_changed       : 1;
   guint motion_events_enabled  : 1;
   guint actor_needs_immediate_relayout : 1;
 };
@@ -181,6 +172,22 @@ static void clutter_stage_set_viewport (ClutterStage *stage,
                                         float         height);
 
 G_DEFINE_TYPE_WITH_PRIVATE (ClutterStage, clutter_stage, CLUTTER_TYPE_ACTOR)
+
+static ClutterBackend *
+backend_from_stage (ClutterStage *stage)
+{
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+
+  return clutter_context_get_backend (context);
+}
+
+static ClutterStageManager *
+stage_manager_from_stage (ClutterStage *stage)
+{
+  ClutterContext *context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+
+  return clutter_context_get_stage_manager (context);
+}
 
 static void
 clutter_stage_get_preferred_width (ClutterActor *self,
@@ -281,6 +288,7 @@ clutter_stage_allocate (ClutterActor           *self,
   float new_width, new_height;
   float width, height;
   cairo_rectangle_int_t window_size;
+  ClutterActorBox children_box;
   ClutterLayoutManager *layout_manager = clutter_actor_get_layout_manager (self);
 
   if (priv->impl == NULL)
@@ -292,85 +300,26 @@ clutter_stage_allocate (ClutterActor           *self,
   /* the current Stage implementation size */
   _clutter_stage_window_get_geometry (priv->impl, &window_size);
 
-  /* if the stage is fixed size (for instance, it's using a EGL framebuffer)
-   * then we simply ignore any allocation request and override the
-   * allocation chain - because we cannot forcibly change the size of the
-   * stage window.
-   */
-  if (!clutter_feature_available (CLUTTER_FEATURE_STAGE_STATIC))
+  children_box.x1 = children_box.y1 = 0.f;
+  children_box.x2 = box->x2 - box->x1;
+  children_box.y2 = box->y2 - box->y1;
+
+  CLUTTER_NOTE (LAYOUT,
+                "Following allocation to %.2fx%.2f",
+                width, height);
+
+  clutter_actor_set_allocation (self, box);
+
+  clutter_layout_manager_allocate (layout_manager,
+                                   CLUTTER_CONTAINER (self),
+                                   &children_box);
+
+  if (window_size.width != CLUTTER_NEARBYINT (width) ||
+      window_size.height != CLUTTER_NEARBYINT (height))
     {
-      ClutterActorBox children_box;
-
-      children_box.x1 = children_box.y1 = 0.f;
-      children_box.x2 = box->x2 - box->x1;
-      children_box.y2 = box->y2 - box->y1;
-
-      CLUTTER_NOTE (LAYOUT,
-                    "Following allocation to %.2fx%.2f",
-                    width, height);
-
-      clutter_actor_set_allocation (self, box);
-
-      clutter_layout_manager_allocate (layout_manager,
-                                       CLUTTER_CONTAINER (self),
-                                       &children_box);
-
-      /* Ensure the window is sized correctly */
-      if (priv->min_size_changed)
-        {
-          gfloat min_width, min_height;
-          gboolean min_width_set, min_height_set;
-
-          g_object_get (G_OBJECT (self),
-                        "min-width", &min_width,
-                        "min-width-set", &min_width_set,
-                        "min-height", &min_height,
-                        "min-height-set", &min_height_set,
-                        NULL);
-
-          if (!min_width_set)
-            min_width = 1;
-          if (!min_height_set)
-            min_height = 1;
-
-          if (width < min_width)
-            width = min_width;
-          if (height < min_height)
-            height = min_height;
-
-          priv->min_size_changed = FALSE;
-        }
-
-      if (window_size.width != CLUTTER_NEARBYINT (width) ||
-          window_size.height != CLUTTER_NEARBYINT (height))
-        {
-          _clutter_stage_window_resize (priv->impl,
-                                        CLUTTER_NEARBYINT (width),
-                                        CLUTTER_NEARBYINT (height));
-        }
-    }
-  else
-    {
-      ClutterActorBox override = { 0, };
-
-      /* override the passed allocation */
-      override.x1 = 0;
-      override.y1 = 0;
-      override.x2 = window_size.width;
-      override.y2 = window_size.height;
-
-      CLUTTER_NOTE (LAYOUT,
-                    "Overriding original allocation of %.2fx%.2f "
-                    "with %.2fx%.2f",
-                    width, height,
-                    override.x2, override.y2);
-
-      /* and store the overridden allocation */
-      clutter_actor_set_allocation (self, &override);
-
-      clutter_layout_manager_allocate (layout_manager,
-                                       CLUTTER_CONTAINER (self),
-                                       &override);
+      _clutter_stage_window_resize (priv->impl,
+                                    CLUTTER_NEARBYINT (width),
+                                    CLUTTER_NEARBYINT (height));
     }
 
   /* set the viewport to the new allocation */
@@ -1167,31 +1116,75 @@ static void
 clutter_stage_constructed (GObject *gobject)
 {
   ClutterStage *self = CLUTTER_STAGE (gobject);
+  cairo_rectangle_int_t geom = { 0, };
+  ClutterStagePrivate *priv;
+  ClutterStageWindow *impl;
+  ClutterBackend *backend;
   ClutterStageManager *stage_manager;
+  GError *error;
 
-  stage_manager = clutter_stage_manager_get_default ();
+  stage_manager = stage_manager_from_stage (self);
+
+  /* a stage is a top-level object */
+  CLUTTER_SET_PRIVATE_FLAGS (self, CLUTTER_IS_TOPLEVEL);
+
+  self->priv = priv = clutter_stage_get_instance_private (self);
+
+  CLUTTER_NOTE (BACKEND, "Creating stage from the default backend");
+  backend = backend_from_stage (self);
+
+  error = NULL;
+  impl = _clutter_backend_create_stage (backend, self, &error);
+
+  if (G_LIKELY (impl != NULL))
+    {
+      _clutter_stage_set_window (self, impl);
+      _clutter_stage_window_get_geometry (priv->impl, &geom);
+    }
+  else
+    {
+      if (error != NULL)
+        {
+          g_critical ("Unable to create a new stage implementation: %s",
+                      error->message);
+          g_error_free (error);
+        }
+      else
+        g_critical ("Unable to create a new stage implementation.");
+    }
+
+  priv->event_queue = g_queue_new ();
+
+  priv->throttle_motion_events = TRUE;
+  priv->motion_events_enabled = TRUE;
+
+  priv->pointer_devices =
+    g_hash_table_new_full (NULL, NULL,
+                           NULL, (GDestroyNotify) free_pointer_device_entry);
+  priv->touch_sequences =
+    g_hash_table_new_full (NULL, NULL,
+                           NULL, (GDestroyNotify) free_pointer_device_entry);
+
+  clutter_actor_set_background_color (CLUTTER_ACTOR (self),
+                                      &default_stage_color);
+
+  clutter_stage_queue_actor_relayout (self, CLUTTER_ACTOR (self));
+
+  clutter_actor_set_reactive (CLUTTER_ACTOR (self), TRUE);
+  clutter_stage_set_title (self, g_get_prgname ());
+  clutter_stage_set_key_focus (self, NULL);
+  clutter_stage_set_viewport (self, geom.width, geom.height);
+
+  priv->pending_queue_redraws =
+    g_hash_table_new_full (NULL, NULL,
+                           g_object_unref,
+                           (GDestroyNotify) free_queue_redraw_entry);
+
+  priv->paint_volume_stack =
+    g_array_new (FALSE, FALSE, sizeof (ClutterPaintVolume));
 
   /* this will take care to sinking the floating reference */
   _clutter_stage_manager_add_stage (stage_manager, self);
-
-  /* if this stage has been created on a backend that does not
-   * support multiple stages then it becomes the default stage
-   * as well; any other attempt at creating a ClutterStage will
-   * fail.
-   */
-  if (!clutter_feature_available (CLUTTER_FEATURE_STAGE_MULTIPLE))
-    {
-      if (G_UNLIKELY (clutter_stage_manager_get_default_stage (stage_manager) != NULL))
-        {
-          g_error ("Unable to create another stage: the backend of "
-                   "type '%s' does not support multiple stages. Use "
-                   "clutter_stage_manager_get_default_stage() instead "
-                   "to access the stage singleton.",
-                   G_OBJECT_TYPE_NAME (clutter_get_default_backend ()));
-        }
-
-      _clutter_stage_manager_set_default_stage (stage_manager, self);
-    }
 
   G_OBJECT_CLASS (clutter_stage_parent_class)->constructed (gobject);
 }
@@ -1279,7 +1272,7 @@ clutter_stage_dispose (GObject *object)
   priv->pending_relayouts = NULL;
 
   /* this will release the reference on the stage */
-  stage_manager = clutter_stage_manager_get_default ();
+  stage_manager = stage_manager_from_stage (stage);
   _clutter_stage_manager_remove_stage (stage_manager, stage);
 
   G_OBJECT_CLASS (clutter_stage_parent_class)->dispose (object);
@@ -1592,84 +1585,8 @@ clutter_stage_class_init (ClutterStageClass *klass)
 }
 
 static void
-clutter_stage_notify_min_size (ClutterStage *self)
-{
-  self->priv->min_size_changed = TRUE;
-}
-
-static void
 clutter_stage_init (ClutterStage *self)
 {
-  cairo_rectangle_int_t geom = { 0, };
-  ClutterStagePrivate *priv;
-  ClutterStageWindow *impl;
-  ClutterBackend *backend;
-  GError *error;
-
-  /* a stage is a top-level object */
-  CLUTTER_SET_PRIVATE_FLAGS (self, CLUTTER_IS_TOPLEVEL);
-
-  self->priv = priv = clutter_stage_get_instance_private (self);
-
-  CLUTTER_NOTE (BACKEND, "Creating stage from the default backend");
-  backend = clutter_get_default_backend ();
-
-  error = NULL;
-  impl = _clutter_backend_create_stage (backend, self, &error);
-
-  if (G_LIKELY (impl != NULL))
-    {
-      _clutter_stage_set_window (self, impl);
-      _clutter_stage_window_get_geometry (priv->impl, &geom);
-    }
-  else
-    {
-      if (error != NULL)
-        {
-          g_critical ("Unable to create a new stage implementation: %s",
-                      error->message);
-          g_error_free (error);
-        }
-      else
-        g_critical ("Unable to create a new stage implementation.");
-    }
-
-  priv->event_queue = g_queue_new ();
-
-  priv->throttle_motion_events = TRUE;
-  priv->min_size_changed = FALSE;
-  priv->motion_events_enabled = TRUE;
-
-  priv->pointer_devices =
-    g_hash_table_new_full (NULL, NULL,
-                           NULL, (GDestroyNotify) free_pointer_device_entry);
-  priv->touch_sequences =
-    g_hash_table_new_full (NULL, NULL,
-                           NULL, (GDestroyNotify) free_pointer_device_entry);
-
-  clutter_actor_set_background_color (CLUTTER_ACTOR (self),
-                                      &default_stage_color);
-
-  clutter_stage_queue_actor_relayout (self, CLUTTER_ACTOR (self));
-
-  clutter_actor_set_reactive (CLUTTER_ACTOR (self), TRUE);
-  clutter_stage_set_title (self, g_get_prgname ());
-  clutter_stage_set_key_focus (self, NULL);
-
-  g_signal_connect (self, "notify::min-width",
-                    G_CALLBACK (clutter_stage_notify_min_size), NULL);
-  g_signal_connect (self, "notify::min-height",
-                    G_CALLBACK (clutter_stage_notify_min_size), NULL);
-
-  clutter_stage_set_viewport (self, geom.width, geom.height);
-
-  priv->pending_queue_redraws =
-    g_hash_table_new_full (NULL, NULL,
-                           g_object_unref,
-                           (GDestroyNotify) free_queue_redraw_entry);
-
-  priv->paint_volume_stack =
-    g_array_new (FALSE, FALSE, sizeof (ClutterPaintVolume));
 }
 
 static void
@@ -2482,19 +2399,6 @@ _clutter_stage_get_window (ClutterStage *stage)
   return CLUTTER_STAGE_WINDOW (stage->priv->impl);
 }
 
-ClutterStageWindow *
-_clutter_stage_get_default_window (void)
-{
-  ClutterStageManager *manager = clutter_stage_manager_get_default ();
-  ClutterStage *stage;
-
-  stage = clutter_stage_manager_get_default_stage (manager);
-  if (stage == NULL)
-    return NULL;
-
-  return _clutter_stage_get_window (stage);
-}
-
 /**
  * clutter_stage_set_throttle_motion_events:
  * @stage: a #ClutterStage
@@ -2542,87 +2446,6 @@ clutter_stage_get_throttle_motion_events (ClutterStage *stage)
   g_return_val_if_fail (CLUTTER_IS_STAGE (stage), FALSE);
 
   return stage->priv->throttle_motion_events;
-}
-
-/**
- * clutter_stage_set_minimum_size:
- * @stage: a #ClutterStage
- * @width: width, in pixels
- * @height: height, in pixels
- *
- * Sets the minimum size for a stage window, if the default backend
- * uses #ClutterStage inside a window
- *
- * This is a convenience function, and it is equivalent to setting the
- * #ClutterActor:min-width and #ClutterActor:min-height on @stage
- *
- * If the current size of @stage is smaller than the minimum size, the
- * @stage will be resized to the new @width and @height
- *
- * Since: 1.2
- */
-void
-clutter_stage_set_minimum_size (ClutterStage *stage,
-                                guint         width,
-                                guint         height)
-{
-  g_return_if_fail (CLUTTER_IS_STAGE (stage));
-  g_return_if_fail ((width > 0) && (height > 0));
-
-  g_object_set (G_OBJECT (stage),
-                "min-width", (gfloat) width,
-                "min-height", (gfloat )height,
-                NULL);
-}
-
-/**
- * clutter_stage_get_minimum_size:
- * @stage: a #ClutterStage
- * @width: (out): return location for the minimum width, in pixels,
- *   or %NULL
- * @height: (out): return location for the minimum height, in pixels,
- *   or %NULL
- *
- * Retrieves the minimum size for a stage window as set using
- * clutter_stage_set_minimum_size().
- *
- * The returned size may not correspond to the actual minimum size and
- * it is specific to the #ClutterStage implementation inside the
- * Clutter backend
- *
- * Since: 1.2
- */
-void
-clutter_stage_get_minimum_size (ClutterStage *stage,
-                                guint        *width_p,
-                                guint        *height_p)
-{
-  gfloat width, height;
-  gboolean width_set, height_set;
-
-  g_return_if_fail (CLUTTER_IS_STAGE (stage));
-
-  g_object_get (G_OBJECT (stage),
-                "min-width", &width,
-                "min-width-set", &width_set,
-                "min-height", &height,
-                "min-height-set", &height_set,
-                NULL);
-
-  /* if not width or height have been set, then the Stage
-   * minimum size is defined to be 1x1
-   */
-  if (!width_set)
-    width = 1;
-
-  if (!height_set)
-    height = 1;
-
-  if (width_p)
-    *width_p = (guint) width;
-
-  if (height_p)
-    *height_p = (guint) height;
 }
 
 /**
@@ -3223,7 +3046,7 @@ clutter_stage_paint_to_buffer (ClutterStage                 *stage,
                                ClutterPaintFlag              paint_flags,
                                GError                      **error)
 {
-  ClutterBackend *clutter_backend = clutter_get_default_backend ();
+  ClutterBackend *clutter_backend = backend_from_stage (stage);
   CoglContext *cogl_context =
     clutter_backend_get_cogl_context (clutter_backend);
   int texture_width, texture_height;
@@ -3292,7 +3115,7 @@ clutter_stage_paint_to_content (ClutterStage                 *stage,
                                 ClutterPaintFlag              paint_flags,
                                 GError                      **error)
 {
-  ClutterBackend *clutter_backend = clutter_get_default_backend ();
+  ClutterBackend *clutter_backend = backend_from_stage (stage);
   CoglContext *cogl_context =
     clutter_backend_get_cogl_context (clutter_backend);
   int texture_width, texture_height;
@@ -3357,7 +3180,7 @@ clutter_stage_capture_view_into (ClutterStage          *stage,
   texture_width = roundf (rect->width * view_scale);
   texture_height = roundf (rect->height * view_scale);
 
-  backend = clutter_get_default_backend ();
+  backend = backend_from_stage (stage);
   context = clutter_backend_get_cogl_context (backend);
   bitmap = cogl_bitmap_new_for_data (context,
                                      texture_width, texture_height,

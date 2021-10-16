@@ -53,15 +53,14 @@
 
 #include "clutter-actor-private.h"
 #include "clutter-backend-private.h"
+#include "clutter-context.h"
 #include "clutter-debug.h"
 #include "clutter-event-private.h"
-#include "clutter-feature.h"
 #include "clutter-input-device-private.h"
 #include "clutter-input-pointer-a11y-private.h"
 #include "clutter-graphene.h"
 #include "clutter-main.h"
 #include "clutter-mutter.h"
-#include "clutter-paint-node-private.h"
 #include "clutter-private.h"
 #include "clutter-settings-private.h"
 #include "clutter-stage.h"
@@ -75,19 +74,11 @@
 #include "cally/cally.h" /* For accessibility support */
 
 /* main context */
-static ClutterMainContext *ClutterCntx       = NULL;
+static ClutterContext *ClutterCntx       = NULL;
 
 /* command line options */
 static gboolean clutter_is_initialized       = FALSE;
-static gboolean clutter_show_fps             = FALSE;
-static gboolean clutter_fatal_warnings       = FALSE;
-static gboolean clutter_disable_mipmap_text  = FALSE;
 static gboolean clutter_enable_accessibility = TRUE;
-static gboolean clutter_sync_to_vblank       = TRUE;
-
-static guint clutter_default_fps             = 60;
-
-static ClutterTextDirection clutter_text_direction = CLUTTER_TEXT_DIRECTION_LTR;
 
 /* debug flags */
 guint clutter_debug_flags       = 0;
@@ -99,50 +90,10 @@ guint clutter_pick_debug_flags  = 0;
  */
 int clutter_max_render_time_constant_us = 2000;
 
-#ifdef CLUTTER_ENABLE_DEBUG
-static const GDebugKey clutter_debug_keys[] = {
-  { "misc", CLUTTER_DEBUG_MISC },
-  { "actor", CLUTTER_DEBUG_ACTOR },
-  { "texture", CLUTTER_DEBUG_TEXTURE },
-  { "event", CLUTTER_DEBUG_EVENT },
-  { "paint", CLUTTER_DEBUG_PAINT },
-  { "pick", CLUTTER_DEBUG_PICK },
-  { "pango", CLUTTER_DEBUG_PANGO },
-  { "backend", CLUTTER_DEBUG_BACKEND },
-  { "scheduler", CLUTTER_DEBUG_SCHEDULER },
-  { "script", CLUTTER_DEBUG_SCRIPT },
-  { "shader", CLUTTER_DEBUG_SHADER },
-  { "animation", CLUTTER_DEBUG_ANIMATION },
-  { "layout", CLUTTER_DEBUG_LAYOUT },
-  { "clipping", CLUTTER_DEBUG_CLIPPING },
-  { "oob-transforms", CLUTTER_DEBUG_OOB_TRANSFORMS },
-  { "frame-timings", CLUTTER_DEBUG_FRAME_TIMINGS },
-  { "detailed-trace", CLUTTER_DEBUG_DETAILED_TRACE },
-};
-#endif /* CLUTTER_ENABLE_DEBUG */
-
-static const GDebugKey clutter_pick_debug_keys[] = {
-  { "nop-picking", CLUTTER_DEBUG_NOP_PICKING },
-};
-
-static const GDebugKey clutter_paint_debug_keys[] = {
-  { "disable-swap-events", CLUTTER_DEBUG_DISABLE_SWAP_EVENTS },
-  { "disable-clipped-redraws", CLUTTER_DEBUG_DISABLE_CLIPPED_REDRAWS },
-  { "redraws", CLUTTER_DEBUG_REDRAWS },
-  { "paint-volumes", CLUTTER_DEBUG_PAINT_VOLUMES },
-  { "disable-culling", CLUTTER_DEBUG_DISABLE_CULLING },
-  { "disable-offscreen-redirect", CLUTTER_DEBUG_DISABLE_OFFSCREEN_REDIRECT },
-  { "continuous-redraw", CLUTTER_DEBUG_CONTINUOUS_REDRAW },
-  { "paint-deform-tiles", CLUTTER_DEBUG_PAINT_DEFORM_TILES },
-  { "damage-region", CLUTTER_DEBUG_PAINT_DAMAGE_REGION },
-  { "disable-dynamic-max-render-time", CLUTTER_DEBUG_DISABLE_DYNAMIC_MAX_RENDER_TIME },
-  { "max-render-time", CLUTTER_DEBUG_PAINT_MAX_RENDER_TIME },
-};
-
 gboolean
 _clutter_context_get_show_fps (void)
 {
-  ClutterMainContext *context = _clutter_context_get_default ();
+  ClutterContext *context = _clutter_context_get_default ();
 
   return context->show_fps;
 }
@@ -185,64 +136,6 @@ clutter_disable_accessibility (void)
     }
 
   clutter_enable_accessibility = FALSE;
-}
-
-static CoglPangoFontMap *
-clutter_context_get_pango_fontmap (void)
-{
-  ClutterMainContext *self;
-  CoglPangoFontMap *font_map;
-  gdouble resolution;
-  gboolean use_mipmapping;
-
-  self = _clutter_context_get_default ();
-  if (G_LIKELY (self->font_map != NULL))
-    return self->font_map;
-
-  font_map = COGL_PANGO_FONT_MAP (cogl_pango_font_map_new ());
-
-  resolution = clutter_backend_get_resolution (self->backend);
-  cogl_pango_font_map_set_resolution (font_map, resolution);
-
-  use_mipmapping = !clutter_disable_mipmap_text;
-  cogl_pango_font_map_set_use_mipmapping (font_map, use_mipmapping);
-
-  self->font_map = font_map;
-
-  return self->font_map;
-}
-
-static ClutterTextDirection
-clutter_get_text_direction (void)
-{
-  ClutterTextDirection dir = CLUTTER_TEXT_DIRECTION_LTR;
-  const gchar *direction;
-
-  direction = g_getenv ("CLUTTER_TEXT_DIRECTION");
-  if (direction && *direction != '\0')
-    {
-      if (strcmp (direction, "rtl") == 0)
-        dir = CLUTTER_TEXT_DIRECTION_RTL;
-      else if (strcmp (direction, "ltr") == 0)
-        dir = CLUTTER_TEXT_DIRECTION_LTR;
-    }
-  else
-    {
-      /* Re-use GTK+'s LTR/RTL handling */
-      const char *e = g_dgettext ("gtk30", "default:LTR");
-
-      if (strcmp (e, "default:RTL") == 0)
-        dir = CLUTTER_TEXT_DIRECTION_RTL;
-      else if (strcmp (e, "default:LTR") == 0)
-        dir = CLUTTER_TEXT_DIRECTION_LTR;
-      else
-        g_warning ("Whoever translated default:LTR did so wrongly.");
-    }
-
-  CLUTTER_NOTE (MISC, "Text direction: %s",
-                dir == CLUTTER_TEXT_DIRECTION_RTL ? "rtl" : "ltr");
-
-  return dir;
 }
 
 gboolean
@@ -487,488 +380,35 @@ _clutter_context_is_initialized (void)
   return ClutterCntx->is_initialized;
 }
 
-ClutterMainContext *
+ClutterContext *
 _clutter_context_get_default (void)
 {
-  if (G_UNLIKELY (ClutterCntx == NULL))
-    {
-      ClutterMainContext *ctx;
-
-      ClutterCntx = ctx = g_new0 (ClutterMainContext, 1);
-
-      ctx->is_initialized = FALSE;
-
-      /* create the windowing system backend */
-      ctx->backend = _clutter_create_backend ();
-
-      /* create the default settings object, and store a back pointer to
-       * the backend singleton
-       */
-      ctx->settings = clutter_settings_get_default ();
-      _clutter_settings_set_backend (ctx->settings, ctx->backend);
-
-      ctx->events_queue = g_async_queue_new ();
-
-      ctx->last_repaint_id = 1;
-    }
-
+  g_assert (ClutterCntx);
   return ClutterCntx;
 }
 
-static gboolean
-clutter_arg_direction_cb (const char *key,
-                          const char *value,
-                          gpointer    user_data)
+ClutterContext *
+clutter_create_context (ClutterContextFlags         flags,
+                        ClutterBackendConstructor   backend_constructor,
+                        gpointer                    user_data,
+                        GError                    **error)
 {
-  clutter_text_direction =
-    (strcmp (value, "rtl") == 0) ? CLUTTER_TEXT_DIRECTION_RTL
-                                 : CLUTTER_TEXT_DIRECTION_LTR;
-
-  return TRUE;
-}
-
-#ifdef CLUTTER_ENABLE_DEBUG
-static gboolean
-clutter_arg_debug_cb (const char *key,
-                      const char *value,
-                      gpointer    user_data)
-{
-  clutter_debug_flags |=
-    g_parse_debug_string (value,
-                          clutter_debug_keys,
-                          G_N_ELEMENTS (clutter_debug_keys));
-  return TRUE;
-}
-
-static gboolean
-clutter_arg_no_debug_cb (const char *key,
-                         const char *value,
-                         gpointer    user_data)
-{
-  clutter_debug_flags &=
-    ~g_parse_debug_string (value,
-                           clutter_debug_keys,
-                           G_N_ELEMENTS (clutter_debug_keys));
-  return TRUE;
-}
-#endif /* CLUTTER_ENABLE_DEBUG */
-
-GQuark
-clutter_init_error_quark (void)
-{
-  return g_quark_from_static_string ("clutter-init-error-quark");
-}
-
-static ClutterInitError
-clutter_init_real (GError **error)
-{
-  ClutterMainContext *ctx;
-  ClutterBackend *backend;
-
-  /* Note, creates backend if not already existing, though parse args will
-   * have likely created it
-   */
-  ctx = _clutter_context_get_default ();
-  backend = ctx->backend;
-
-  if (!ctx->options_parsed)
+  if (ClutterCntx)
     {
-      if (error)
-        g_set_error (error, CLUTTER_INIT_ERROR,
-                     CLUTTER_INIT_ERROR_INTERNAL,
-                     "When using clutter_get_option_group_without_init() "
-		     "you must parse options before calling clutter_init()");
-      else
-        g_critical ("When using clutter_get_option_group_without_init() "
-		    "you must parse options before calling clutter_init()");
-
-      return CLUTTER_INIT_ERROR_INTERNAL;
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Currently only creating one clutter context is supported");
+      return NULL;
     }
 
-  /*
-   * Call backend post parse hooks.
-   */
-  if (!_clutter_backend_post_parse (backend, error))
-    return CLUTTER_INIT_ERROR_BACKEND;
-
-  /* If we are displaying the regions that would get redrawn with clipped
-   * redraws enabled we actually have to disable the clipped redrawing
-   * because otherwise we end up with nasty trails of rectangles everywhere.
-   */
-  if (clutter_paint_debug_flags & CLUTTER_DEBUG_REDRAWS)
-    clutter_paint_debug_flags |= CLUTTER_DEBUG_DISABLE_CLIPPED_REDRAWS;
-
-  /* The same is true when drawing the outlines of paint volumes... */
-  if (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_VOLUMES)
-    {
-      clutter_paint_debug_flags |=
-        CLUTTER_DEBUG_DISABLE_CLIPPED_REDRAWS | CLUTTER_DEBUG_DISABLE_CULLING;
-    }
-
-  if (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION)
-    g_message ("Enabling damaged region");
-
-  /* this will take care of initializing Cogl's state and
-   * query the GL machinery for features
-   */
-  if (!_clutter_feature_init (error))
-    return CLUTTER_INIT_ERROR_BACKEND;
-
-  clutter_text_direction = clutter_get_text_direction ();
+  ClutterCntx = clutter_context_new (flags,
+                                     backend_constructor, user_data,
+                                     error);
+  if (!ClutterCntx)
+    return NULL;
 
   clutter_is_initialized = TRUE;
-  ctx->is_initialized = TRUE;
-
-  /* Initialize a11y */
-  if (clutter_enable_accessibility)
-    cally_accessibility_init ();
-
-  /* Initialize types required for paint nodes */
-  _clutter_paint_node_init_types ();
-
-  return CLUTTER_INIT_SUCCESS;
-}
-
-static GOptionEntry clutter_args[] = {
-  { "clutter-show-fps", 0, 0, G_OPTION_ARG_NONE, &clutter_show_fps,
-    N_("Show frames per second"), NULL },
-  { "clutter-default-fps", 0, 0, G_OPTION_ARG_INT, &clutter_default_fps,
-    N_("Default frame rate"), "FPS" },
-  { "g-fatal-warnings", 0, 0, G_OPTION_ARG_NONE, &clutter_fatal_warnings,
-    N_("Make all warnings fatal"), NULL },
-  { "clutter-text-direction", 0, 0, G_OPTION_ARG_CALLBACK,
-    clutter_arg_direction_cb,
-    N_("Direction for the text"), "DIRECTION" },
-  { "clutter-disable-mipmapped-text", 0, 0, G_OPTION_ARG_NONE,
-    &clutter_disable_mipmap_text,
-    N_("Disable mipmapping on text"), NULL },
-#ifdef CLUTTER_ENABLE_DEBUG
-  { "clutter-debug", 0, 0, G_OPTION_ARG_CALLBACK, clutter_arg_debug_cb,
-    N_("Clutter debugging flags to set"), "FLAGS" },
-  { "clutter-no-debug", 0, 0, G_OPTION_ARG_CALLBACK, clutter_arg_no_debug_cb,
-    N_("Clutter debugging flags to unset"), "FLAGS" },
-#endif /* CLUTTER_ENABLE_DEBUG */
-  { "clutter-enable-accessibility", 0, 0, G_OPTION_ARG_NONE, &clutter_enable_accessibility,
-    N_("Enable accessibility"), NULL },
-  { NULL, },
-};
-
-/* pre_parse_hook: initialise variables depending on environment
- * variables; these variables might be overridden by the command
- * line arguments that are going to be parsed after.
- */
-static gboolean
-pre_parse_hook (GOptionContext  *context,
-                GOptionGroup    *group,
-                gpointer         data,
-                GError         **error)
-{
-  ClutterMainContext *clutter_context;
-  ClutterBackend *backend;
-  const char *env_string;
-
-  if (clutter_is_initialized)
-    return TRUE;
-
-  clutter_context = _clutter_context_get_default ();
-
-  backend = clutter_context->backend;
-  g_assert (CLUTTER_IS_BACKEND (backend));
-
-#ifdef CLUTTER_ENABLE_DEBUG
-  env_string = g_getenv ("CLUTTER_DEBUG");
-  if (env_string != NULL)
-    {
-      clutter_debug_flags =
-        g_parse_debug_string (env_string,
-                              clutter_debug_keys,
-                              G_N_ELEMENTS (clutter_debug_keys));
-      env_string = NULL;
-    }
-#endif /* CLUTTER_ENABLE_DEBUG */
-
-  env_string = g_getenv ("CLUTTER_PICK");
-  if (env_string != NULL)
-    {
-      clutter_pick_debug_flags =
-        g_parse_debug_string (env_string,
-                              clutter_pick_debug_keys,
-                              G_N_ELEMENTS (clutter_pick_debug_keys));
-      env_string = NULL;
-    }
-
-  env_string = g_getenv ("CLUTTER_PAINT");
-  if (env_string != NULL)
-    {
-      clutter_paint_debug_flags =
-        g_parse_debug_string (env_string,
-                              clutter_paint_debug_keys,
-                              G_N_ELEMENTS (clutter_paint_debug_keys));
-      env_string = NULL;
-    }
-
-  env_string = g_getenv ("CLUTTER_SHOW_FPS");
-  if (env_string)
-    clutter_show_fps = TRUE;
-
-  env_string = g_getenv ("CLUTTER_DEFAULT_FPS");
-  if (env_string)
-    {
-      gint default_fps = g_ascii_strtoll (env_string, NULL, 10);
-
-      clutter_default_fps = CLAMP (default_fps, 1, 1000);
-    }
-
-  env_string = g_getenv ("CLUTTER_DISABLE_MIPMAPPED_TEXT");
-  if (env_string)
-    clutter_disable_mipmap_text = TRUE;
-
-  return _clutter_backend_pre_parse (backend, error);
-}
-
-/* post_parse_hook: initialise the context and data structures
- * and opens the X display
- */
-static gboolean
-post_parse_hook (GOptionContext  *context,
-                 GOptionGroup    *group,
-                 gpointer         data,
-                 GError         **error)
-{
-  ClutterMainContext *clutter_context;
-  ClutterBackend *backend;
-
-  if (clutter_is_initialized)
-    return TRUE;
-
-  clutter_context = _clutter_context_get_default ();
-  backend = clutter_context->backend;
-  g_assert (CLUTTER_IS_BACKEND (backend));
-
-  if (clutter_fatal_warnings)
-    {
-      GLogLevelFlags fatal_mask;
-
-      fatal_mask = g_log_set_always_fatal (G_LOG_FATAL_MASK);
-      fatal_mask |= G_LOG_LEVEL_WARNING | G_LOG_LEVEL_CRITICAL;
-      g_log_set_always_fatal (fatal_mask);
-    }
-
-  clutter_context->frame_rate = clutter_default_fps;
-  clutter_context->show_fps = clutter_show_fps;
-  clutter_context->options_parsed = TRUE;
-
-  /* If not asked to defer display setup, call clutter_init_real(),
-   * which in turn calls the backend post parse hooks.
-   */
-  if (!clutter_context->defer_display_setup)
-    return clutter_init_real (error) == CLUTTER_INIT_SUCCESS;
-
-  return TRUE;
-}
-
-/**
- * clutter_get_option_group: (skip)
- *
- * Returns a #GOptionGroup for the command line arguments recognized
- * by Clutter. You should add this group to your #GOptionContext with
- * g_option_context_add_group(), if you are using g_option_context_parse()
- * to parse your commandline arguments.
- *
- * Calling g_option_context_parse() with Clutter's #GOptionGroup will result
- * in Clutter's initialization. That is, the following code:
- *
- * |[
- *   g_option_context_set_main_group (context, clutter_get_option_group ());
- *   res = g_option_context_parse (context, &argc, &argc, NULL);
- * ]|
- *
- * is functionally equivalent to:
- *
- * |[
- *   clutter_init (&argc, &argv);
- * ]|
- *
- * After g_option_context_parse() on a #GOptionContext containing the
- * Clutter #GOptionGroup has returned %TRUE, Clutter is guaranteed to be
- * initialized.
- *
- * Return value: (transfer full): a #GOptionGroup for the commandline arguments
- *   recognized by Clutter
- *
- * Since: 0.2
- */
-GOptionGroup *
-clutter_get_option_group (void)
-{
-  ClutterMainContext *context;
-  GOptionGroup *group;
-
-  clutter_base_init ();
-
-  context = _clutter_context_get_default ();
-
-  group = g_option_group_new ("clutter",
-                              "Clutter Options",
-                              "Show Clutter Options",
-                              NULL,
-                              NULL);
-
-  g_option_group_set_parse_hooks (group, pre_parse_hook, post_parse_hook);
-  g_option_group_add_entries (group, clutter_args);
-
-  /* add backend-specific options */
-  _clutter_backend_add_options (context->backend, group);
-
-  return group;
-}
-
-/**
- * clutter_get_option_group_without_init: (skip)
- *
- * Returns a #GOptionGroup for the command line arguments recognized
- * by Clutter. You should add this group to your #GOptionContext with
- * g_option_context_add_group(), if you are using g_option_context_parse()
- * to parse your commandline arguments.
- *
- * Unlike clutter_get_option_group(), calling g_option_context_parse() with
- * the #GOptionGroup returned by this function requires a subsequent explicit
- * call to clutter_init(); use this function when needing to set foreign
- * display connection with clutter_x11_set_display(), or with
- * `gtk_clutter_init()`.
- *
- * Return value: (transfer full): a #GOptionGroup for the commandline arguments
- *   recognized by Clutter
- *
- * Since: 0.8
- */
-GOptionGroup *
-clutter_get_option_group_without_init (void)
-{
-  ClutterMainContext *context;
-  GOptionGroup *group;
-
-  clutter_base_init ();
-
-  context = _clutter_context_get_default ();
-  context->defer_display_setup = TRUE;
-
-  group = clutter_get_option_group ();
-
-  return group;
-}
-
-/* Note that the gobject-introspection annotations for the argc/argv
- * parameters do not produce the right result; however, they do
- * allow the common case of argc=NULL, argv=NULL to work.
- */
-
-
-static gboolean
-clutter_parse_args (int      *argc,
-                    char   ***argv,
-                    GError  **error)
-{
-  GOptionContext *option_context;
-  GOptionGroup *clutter_group, *cogl_group;
-  GError *internal_error = NULL;
-  gboolean ret = TRUE;
-
-  if (clutter_is_initialized)
-    return TRUE;
-
-  option_context = g_option_context_new (NULL);
-  g_option_context_set_ignore_unknown_options (option_context, TRUE);
-  g_option_context_set_help_enabled (option_context, FALSE);
-
-  /* Initiate any command line options from the backend */
-  clutter_group = clutter_get_option_group ();
-  g_option_context_set_main_group (option_context, clutter_group);
-
-  cogl_group = cogl_get_option_group ();
-  g_option_context_add_group (option_context, cogl_group);
-
-  if (!g_option_context_parse (option_context, argc, argv, &internal_error))
-    {
-      g_propagate_error (error, internal_error);
-      ret = FALSE;
-    }
-
-  g_option_context_free (option_context);
-
-  return ret;
-}
-
-/**
- * clutter_init:
- * @argc: (inout): The number of arguments in @argv
- * @argv: (array length=argc) (inout) (allow-none): A pointer to an array
- *   of arguments.
- *
- * Initialises everything needed to operate with Clutter and parses some
- * standard command line options; @argc and @argv are adjusted accordingly
- * so your own code will never see those standard arguments.
- *
- * It is safe to call this function multiple times.
- *
- * This function will not abort in case of errors during
- * initialization; clutter_init() will print out the error message on
- * stderr, and will return an error code. It is up to the application
- * code to handle this case.
- *
- * If this function fails, and returns an error code, any subsequent
- * Clutter API will have undefined behaviour - including segmentation
- * faults and assertion failures. Make sure to handle the returned
- * #ClutterInitError enumeration value.
- *
- * Return value: a #ClutterInitError value
- */
-ClutterInitError
-clutter_init (int    *argc,
-              char ***argv)
-{
-  ClutterMainContext *ctx;
-  GError *error = NULL;
-  ClutterInitError res;
-
-  if (clutter_is_initialized)
-    return CLUTTER_INIT_SUCCESS;
-
-  clutter_base_init ();
-
-  ctx = _clutter_context_get_default ();
-
-  if (!ctx->defer_display_setup)
-    {
-#if 0
-      if (argc && *argc > 0 && *argv)
-	g_set_prgname ((*argv)[0]);
-#endif
-
-      /* parse_args will trigger backend creation and things like
-       * DISPLAY connection etc.
-       */
-      if (!clutter_parse_args (argc, argv, &error))
-	{
-          g_critical ("Unable to initialize Clutter: %s", error->message);
-          g_error_free (error);
-
-          res = CLUTTER_INIT_ERROR_INTERNAL;
-	}
-      else
-        res = CLUTTER_INIT_SUCCESS;
-    }
-  else
-    {
-      res = clutter_init_real (&error);
-      if (error != NULL)
-        {
-          g_critical ("Unable to initialize Clutter: %s", error->message);
-          g_error_free (error);
-        }
-    }
-
-  return res;
+  g_object_add_weak_pointer (G_OBJECT (ClutterCntx), (gpointer *) &ClutterCntx);
+  return ClutterCntx;
 }
 
 gboolean
@@ -1415,12 +855,11 @@ remove_device_for_event (ClutterStage *stage,
 
 
 static void
-_clutter_process_event_details (ClutterActor        *stage,
-                                ClutterMainContext  *context,
-                                ClutterEvent        *event)
+_clutter_process_event_details (ClutterActor    *stage,
+                                ClutterContext  *clutter_context,
+                                ClutterEvent    *event)
 {
   ClutterInputDevice *device = clutter_event_get_device (event);
-  ClutterMainContext *clutter_context;
   ClutterBackend *backend;
 
   clutter_context = _clutter_context_get_default ();
@@ -1802,7 +1241,7 @@ _clutter_process_event_details (ClutterActor        *stage,
 void
 _clutter_process_event (ClutterEvent *event)
 {
-  ClutterMainContext *context;
+  ClutterContext *context;
   ClutterActor *stage;
   ClutterSeat *seat;
 
@@ -1828,43 +1267,6 @@ _clutter_process_event (ClutterEvent *event)
   context->current_event = g_slist_delete_link (context->current_event, context->current_event);
 }
 
-void
-clutter_base_init (void)
-{
-  static gboolean initialised = FALSE;
-
-  if (!initialised)
-    {
-      initialised = TRUE;
-
-#if !GLIB_CHECK_VERSION (2, 35, 1)
-      /* initialise GLib type system */
-      g_type_init ();
-#endif
-
-      clutter_graphene_init ();
-    }
-}
-
-/**
- * clutter_get_default_frame_rate:
- *
- * Retrieves the default frame rate. See clutter_set_default_frame_rate().
- *
- * Return value: the default frame rate
- *
- * Since: 0.6
- */
-guint
-clutter_get_default_frame_rate (void)
-{
-  ClutterMainContext *context;
-
-  context = _clutter_context_get_default ();
-
-  return context->frame_rate;
-}
-
 /**
  * clutter_get_font_map:
  *
@@ -1880,7 +1282,7 @@ clutter_get_default_frame_rate (void)
 PangoFontMap *
 clutter_get_font_map (void)
 {
-  return PANGO_FONT_MAP (clutter_context_get_pango_fontmap ());
+  return PANGO_FONT_MAP (clutter_context_get_pango_fontmap (ClutterCntx));
 }
 
 typedef struct _ClutterRepaintFunction
@@ -1904,7 +1306,7 @@ void
 clutter_threads_remove_repaint_func (guint handle_id)
 {
   ClutterRepaintFunction *repaint_func;
-  ClutterMainContext *context;
+  ClutterContext *context;
   GList *l;
 
   g_return_if_fail (handle_id > 0);
@@ -2025,7 +1427,7 @@ clutter_threads_add_repaint_func_full (ClutterRepaintFlags flags,
                                        gpointer            data,
                                        GDestroyNotify      notify)
 {
-  ClutterMainContext *context;
+  ClutterContext *context;
   ClutterRepaintFunction *repaint_func;
 
   g_return_val_if_fail (func != NULL, 0);
@@ -2059,7 +1461,7 @@ clutter_threads_add_repaint_func_full (ClutterRepaintFlags flags,
 void
 _clutter_run_repaint_functions (ClutterRepaintFlags flags)
 {
-  ClutterMainContext *context = _clutter_context_get_default ();
+  ClutterContext *context = _clutter_context_get_default ();
   ClutterRepaintFunction *repaint_func;
   GList *invoke_list, *reinvoke_list, *l;
 
@@ -2126,7 +1528,7 @@ _clutter_run_repaint_functions (ClutterRepaintFlags flags)
 ClutterTextDirection
 clutter_get_default_text_direction (void)
 {
-  return clutter_text_direction;
+  return clutter_context_get_text_direction (ClutterCntx);;
 }
 
 /*< private >
@@ -2137,7 +1539,7 @@ clutter_get_default_text_direction (void)
 void
 _clutter_clear_events_queue (void)
 {
-  ClutterMainContext *context = _clutter_context_get_default ();
+  ClutterContext *context = _clutter_context_get_default ();
   ClutterEvent *event;
   GAsyncQueue *events_queue;
 
@@ -2203,12 +1605,6 @@ clutter_get_debug_flags (ClutterDebugFlag     *debug_flags,
     *draw_flags = clutter_paint_debug_flags;
   if (pick_flags)
     *pick_flags = clutter_pick_debug_flags;
-}
-
-void
-_clutter_set_sync_to_vblank (gboolean sync_to_vblank)
-{
-  clutter_sync_to_vblank = !!sync_to_vblank;
 }
 
 void

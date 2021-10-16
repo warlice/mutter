@@ -115,9 +115,11 @@ meta_backend_native_dispose (GObject *object)
 }
 
 static ClutterBackend *
-meta_backend_native_create_clutter_backend (MetaBackend *backend)
+meta_backend_native_create_clutter_backend (MetaBackend    *backend,
+                                            ClutterContext *clutter_context)
 {
-  return g_object_new (META_TYPE_CLUTTER_BACKEND_NATIVE, NULL);
+  return CLUTTER_BACKEND (meta_clutter_backend_native_new (backend,
+                                                           clutter_context));
 }
 
 static ClutterSeat *

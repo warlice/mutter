@@ -4,6 +4,7 @@
 #include <glib-object.h>
 #include <clutter/clutter.h>
 
+#include "backends/meta-backend-private.h"
 #include "compositor/meta-plugin-manager.h"
 #include "core/meta-context-private.h"
 
@@ -73,6 +74,23 @@ clutter_test_get_stage (void)
   MetaBackend *backend = meta_get_backend ();
 
   return meta_backend_get_stage (backend);
+}
+
+/**
+ * clutter_test_get_context:
+ *
+ * Retrieves the #ClutterContext used for testing.
+ *
+ * Return value: (transfer none): the context used for testing
+ *
+ * Since: 1.18
+ */
+ClutterContext *
+clutter_test_get_context (void)
+{
+  MetaBackend *backend = meta_get_backend ();
+
+  return meta_backend_get_clutter_context (backend);
 }
 
 typedef struct {

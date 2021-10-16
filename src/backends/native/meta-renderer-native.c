@@ -485,7 +485,11 @@ cogl_context_from_renderer_native (MetaRendererNative *renderer_native)
 {
   MetaRenderer *renderer = META_RENDERER (renderer_native);
   MetaBackend *backend = meta_renderer_get_backend (renderer);
-  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
+  ClutterBackend *clutter_backend;
+
+  clutter_backend = meta_backend_get_clutter_backend (backend);
+  if (!clutter_backend)
+    return NULL;
 
   return clutter_backend_get_cogl_context (clutter_backend);
 }
@@ -861,9 +865,6 @@ meta_renderer_native_init_egl_context (CoglContext *cogl_context,
                   TRUE);
   COGL_FLAGS_SET (cogl_context->winsys_features,
                   COGL_WINSYS_FEATURE_SYNC_AND_COMPLETE_EVENT,
-                  TRUE);
-  COGL_FLAGS_SET (cogl_context->winsys_features,
-                  COGL_WINSYS_FEATURE_MULTIPLE_ONSCREEN,
                   TRUE);
 
 #ifdef HAVE_EGL_DEVICE

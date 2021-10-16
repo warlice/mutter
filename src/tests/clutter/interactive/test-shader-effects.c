@@ -15,6 +15,7 @@ test_shader_effects_main (int argc, char *argv[]);
 G_MODULE_EXPORT int
 test_shader_effects_main (int argc, char *argv[])
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterTimeline *timeline;
   ClutterActor *stage, *hand, *label, *rect;
   gchar *file;
@@ -49,7 +50,7 @@ test_shader_effects_main (int argc, char *argv[])
                                        "opacity", 128,
                                        NULL);
 
-  rect = clutter_actor_new ();
+  rect = clutter_actor_new (context);
   clutter_actor_set_background_color (rect, CLUTTER_COLOR_DarkOrange);
   clutter_actor_add_effect_with_name (rect, "blur", clutter_blur_effect_new ());
   clutter_actor_set_position (rect, 415, 215);

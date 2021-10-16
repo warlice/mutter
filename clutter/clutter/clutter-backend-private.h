@@ -50,7 +50,6 @@ struct _ClutterBackend
 
   gchar *font_name;
 
-  gfloat units_per_em;
   gint32 units_serial;
 
   float fallback_resource_scale;
@@ -66,17 +65,9 @@ struct _ClutterBackendClass
   GObjectClass parent_class;
 
   /* vfuncs */
-  gboolean              (* pre_parse)          (ClutterBackend  *backend,
-                                                GError         **error);
-  gboolean              (* post_parse)         (ClutterBackend  *backend,
-                                                GError         **error);
   ClutterStageWindow *  (* create_stage)       (ClutterBackend  *backend,
                                                 ClutterStage    *wrapper,
                                                 GError         **error);
-  void                  (* init_features)      (ClutterBackend  *backend);
-  void                  (* add_options)        (ClutterBackend  *backend,
-                                                GOptionGroup    *group);
-  ClutterFeatureFlags   (* get_features)       (ClutterBackend  *backend);
   CoglRenderer *        (* get_renderer)       (ClutterBackend  *backend,
                                                 GError         **error);
   CoglDisplay *         (* get_display)        (ClutterBackend  *backend,
@@ -96,11 +87,8 @@ struct _ClutterBackendClass
 
   /* signals */
   void (* resolution_changed) (ClutterBackend *backend);
-  void (* font_changed)       (ClutterBackend *backend);
   void (* settings_changed)   (ClutterBackend *backend);
 };
-
-ClutterBackend *        _clutter_create_backend                         (void);
 
 ClutterStageWindow *    _clutter_backend_create_stage                   (ClutterBackend         *backend,
                                                                          ClutterStage           *wrapper,
@@ -108,23 +96,10 @@ ClutterStageWindow *    _clutter_backend_create_stage                   (Clutter
 gboolean                _clutter_backend_create_context                 (ClutterBackend         *backend,
                                                                          GError                **error);
 
-void                    _clutter_backend_add_options                    (ClutterBackend         *backend,
-                                                                         GOptionGroup           *group);
-gboolean                _clutter_backend_pre_parse                      (ClutterBackend         *backend,
-                                                                         GError                **error);
-gboolean                _clutter_backend_post_parse                     (ClutterBackend         *backend,
-                                                                         GError                **error);
-
 CLUTTER_EXPORT
 gboolean                _clutter_backend_translate_event                (ClutterBackend         *backend,
                                                                          gpointer                native,
                                                                          ClutterEvent           *event);
-
-ClutterFeatureFlags     _clutter_backend_get_features                   (ClutterBackend         *backend);
-
-gfloat                  _clutter_backend_get_units_per_em               (ClutterBackend         *backend,
-                                                                         PangoFontDescription   *font_desc);
-gint32                  _clutter_backend_get_units_serial               (ClutterBackend         *backend);
 
 void                    clutter_set_allowed_drivers                     (const char             *drivers);
 

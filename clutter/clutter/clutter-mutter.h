@@ -38,15 +38,21 @@
 #include "clutter-stage-view-private.h"
 #include "clutter.h"
 
+/**
+ * clutter_create_context: (skip)
+ */
+CLUTTER_EXPORT
+ClutterContext * clutter_create_context (ClutterContextFlags         flags,
+                                         ClutterBackendConstructor   backend_constructor,
+                                         gpointer                    user_data,
+                                         GError                    **error);
+
 CLUTTER_EXPORT
 GList * clutter_stage_peek_stage_views (ClutterStage *stage);
 
 CLUTTER_EXPORT
 gboolean clutter_actor_is_effectively_on_stage_view (ClutterActor     *self,
                                                      ClutterStageView *view);
-
-CLUTTER_EXPORT
-void clutter_set_custom_backend_func (ClutterBackend *(* func) (void));
 
 CLUTTER_EXPORT
 int64_t clutter_stage_get_frame_counter (ClutterStage *stage);

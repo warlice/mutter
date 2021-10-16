@@ -5,19 +5,29 @@
 static void
 actor_add_child (void)
 {
-  ClutterActor *actor = clutter_actor_new ();
+  ClutterActor *stage;
+  ClutterContext *context;
+  ClutterActor *actor;
   ClutterActor *iter;
+
+  stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
+
+  actor = clutter_actor_new (context);
 
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "foo",
                                                 NULL));
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "bar",
                                                 NULL));
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "baz",
                                                 NULL));
 
@@ -52,14 +62,22 @@ actor_add_child (void)
 static void
 actor_insert_child (void)
 {
-  ClutterActor *actor = clutter_actor_new ();
+  ClutterActor *stage;
+  ClutterContext *context;
+  ClutterActor *actor;
   ClutterActor *iter;
+
+  stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
+
+  actor = clutter_actor_new (context);
 
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 
   clutter_actor_insert_child_at_index (actor,
                                        g_object_new (CLUTTER_TYPE_ACTOR,
+                                                     "context", context,
                                                      "name", "foo",
                                                      NULL),
                                        0);
@@ -71,6 +89,7 @@ actor_insert_child (void)
 
   clutter_actor_insert_child_below (actor,
                                     g_object_new (CLUTTER_TYPE_ACTOR,
+                                                  "context", context,
                                                   "name", "bar",
                                                   NULL),
                                     iter);
@@ -86,6 +105,7 @@ actor_insert_child (void)
   iter = clutter_actor_get_first_child (actor);
   clutter_actor_insert_child_above (actor,
                                     g_object_new (CLUTTER_TYPE_ACTOR,
+                                                  "context", context,
                                                   "name", "baz",
                                                   NULL),
                                     iter);
@@ -103,6 +123,7 @@ actor_insert_child (void)
 
   clutter_actor_insert_child_at_index (actor,
                                        g_object_new (CLUTTER_TYPE_ACTOR,
+                                                     "context", context,
                                                      "name", "1",
                                                      NULL),
                                        0);
@@ -113,6 +134,7 @@ actor_insert_child (void)
 
   clutter_actor_insert_child_at_index (actor,
                                        g_object_new (CLUTTER_TYPE_ACTOR,
+                                                     "context", context,
                                                      "name", "2",
                                                      NULL),
                                        0);
@@ -125,6 +147,7 @@ actor_insert_child (void)
 
   clutter_actor_insert_child_at_index (actor,
                                        g_object_new (CLUTTER_TYPE_ACTOR,
+                                                     "context", context,
                                                      "name", "3",
                                                      NULL),
                                        -1);
@@ -139,16 +162,25 @@ actor_insert_child (void)
 static void
 actor_remove_child (void)
 {
-  ClutterActor *actor = clutter_actor_new ();
+  ClutterActor *stage;
+  ClutterContext *context;
+  ClutterActor *actor;
   ClutterActor *iter;
+
+  stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
+
+  actor = clutter_actor_new (context);
 
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "foo",
                                                 NULL));
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "bar",
                                                 NULL));
 
@@ -183,22 +215,32 @@ actor_remove_child (void)
 static void
 actor_raise_child (void)
 {
-  ClutterActor *actor = clutter_actor_new ();
+  ClutterActor *stage;
+  ClutterContext *context;
+  ClutterActor *actor;
   ClutterActor *iter;
   gboolean show_on_set_parent;
+
+  stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
+
+  actor = clutter_actor_new (context);
 
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "foo",
                                                 "visible", FALSE,
                                                 NULL));
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "bar",
                                                 "visible", FALSE,
                                                 NULL));
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "baz",
                                                 "visible", FALSE,
                                                 NULL));
@@ -249,22 +291,32 @@ actor_raise_child (void)
 static void
 actor_lower_child (void)
 {
-  ClutterActor *actor = clutter_actor_new ();
+  ClutterActor *stage;
+  ClutterContext *context;
+  ClutterActor *actor;
   ClutterActor *iter;
   gboolean show_on_set_parent;
+
+  stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
+
+  actor = clutter_actor_new (context);
 
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "foo",
                                                 "visible", FALSE,
                                                 NULL));
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "bar",
                                                 "visible", FALSE,
                                                 NULL));
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "baz",
                                                 "visible", FALSE,
                                                 NULL));
@@ -313,16 +365,25 @@ actor_lower_child (void)
 static void
 actor_replace_child (void)
 {
-  ClutterActor *actor = clutter_actor_new ();
+  ClutterActor *stage;
+  ClutterContext *context;
+  ClutterActor *actor;
   ClutterActor *iter;
+
+  stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
+
+  actor = clutter_actor_new (context);
 
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "foo",
                                                 NULL));
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "bar",
                                                 NULL));
 
@@ -331,6 +392,7 @@ actor_replace_child (void)
 
   clutter_actor_replace_child (actor, iter,
                                g_object_new (CLUTTER_TYPE_ACTOR,
+                                             "context", context,
                                              "name", "baz",
                                              NULL));
 
@@ -342,6 +404,7 @@ actor_replace_child (void)
 
   clutter_actor_replace_child (actor, iter,
                                g_object_new (CLUTTER_TYPE_ACTOR,
+                                             "context", context,
                                              "name", "qux",
                                              NULL));
 
@@ -352,11 +415,13 @@ actor_replace_child (void)
   g_assert_cmpstr (clutter_actor_get_name (iter), ==, "qux");
 
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "foo",
                                                 NULL));
 
   clutter_actor_replace_child (actor, iter,
                                g_object_new (CLUTTER_TYPE_ACTOR,
+                                             "context", context,
                                              "name", "bar",
                                              NULL));
 
@@ -374,18 +439,28 @@ actor_replace_child (void)
 static void
 actor_remove_all (void)
 {
-  ClutterActor *actor = clutter_actor_new ();
+  ClutterActor *stage;
+  ClutterContext *context;
+  ClutterActor *actor;
+
+  stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
+
+  actor = clutter_actor_new (context);
 
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "foo",
                                                 NULL));
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "bar",
                                                 NULL));
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "baz",
                                                 NULL));
 
@@ -434,8 +509,15 @@ actor_removed (ClutterContainer *container,
 static void
 actor_container_signals (void)
 {
-  ClutterActor *actor = clutter_actor_new ();
+  ClutterActor *stage;
+  ClutterContext *context;
+  ClutterActor *actor;
   int add_count, remove_count;
+
+  stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
+
+  actor = clutter_actor_new (context);
 
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
@@ -449,6 +531,7 @@ actor_container_signals (void)
                     &remove_count);
 
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "foo",
                                                 NULL));
 
@@ -457,6 +540,7 @@ actor_container_signals (void)
   g_assert_cmpint (clutter_actor_get_n_children (actor), ==, 1);
 
   clutter_actor_add_child (actor, g_object_new (CLUTTER_TYPE_ACTOR,
+                                                "context", context,
                                                 "name", "bar",
                                                 NULL));
 
@@ -476,6 +560,8 @@ actor_container_signals (void)
 static void
 actor_contains (void)
 {
+  ClutterActor *stage;
+  ClutterContext *context;
   /* This build up the following tree:
    *
    *              a
@@ -507,16 +593,19 @@ actor_contains (void)
       /* j */    0, 0, 0, 0, 0, 0, 0, 0, 0, 1
     };
 
-  d.actor_a = clutter_actor_new ();
-  d.actor_b = clutter_actor_new ();
-  d.actor_c = clutter_actor_new ();
-  d.actor_d = clutter_actor_new ();
-  d.actor_e = clutter_actor_new ();
-  d.actor_f = clutter_actor_new ();
-  d.actor_g = clutter_actor_new ();
-  d.actor_h = clutter_actor_new ();
-  d.actor_i = clutter_actor_new ();
-  d.actor_j = clutter_actor_new ();
+  stage = clutter_test_get_stage ();
+  context = clutter_actor_get_context (stage);
+
+  d.actor_a = clutter_actor_new (context);
+  d.actor_b = clutter_actor_new (context);
+  d.actor_c = clutter_actor_new (context);
+  d.actor_d = clutter_actor_new (context);
+  d.actor_e = clutter_actor_new (context);
+  d.actor_f = clutter_actor_new (context);
+  d.actor_g = clutter_actor_new (context);
+  d.actor_h = clutter_actor_new (context);
+  d.actor_i = clutter_actor_new (context);
+  d.actor_j = clutter_actor_new (context);
 
   clutter_actor_add_child (d.actor_a, d.actor_b);
   clutter_actor_add_child (d.actor_a, d.actor_c);

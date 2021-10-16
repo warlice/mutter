@@ -162,6 +162,7 @@ meta_dnd_actor_new (ClutterActor *drag_origin,
   MetaDnDActor *self;
 
   self = g_object_new (META_TYPE_DND_ACTOR,
+                       "context", clutter_actor_get_context (drag_origin),
                        "drag-origin", drag_origin,
                        "drag-start-x", drag_start_x,
                        "drag-start-y", drag_start_y,

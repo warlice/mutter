@@ -31,14 +31,14 @@ static ClutterActor *
 create_source (void)
 {
   int x, y;
-  ClutterActor *group = clutter_actor_new ();
+  ClutterActor *group = clutter_actor_new (clutter_test_get_context ());
 
   /* Create a group with a different coloured rectangle at each
      corner */
   for (y = 0; y < SOURCE_DIVISIONS_Y; y++)
     for (x = 0; x < SOURCE_DIVISIONS_X; x++)
       {
-        ClutterActor *rect = clutter_actor_new ();
+        ClutterActor *rect = clutter_actor_new (clutter_test_get_context ());
         clutter_actor_set_background_color (rect,
                                             corner_colors +
                                             (y * SOURCE_DIVISIONS_X + x));

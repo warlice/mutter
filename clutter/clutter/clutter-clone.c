@@ -388,9 +388,13 @@ clutter_clone_init (ClutterClone *self)
  * Since: 1.0
  */
 ClutterActor *
-clutter_clone_new (ClutterActor *source)
+clutter_clone_new (ClutterContext *context,
+                   ClutterActor   *source)
 {
-  return g_object_new (CLUTTER_TYPE_CLONE, "source", source,  NULL);
+  return g_object_new (CLUTTER_TYPE_CLONE,
+                       "context", context,
+                       "source", source,
+                       NULL);
 }
 
 static void

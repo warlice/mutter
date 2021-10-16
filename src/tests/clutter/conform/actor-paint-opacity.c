@@ -6,6 +6,7 @@
 static void
 opacity_label (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage;
   ClutterActor *label;
   ClutterColor label_color = { 255, 0, 0, 128 };
@@ -13,7 +14,9 @@ opacity_label (void)
 
   stage = clutter_test_get_stage ();
 
-  label = clutter_text_new_with_text ("Sans 18px", "Label, 50% opacity");
+  label = clutter_text_new_with_text (context,
+                                      "Sans 18px",
+                                      "Label, 50% opacity");
   clutter_text_set_color (CLUTTER_TEXT (label), &label_color);
 
   if (!g_test_quiet ())
@@ -45,6 +48,7 @@ G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 static void
 opacity_rectangle (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage;
   ClutterActor *rect;
   ClutterColor rect_color = { 0, 0, 255, 255 };
@@ -52,7 +56,7 @@ opacity_rectangle (void)
 
   stage = clutter_test_get_stage ();
 
-  rect = clutter_actor_new ();
+  rect = clutter_actor_new (context);
   clutter_actor_set_background_color (rect, &rect_color);
   clutter_actor_set_size (rect, 128, 128);
   clutter_actor_set_position (rect, 150, 90);
@@ -81,6 +85,7 @@ G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 static void
 opacity_paint (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *stage, *group1, *group2;
   ClutterActor *label, *rect;
   ClutterColor label_color = { 255, 0, 0, 128 };
@@ -89,13 +94,15 @@ opacity_paint (void)
 
   stage = clutter_test_get_stage ();
 
-  group1 = clutter_actor_new ();
+  group1 = clutter_actor_new (context);
   clutter_actor_set_opacity (group1, 128);
   clutter_container_add (CLUTTER_CONTAINER (stage), group1, NULL);
   clutter_actor_set_position (group1, 10, 30);
   clutter_actor_show (group1);
 
-  label = clutter_text_new_with_text ("Sans 18px", "Label+Group, 25% opacity");
+  label = clutter_text_new_with_text (context,
+                                      "Sans 18px",
+                                      "Label+Group, 25% opacity");
   clutter_text_set_color (CLUTTER_TEXT (label), &label_color);
 
   if (!g_test_quiet ())
@@ -116,11 +123,11 @@ opacity_paint (void)
 
   clutter_actor_destroy (label);
 
-  group2 = clutter_actor_new ();
+  group2 = clutter_actor_new (context);
   clutter_container_add (CLUTTER_CONTAINER (group1), group2, NULL);
   clutter_actor_set_position (group2, 10, 60);
 
-  rect = clutter_actor_new ();
+  rect = clutter_actor_new (context);
   clutter_actor_set_background_color (rect, &rect_color);
   clutter_actor_set_size (rect, 128, 128);
 

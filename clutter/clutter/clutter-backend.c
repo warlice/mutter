@@ -56,6 +56,17 @@
 
 enum
 {
+  PROP_0,
+
+  PROP_CONTEXT,
+
+  N_PROPS
+};
+
+static GParamSpec *obj_props[N_PROPS];
+
+enum
+{
   RESOLUTION_CHANGED,
   FONT_CHANGED,
   SETTINGS_CHANGED,
@@ -63,9 +74,55 @@ enum
   LAST_SIGNAL
 };
 
-G_DEFINE_ABSTRACT_TYPE (ClutterBackend, clutter_backend, G_TYPE_OBJECT)
+typedef struct _ClutterBackendPrivate
+{
+  ClutterContext *context;
+} ClutterBackendPrivate;
+
+G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (ClutterBackend, clutter_backend,
+                                     G_TYPE_OBJECT)
 
 static guint backend_signals[LAST_SIGNAL] = { 0, };
+
+static void
+clutter_backend_get_property (GObject    *object,
+                              guint       prop_id,
+                              GValue     *value,
+                              GParamSpec *pspec)
+{
+  ClutterBackend *context = CLUTTER_BACKEND (object);
+  ClutterBackendPrivate *priv = clutter_backend_get_instance_private (context);
+
+  switch (prop_id)
+    {
+    case PROP_CONTEXT:
+      g_value_set_object (value, priv->context);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
+clutter_backend_set_property (GObject      *object,
+                              guint         prop_id,
+                              const GValue *value,
+                              GParamSpec   *pspec)
+{
+  ClutterBackend *context = CLUTTER_BACKEND (object);
+  ClutterBackendPrivate *priv = clutter_backend_get_instance_private (context);
+
+  switch (prop_id)
+    {
+    case PROP_CONTEXT:
+      priv->context = g_value_get_object (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
 
 static void
 clutter_backend_dispose (GObject *gobject)
@@ -91,71 +148,14 @@ clutter_backend_dispose (GObject *gobject)
   G_OBJECT_CLASS (clutter_backend_parent_class)->dispose (gobject);
 }
 
-static gfloat
-get_units_per_em (ClutterBackend       *backend,
-                  PangoFontDescription *font_desc)
-{
-  gfloat units_per_em = -1.0;
-  gboolean free_font_desc = FALSE;
-  gdouble dpi;
-
-  dpi = clutter_backend_get_resolution (backend);
-
-  if (font_desc == NULL)
-    {
-      ClutterSettings *settings;
-      gchar *font_name = NULL;
-
-      settings = clutter_settings_get_default ();
-      g_object_get (settings, "font-name", &font_name, NULL);
-
-      if (G_LIKELY (font_name != NULL && *font_name != '\0'))
-        {
-          font_desc = pango_font_description_from_string (font_name);
-          free_font_desc = TRUE;
-
-          g_free (font_name);
-        }
-    }
-
-  if (font_desc != NULL)
-    {
-      gdouble font_size = 0;
-      gint pango_size;
-      gboolean is_absolute;
-
-      pango_size = pango_font_description_get_size (font_desc);
-      is_absolute = pango_font_description_get_size_is_absolute (font_desc);
-
-      /* "absolute" means "device units" (usually, pixels); otherwise,
-       * it means logical units (points)
-       */
-      if (is_absolute)
-        font_size = (gdouble) pango_size / PANGO_SCALE;
-      else
-        font_size = dpi * ((gdouble) pango_size / PANGO_SCALE) / 72.0f;
-
-      /* 10 points at 96 DPI is 13.3 pixels */
-      units_per_em = (1.2f * font_size) * dpi / 96.0f;
-    }
-  else
-    units_per_em = -1.0f;
-
-  if (free_font_desc)
-    pango_font_description_free (font_desc);
-
-  return units_per_em;
-}
-
 static void
 clutter_backend_real_resolution_changed (ClutterBackend *backend)
 {
-  ClutterMainContext *context;
-  ClutterSettings *settings;
+  ClutterContext *context = clutter_backend_get_context (backend);
+  ClutterSettings *settings = clutter_context_get_settings (context);
   gdouble resolution;
   gint dpi;
 
-  settings = clutter_settings_get_default ();
   g_object_get (settings, "font-dpi", &dpi, NULL);
 
   if (dpi < 0)
@@ -163,23 +163,8 @@ clutter_backend_real_resolution_changed (ClutterBackend *backend)
   else
     resolution = dpi / 1024.0;
 
-  context = _clutter_context_get_default ();
   if (context->font_map != NULL)
     cogl_pango_font_map_set_resolution (context->font_map, resolution);
-
-  backend->units_per_em = get_units_per_em (backend, NULL);
-  backend->units_serial += 1;
-
-  CLUTTER_NOTE (BACKEND, "Units per em: %.2f", backend->units_per_em);
-}
-
-static void
-clutter_backend_real_font_changed (ClutterBackend *backend)
-{
-  backend->units_per_em = get_units_per_em (backend, NULL);
-  backend->units_serial += 1;
-
-  CLUTTER_NOTE (BACKEND, "Units per em: %.2f", backend->units_per_em);
 }
 
 static gboolean
@@ -353,8 +338,7 @@ clutter_backend_real_create_context (ClutterBackend  *backend,
       if (internal_error != NULL)
         g_propagate_error (error, internal_error);
       else
-        g_set_error_literal (error, CLUTTER_INIT_ERROR,
-                             CLUTTER_INIT_ERROR_BACKEND,
+        g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                              "Unable to initialize the Clutter backend: no available drivers found.");
 
       return FALSE;
@@ -366,59 +350,24 @@ clutter_backend_real_create_context (ClutterBackend  *backend,
   return TRUE;
 }
 
-static ClutterFeatureFlags
-clutter_backend_real_get_features (ClutterBackend *backend)
-{
-  ClutterFeatureFlags flags = 0;
-
-  if (cogl_clutter_winsys_has_feature (COGL_WINSYS_FEATURE_MULTIPLE_ONSCREEN))
-    {
-      CLUTTER_NOTE (BACKEND, "Cogl supports multiple onscreen framebuffers");
-      flags |= CLUTTER_FEATURE_STAGE_MULTIPLE;
-    }
-  else
-    {
-      CLUTTER_NOTE (BACKEND, "Cogl only supports one onscreen framebuffer");
-      flags |= CLUTTER_FEATURE_STAGE_STATIC;
-    }
-
-  if (cogl_clutter_winsys_has_feature (COGL_WINSYS_FEATURE_SWAP_BUFFERS_EVENT))
-    {
-      CLUTTER_NOTE (BACKEND, "Cogl supports swap buffers complete events");
-      flags |= CLUTTER_FEATURE_SWAP_EVENTS;
-    }
-
-  return flags;
-}
-
-static ClutterBackend * (* custom_backend_func) (void);
-
-void
-clutter_set_custom_backend_func (ClutterBackend *(* func) (void))
-{
-  custom_backend_func = func;
-}
-
-ClutterBackend *
-_clutter_create_backend (void)
-{
-  ClutterBackend *retval;
-
-  g_return_val_if_fail (custom_backend_func, NULL);
-
-  retval = custom_backend_func ();
-  if (!retval)
-    g_error ("Failed to create custom backend.");
-
-  return retval;
-}
-
 static void
 clutter_backend_class_init (ClutterBackendClass *klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
 
+  gobject_class->get_property = clutter_backend_get_property;
+  gobject_class->set_property = clutter_backend_set_property;
   gobject_class->dispose = clutter_backend_dispose;
+
+  obj_props[PROP_CONTEXT] =
+    g_param_spec_object ("context",
+                         "context",
+                         "ClutterContext",
+                         CLUTTER_TYPE_CONTEXT,
+                         G_PARAM_READWRITE |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+  g_object_class_install_properties (gobject_class, N_PROPS, obj_props);
 
   /**
    * ClutterBackend::resolution-changed:
@@ -450,7 +399,7 @@ clutter_backend_class_init (ClutterBackendClass *klass)
     g_signal_new (I_("font-changed"),
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_FIRST,
-                  G_STRUCT_OFFSET (ClutterBackendClass, font_changed),
+                  0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
 
@@ -472,64 +421,16 @@ clutter_backend_class_init (ClutterBackendClass *klass)
                   G_TYPE_NONE, 0);
 
   klass->resolution_changed = clutter_backend_real_resolution_changed;
-  klass->font_changed = clutter_backend_real_font_changed;
 
   klass->create_context = clutter_backend_real_create_context;
-  klass->get_features = clutter_backend_real_get_features;
 }
 
 static void
 clutter_backend_init (ClutterBackend *self)
 {
-  self->units_per_em = -1.0;
-  self->units_serial = 1;
-
   self->dummy_onscreen = NULL;
 
   self->fallback_resource_scale = 1.f;
-}
-
-void
-_clutter_backend_add_options (ClutterBackend *backend,
-                              GOptionGroup   *group)
-{
-  ClutterBackendClass *klass;
-
-  g_assert (CLUTTER_IS_BACKEND (backend));
-
-  klass = CLUTTER_BACKEND_GET_CLASS (backend);
-  if (klass->add_options)
-    klass->add_options (backend, group);
-}
-
-gboolean
-_clutter_backend_pre_parse (ClutterBackend  *backend,
-                            GError         **error)
-{
-  ClutterBackendClass *klass;
-
-  g_assert (CLUTTER_IS_BACKEND (backend));
-
-  klass = CLUTTER_BACKEND_GET_CLASS (backend);
-  if (klass->pre_parse)
-    return klass->pre_parse (backend, error);
-
-  return TRUE;
-}
-
-gboolean
-_clutter_backend_post_parse (ClutterBackend  *backend,
-                             GError         **error)
-{
-  ClutterBackendClass *klass;
-
-  g_assert (CLUTTER_IS_BACKEND (backend));
-
-  klass = CLUTTER_BACKEND_GET_CLASS (backend);
-  if (klass->post_parse)
-    return klass->post_parse (backend, error);
-
-  return TRUE;
 }
 
 ClutterStageWindow *
@@ -572,60 +473,6 @@ _clutter_backend_create_context (ClutterBackend  *backend,
   return klass->create_context (backend, error);
 }
 
-ClutterFeatureFlags
-_clutter_backend_get_features (ClutterBackend *backend)
-{
-  ClutterBackendClass *klass;
-  GError *error;
-
-  g_assert (CLUTTER_IS_BACKEND (backend));
-
-  klass = CLUTTER_BACKEND_GET_CLASS (backend);
-
-  /* we need to have a context here; so we create the
-   * GL context first and the ask for features. if the
-   * context already exists this should be a no-op
-   */
-  error = NULL;
-  if (klass->create_context != NULL)
-    {
-      gboolean res;
-
-      res = klass->create_context (backend, &error);
-      if (!res)
-        {
-          if (error)
-            {
-              g_critical ("Unable to create a context: %s", error->message);
-              g_error_free (error);
-            }
-          else
-            g_critical ("Unable to create a context: unknown error");
-
-          return 0;
-        }
-    }
-
-  if (klass->get_features)
-    return klass->get_features (backend);
-  
-  return 0;
-}
-
-gfloat
-_clutter_backend_get_units_per_em (ClutterBackend       *backend,
-                                   PangoFontDescription *font_desc)
-{
-  /* recompute for the font description, but do not cache the result */
-  if (font_desc != NULL)
-    return get_units_per_em (backend, font_desc);
-
-  if (backend->units_per_em < 0)
-    backend->units_per_em = get_units_per_em (backend, NULL);
-
-  return backend->units_per_em;
-}
-
 /**
  * clutter_get_default_backend:
  *
@@ -641,11 +488,25 @@ _clutter_backend_get_units_per_em (ClutterBackend       *backend,
 ClutterBackend *
 clutter_get_default_backend (void)
 {
-  ClutterMainContext *clutter_context;
+  ClutterContext *clutter_context;
 
   clutter_context = _clutter_context_get_default ();
 
   return clutter_context->backend;
+}
+
+/**
+ * clutter_backend_get_context:
+ * @backend: the #ClutterBackend
+ *
+ * Returns: (transfer none): a pointer to the #ClutterContext
+ */
+ClutterContext *
+clutter_backend_get_context (ClutterBackend *backend)
+{
+  ClutterBackendPrivate *priv = clutter_backend_get_instance_private (backend);
+
+  return priv->context;
 }
 
 /**
@@ -671,12 +532,14 @@ clutter_get_default_backend (void)
 gdouble
 clutter_backend_get_resolution (ClutterBackend *backend)
 {
+  ClutterContext *context;
   ClutterSettings *settings;
   gint resolution;
 
   g_return_val_if_fail (CLUTTER_IS_BACKEND (backend), -1.0);
 
-  settings = clutter_settings_get_default ();
+  context = clutter_backend_get_context (backend);
+  settings = clutter_context_get_settings (context);
   g_object_get (settings, "font-dpi", &resolution, NULL);
 
   if (resolution < 0)
@@ -751,12 +614,6 @@ clutter_backend_get_font_options (ClutterBackend *backend)
   g_signal_emit (backend, backend_signals[FONT_CHANGED], 0);
 
   return backend->font_options;
-}
-
-gint32
-_clutter_backend_get_units_serial (ClutterBackend *backend)
-{
-  return backend->units_serial;
 }
 
 gboolean

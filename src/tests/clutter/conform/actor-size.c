@@ -88,7 +88,9 @@ actor_preferred_size (void)
   gfloat min_width, min_height;
   gfloat nat_width, nat_height;
 
-  test = g_object_new (TEST_TYPE_ACTOR, NULL);
+  test = g_object_new (TEST_TYPE_ACTOR,
+                       "context", clutter_test_get_context (),
+                       NULL);
   self = (TestActor *) test;
 
   if (!g_test_quiet ())
@@ -149,7 +151,7 @@ actor_fixed_size (void)
   gfloat min_width, min_height;
   gfloat nat_width, nat_height;
 
-  rect = clutter_actor_new ();
+  rect = clutter_actor_new (clutter_test_get_context ());
   g_object_ref_sink (rect);
 
   if (!g_test_quiet ())

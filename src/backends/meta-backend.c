@@ -162,7 +162,7 @@ struct _MetaBackendPrivate
   WacomDeviceDatabase *wacom_db;
 #endif
 
-  ClutterBackend *clutter_backend;
+  ClutterContext *clutter_context;
   ClutterSeat *default_seat;
   ClutterActor *stage;
 
@@ -257,7 +257,7 @@ meta_backend_dispose (GObject *object)
   g_clear_pointer (&priv->stage, clutter_actor_destroy);
   g_clear_pointer (&priv->idle_manager, meta_idle_manager_free);
   g_clear_object (&priv->renderer);
-  g_clear_pointer (&priv->clutter_backend, clutter_backend_destroy);
+  g_clear_pointer (&priv->clutter_context, clutter_context_destroy);
   g_clear_list (&priv->gpus, g_object_unref);
 
   G_OBJECT_CLASS (meta_backend_parent_class)->dispose (object);
@@ -286,7 +286,7 @@ reset_pointer_position (MetaBackend *backend)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
   MetaMonitorManager *monitor_manager = priv->monitor_manager;
-  ClutterSeat *seat = clutter_backend_get_default_seat (priv->clutter_backend);
+  ClutterSeat *seat = priv->default_seat;
   MetaLogicalMonitor *primary;
 
   primary =
@@ -321,7 +321,7 @@ static void
 update_cursors (MetaBackend *backend)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
-  ClutterSeat *seat = clutter_backend_get_default_seat (priv->clutter_backend);
+  ClutterSeat *seat = priv->default_seat;
   MetaCursorRenderer *cursor_renderer;
   ClutterInputDevice *pointer, *device;
   GList *devices, *l;
@@ -352,7 +352,7 @@ meta_backend_monitors_changed (MetaBackend *backend)
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
-  ClutterSeat *seat = clutter_backend_get_default_seat (priv->clutter_backend);
+  ClutterSeat *seat = priv->default_seat;
   ClutterInputDevice *device = clutter_seat_get_pointer (seat);
   graphene_point_t point;
 
@@ -509,7 +509,7 @@ static void
 on_stage_shown_cb (MetaBackend *backend)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
-  ClutterSeat *seat = clutter_backend_get_default_seat (priv->clutter_backend);
+  ClutterSeat *seat = priv->default_seat;
   g_autoptr (GList) devices = NULL;
   const GList *l;
 
@@ -535,7 +535,7 @@ static void
 meta_backend_real_post_init (MetaBackend *backend)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
-  ClutterSeat *seat = clutter_backend_get_default_seat (priv->clutter_backend);
+  ClutterSeat *seat = priv->default_seat;
   MetaInputSettings *input_settings;
 
   priv->stage = meta_stage_new (backend);
@@ -1037,11 +1037,13 @@ static GSourceFuncs clutter_source_funcs = {
 };
 
 static ClutterBackend *
-meta_get_clutter_backend (void)
+meta_clutter_backend_constructor (ClutterContext *clutter_context,
+                                  gpointer        user_data)
 {
-  MetaBackend *backend = meta_get_backend ();
+  MetaBackend *backend = META_BACKEND (user_data);
+  MetaBackendClass *klass = META_BACKEND_GET_CLASS (backend);
 
-  return meta_backend_get_clutter_backend (backend);
+  return klass->create_clutter_backend (backend, clutter_context);
 }
 
 static ClutterSeat *
@@ -1059,14 +1061,12 @@ init_clutter (MetaBackend  *backend,
   MetaBackendSource *backend_source;
   GSource *source;
 
-  clutter_set_custom_backend_func (meta_get_clutter_backend);
-
-  if (clutter_init (NULL, NULL) != CLUTTER_INIT_SUCCESS)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unable to initialize Clutter");
-      return FALSE;
-    }
+  priv->clutter_context = clutter_create_context (CLUTTER_CONTEXT_FLAG_NONE,
+                                                  meta_clutter_backend_constructor,
+                                                  backend,
+                                                  error);
+  if (!priv->clutter_context)
+    return FALSE;
 
   priv->default_seat = meta_backend_create_default_seat (backend, error);
   if (!priv->default_seat)
@@ -1225,10 +1225,8 @@ meta_backend_get_cursor_renderer (MetaBackend *backend)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
   ClutterInputDevice *pointer;
-  ClutterSeat *seat;
 
-  seat = clutter_backend_get_default_seat (priv->clutter_backend);
-  pointer = clutter_seat_get_pointer (seat);
+  pointer = clutter_seat_get_pointer (priv->default_seat);
 
   return meta_backend_get_cursor_renderer_for_device (backend, pointer);
 }
@@ -1528,18 +1526,31 @@ meta_backend_set_client_pointer_constraint (MetaBackend           *backend,
   g_set_object (&priv->client_pointer_constraint, constraint);
 }
 
+/**
+ * meta_backend_get_clutter_context:
+ * @backend: a #MetaBackend object
+ *
+ * Returns: (transfer none): the #CluterContext
+ */
+ClutterContext *
+meta_backend_get_clutter_context (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  return priv->clutter_context;
+}
+
 ClutterBackend *
 meta_backend_get_clutter_backend (MetaBackend *backend)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+  ClutterContext *clutter_context;
 
-  if (!priv->clutter_backend)
-    {
-      priv->clutter_backend =
-        META_BACKEND_GET_CLASS (backend)->create_clutter_backend (backend);
-    }
+  clutter_context = priv->clutter_context;
+  if (!clutter_context)
+    return NULL;
 
-  return priv->clutter_backend;
+  return clutter_context_get_backend (clutter_context);
 }
 
 void

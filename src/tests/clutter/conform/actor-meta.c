@@ -8,11 +8,12 @@
 static void
 actor_meta_clear (void)
 {
+  ClutterContext *context = clutter_test_get_context ();
   ClutterActor *actor, *stage;
 
   stage = clutter_test_get_stage ();
 
-  actor = clutter_actor_new ();
+  actor = clutter_actor_new (context);
   g_object_ref_sink (actor);
   g_object_add_weak_pointer (G_OBJECT (actor), (gpointer *) &actor);
 

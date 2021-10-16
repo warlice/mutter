@@ -422,6 +422,7 @@ my_thing_new (gfloat padding,
               gfloat spacing)
 {
   return g_object_new (MY_TYPE_THING,
+                       "context", clutter_test_get_context (),
                        "padding", padding,
                        "spacing", spacing,
                        NULL);

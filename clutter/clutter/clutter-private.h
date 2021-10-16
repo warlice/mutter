@@ -32,9 +32,9 @@
 #include <cogl-pango/cogl-pango.h>
 
 #include "clutter-backend.h"
+#include "clutter-context.h"
 #include "clutter-effect.h"
 #include "clutter-event.h"
-#include "clutter-feature.h"
 #include "clutter-id-pool.h"
 #include "clutter-layout-manager.h"
 #include "clutter-settings.h"
@@ -43,7 +43,7 @@
 
 G_BEGIN_DECLS
 
-typedef struct _ClutterMainContext      ClutterMainContext;
+typedef struct _ClutterContext      ClutterContext;
 
 #define CLUTTER_REGISTER_VALUE_TRANSFORM_TO(TYPE_TO,func)             { \
   g_value_register_transform_func (g_define_type_id, TYPE_TO, func);    \
@@ -107,58 +107,6 @@ typedef enum
   CLUTTER_IN_RELAYOUT    = 1 << 7,
 } ClutterPrivateFlags;
 
-/*
- * ClutterMainContext:
- *
- * The shared state of Clutter
- */
-struct _ClutterMainContext
-{
-  /* the main windowing system backend */
-  ClutterBackend *backend;
-
-  /* the object holding all the stage instances */
-  ClutterStageManager *stage_manager;
-
-  /* the main event queue */
-  GAsyncQueue *events_queue;
-
-  /* the event filters added via clutter_event_add_filter. these are
-   * ordered from least recently added to most recently added */
-  GList *event_filters;
-
-  /* default FPS; this is only used if we cannot sync to vblank */
-  guint frame_rate;
-
-  /* fb bit masks for col<->id mapping in picking */
-  gint fb_r_mask;
-  gint fb_g_mask;
-  gint fb_b_mask;
-  gint fb_r_mask_used;
-  gint fb_g_mask_used;
-  gint fb_b_mask_used;
-
-  CoglPangoFontMap *font_map;   /* Global font map */
-
-  /* stack of #ClutterEvent */
-  GSList *current_event;
-
-  /* list of repaint functions installed through
-   * clutter_threads_add_repaint_func()
-   */
-  GList *repaint_funcs;
-  guint last_repaint_id;
-
-  /* main settings singleton */
-  ClutterSettings *settings;
-
-  /* boolean flags */
-  guint is_initialized          : 1;
-  guint defer_display_setup     : 1;
-  guint options_parsed          : 1;
-  guint show_fps                : 1;
-};
-
 /* shared between clutter-main.c and clutter-frame-source.c */
 typedef struct
 {
@@ -170,14 +118,11 @@ typedef struct
 gboolean _clutter_threads_dispatch      (gpointer data);
 void     _clutter_threads_dispatch_free (gpointer data);
 
-ClutterMainContext *    _clutter_context_get_default                    (void);
-void                    _clutter_context_lock                           (void);
-void                    _clutter_context_unlock                         (void);
+ClutterContext *        _clutter_context_get_default                    (void);
+
 CLUTTER_EXPORT
 gboolean                _clutter_context_is_initialized                 (void);
 gboolean                _clutter_context_get_show_fps                   (void);
-
-gboolean      _clutter_feature_init (GError **error);
 
 /* Diagnostic mode */
 gboolean        _clutter_diagnostic_enabled     (void);
