@@ -2131,6 +2131,17 @@ post_finish_frame (MetaOnscreenNative *onscreen_native,
                                META_KMS_UPDATE_FLAG_NONE);
 }
 
+void
+meta_onscreen_native_discard_pending_swaps (CoglOnscreen *onscreen)
+{
+  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+
+  onscreen_native->swaps_pending = 0;
+
+  g_clear_pointer (&onscreen_native->stalled_frame, clutter_frame_unref);
+  g_clear_pointer (&onscreen_native->next_frame, clutter_frame_unref);
+}
+
 static gboolean
 should_surface_be_sharable (CoglOnscreen *onscreen)
 {
