@@ -36,9 +36,14 @@ typedef enum _ClutterFrameResult
 
 #define CLUTTER_TYPE_FRAME_CLOCK (clutter_frame_clock_get_type ())
 CLUTTER_EXPORT
-G_DECLARE_FINAL_TYPE (ClutterFrameClock, clutter_frame_clock,
-                      CLUTTER, FRAME_CLOCK,
-                      GObject)
+G_DECLARE_DERIVABLE_TYPE (ClutterFrameClock, clutter_frame_clock,
+                          CLUTTER, FRAME_CLOCK,
+                          GObject)
+
+struct _ClutterFrameClockClass
+{
+  GObjectClass parent_class;
+};
 
 /**
  * ClutterFrameListenerIface: (skip)
