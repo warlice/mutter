@@ -26,6 +26,7 @@
 
 #include "backends/meta-backend-private.h"
 #include "backends/meta-cursor-tracker-private.h"
+#include "backends/meta-frame-clock.h"
 #include "clutter/clutter-mutter.h"
 #include "meta/meta-backend.h"
 #include "meta/meta-monitor-manager.h"
@@ -218,13 +219,64 @@ meta_stage_before_paint (ClutterStage     *stage,
 }
 
 static void
+debug_paint_max_render_time (MetaStage           *stage,
+                             ClutterPaintContext *paint_context)
+{
+  ClutterStageView *view;
+  cairo_rectangle_int_t view_layout;
+  MetaFrameClock *frame_clock;
+  g_autoptr (GString) string = NULL;
+  PangoLayout *layout;
+  PangoRectangle logical;
+  ClutterColor color;
+  g_autoptr (ClutterPaintNode) node = NULL;
+  ClutterActorBox box;
+
+  view = clutter_paint_context_get_stage_view (paint_context);
+  if (!view)
+    return;
+
+  if (!META_IS_FRAME_CLOCK (clutter_stage_view_get_frame_clock (view)))
+    return;
+
+  clutter_stage_view_get_layout (view, &view_layout);
+  frame_clock = META_FRAME_CLOCK (clutter_stage_view_get_frame_clock (view));
+
+  string = meta_frame_clock_get_max_render_time_debug_info (frame_clock);
+
+  layout = clutter_actor_create_pango_layout (CLUTTER_ACTOR (stage),
+                                              string->str);
+  pango_layout_set_alignment (layout, PANGO_ALIGN_RIGHT);
+  pango_layout_get_pixel_extents (layout, NULL, &logical);
+
+  clutter_color_init (&color, 255, 255, 255, 255);
+  node = clutter_text_node_new (layout, &color);
+
+  box.x1 = view_layout.x;
+  box.y1 = view_layout.y + 30;
+  box.x2 = box.x1 + logical.width;
+  box.y2 = box.y1 + logical.height;
+  clutter_paint_node_add_rectangle (node, &box);
+
+  clutter_paint_node_paint (node, paint_context);
+
+  g_object_unref (layout);
+}
+
+static void
 meta_stage_paint (ClutterActor        *actor,
                   ClutterPaintContext *paint_context)
 {
   MetaStage *stage = META_STAGE (actor);
   ClutterStageView *view;
+  unsigned int clutter_paint_debug_flags;
 
   CLUTTER_ACTOR_CLASS (meta_stage_parent_class)->paint (actor, paint_context);
+
+  clutter_get_debug_flags (NULL, &clutter_paint_debug_flags, NULL);
+  if (G_UNLIKELY (clutter_paint_debug_flags &
+                  CLUTTER_DEBUG_PAINT_MAX_RENDER_TIME))
+    debug_paint_max_render_time (stage, paint_context);
 
   view = clutter_paint_context_get_stage_view (paint_context);
   if (view)

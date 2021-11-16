@@ -50,4 +50,6 @@ void meta_init_debug_utils (void);
    (ycoord) >= (rect).y &&                   \
    (ycoord) <  ((rect).y + (rect).height))
 
+extern int max_render_time_constant_us;
+
 #endif

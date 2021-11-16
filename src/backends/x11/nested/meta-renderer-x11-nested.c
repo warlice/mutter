@@ -27,6 +27,7 @@
 #include <glib-object.h>
 
 #include "backends/meta-backend-private.h"
+#include "backends/meta-frame-clock.h"
 #include "backends/meta-logical-monitor.h"
 #include "backends/meta-output.h"
 #include "backends/meta-renderer.h"
@@ -145,6 +146,7 @@ meta_renderer_x11_nested_ensure_legacy_view (MetaRendererX11Nested *renderer_x11
   MetaBackend *backend = meta_renderer_get_backend (renderer);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
+  g_autoptr (MetaFrameClock) frame_clock = NULL;
   cairo_rectangle_int_t view_layout;
   CoglOffscreen *fake_onscreen;
   MetaRendererView *legacy_view;
@@ -162,6 +164,8 @@ meta_renderer_x11_nested_ensure_legacy_view (MetaRendererX11Nested *renderer_x11
     .width = width,
     .height = height
   };
+
+  frame_clock = meta_frame_clock_new (60.0, 0);
   legacy_view = g_object_new (META_TYPE_RENDERER_VIEW,
                               "name", "legacy nested",
                               "stage", meta_backend_get_stage (backend),
@@ -184,6 +188,7 @@ meta_renderer_x11_nested_create_view (MetaRenderer       *renderer,
     meta_backend_get_monitor_manager (backend);
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
+  g_autoptr (MetaFrameClock) frame_clock = NULL;
   MetaMonitorTransform view_transform;
   float view_scale;
   const MetaCrtcConfig *crtc_config;
@@ -218,12 +223,13 @@ meta_renderer_x11_nested_create_view (MetaRenderer       *renderer,
 
   mode_info = meta_crtc_mode_get_info (crtc_config->mode);
 
+  frame_clock = meta_frame_clock_new (mode_info->refresh_rate, 0);
   view = g_object_new (META_TYPE_RENDERER_VIEW,
                        "name", meta_output_get_name (output),
+                       "frame-clock", frame_clock,
                        "stage", meta_backend_get_stage (backend),
                        "layout", &view_layout,
                        "crtc", crtc,
-                       "refresh-rate", mode_info->refresh_rate,
                        "framebuffer", COGL_FRAMEBUFFER (fake_onscreen),
                        "offscreen", COGL_FRAMEBUFFER (offscreen),
                        "transform", view_transform,

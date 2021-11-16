@@ -17,6 +17,7 @@
 
 #include "config.h"
 
+#include "backends/meta-frame-clock.h"
 #include "clutter/clutter.h"
 #include "clutter/clutter-stage-view-private.h"
 #include "compositor/meta-window-actor-private.h"
@@ -600,7 +601,7 @@ meta_test_actor_stage_views_frame_clock (void)
   GList *stage_views;
   MonitorTestCaseSetup frame_clock_test_setup = initial_test_case_setup;
   MetaMonitorTestSetup *test_setup;
-  ClutterFrameClock *frame_clock;
+  MetaFrameClock *frame_clock;
 
   frame_clock_test_setup.modes[1].width = 1024;
   frame_clock_test_setup.modes[1].height = 768;
@@ -615,10 +616,14 @@ meta_test_actor_stage_views_frame_clock (void)
 
   stage_views = clutter_stage_peek_stage_views (CLUTTER_STAGE (stage));
 
-  g_assert_cmpfloat (clutter_stage_view_get_refresh_rate (stage_views->data),
+  frame_clock =
+    META_FRAME_CLOCK (clutter_stage_view_get_frame_clock (stage_views->data));
+  g_assert_cmpfloat (meta_frame_clock_get_refresh_rate (frame_clock),
                      ==,
                      60.0);
-  g_assert_cmpfloat (clutter_stage_view_get_refresh_rate (stage_views->next->data),
+  frame_clock =
+    META_FRAME_CLOCK (clutter_stage_view_get_frame_clock (stage_views->next->data));
+  g_assert_cmpfloat (meta_frame_clock_get_refresh_rate (frame_clock),
                      ==,
                      30.0);
 
@@ -647,16 +652,19 @@ meta_test_actor_stage_views_frame_clock (void)
                      stage_views->data,
                      stage_views->next->data);
 
-  frame_clock = clutter_actor_pick_frame_clock (actor_1, NULL);
-  g_assert_cmpfloat (clutter_frame_clock_get_refresh_rate (frame_clock),
+  frame_clock =
+    META_FRAME_CLOCK (clutter_actor_pick_frame_clock (actor_1, NULL));
+  g_assert_cmpfloat (meta_frame_clock_get_refresh_rate (frame_clock),
                      ==,
                      60.0);
-  frame_clock = clutter_actor_pick_frame_clock (actor_2, NULL);
-  g_assert_cmpfloat (clutter_frame_clock_get_refresh_rate (frame_clock),
+  frame_clock =
+    META_FRAME_CLOCK (clutter_actor_pick_frame_clock (actor_2, NULL));
+  g_assert_cmpfloat (meta_frame_clock_get_refresh_rate (frame_clock),
                      ==,
                      30.0);
-  frame_clock = clutter_actor_pick_frame_clock (actor_3, NULL);
-  g_assert_cmpfloat (clutter_frame_clock_get_refresh_rate (frame_clock),
+  frame_clock =
+    META_FRAME_CLOCK (clutter_actor_pick_frame_clock (actor_3, NULL));
+  g_assert_cmpfloat (meta_frame_clock_get_refresh_rate (frame_clock),
                      ==,
                      60.0);
 

@@ -211,6 +211,8 @@ mutter_sources = [
   'backends/meta-cursor-tracker-private.h',
   'backends/meta-display-config-shared.h',
   'backends/meta-dnd-private.h',
+  'backends/meta-frame-clock.c',
+  'backends/meta-frame-clock.h',
   'backends/meta-gpu.c',
   'backends/meta-gpu.h',
   'backends/meta-idle-monitor.c',

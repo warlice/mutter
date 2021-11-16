@@ -190,7 +190,6 @@ meta_stage_view_perform_fake_swap (MetaStageView *view,
   closure->view = clutter_view;
   closure->frame_info = (ClutterFrameInfo) {
     .frame_counter = counter,
-    .refresh_rate = clutter_stage_view_get_refresh_rate (clutter_view),
     .presentation_time = g_get_monotonic_time (),
     .flags = CLUTTER_FRAME_INFO_FLAG_NONE,
     .sequence = 0,

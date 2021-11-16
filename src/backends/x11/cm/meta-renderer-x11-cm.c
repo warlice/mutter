@@ -24,6 +24,7 @@
 
 #include "backends/x11/cm/meta-renderer-x11-cm.h"
 
+#include "backends/meta-frame-clock.h"
 #include "backends/meta-renderer-view.h"
 
 struct _MetaRendererX11Cm
@@ -45,6 +46,7 @@ meta_renderer_x11_cm_init_screen_view (MetaRendererX11Cm *renderer_x11_cm,
   MetaRenderer *renderer = META_RENDERER (renderer_x11_cm);
   MetaBackend *backend = meta_renderer_get_backend (renderer);
   ClutterActor *stage = meta_backend_get_stage (backend);
+  g_autoptr (MetaFrameClock) frame_clock = NULL;
   cairo_rectangle_int_t view_layout;
 
   g_return_if_fail (!renderer_x11_cm->screen_view);
@@ -53,8 +55,10 @@ meta_renderer_x11_cm_init_screen_view (MetaRendererX11Cm *renderer_x11_cm,
     .width = width,
     .height = height,
   };
+  frame_clock = meta_frame_clock_new (60.0, 0);
   renderer_x11_cm->screen_view = g_object_new (META_TYPE_RENDERER_VIEW,
                                                "name", "X11 screen",
+                                               "frame-clock", frame_clock,
                                                "stage", stage,
                                                "layout", &view_layout,
                                                "framebuffer", onscreen,

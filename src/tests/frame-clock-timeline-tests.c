@@ -1,3 +1,4 @@
+#include "backends/meta-frame-clock.h"
 #include "clutter/clutter.h"
 #include "tests/clutter-test-utils.h"
 
@@ -55,7 +56,7 @@ static void
 frame_clock_timeline_basic (void)
 {
   GMainLoop *main_loop;
-  ClutterFrameClock *frame_clock;
+  MetaFrameClock *frame_clock;
   ClutterTimeline *timeline;
   gboolean marker1_reached;
   int frame_counter;
@@ -65,10 +66,9 @@ frame_clock_timeline_basic (void)
   int64_t lateness_us;
 
   main_loop = g_main_loop_new (NULL, FALSE);
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &timeline_frame_listener_iface,
-                                         NULL);
+  frame_clock = meta_frame_clock_new (refresh_rate, 0);
+  clutter_frame_clock_set_listener (CLUTTER_FRAME_CLOCK (frame_clock),
+                                    &timeline_frame_listener_iface, NULL);
   g_object_add_weak_pointer (G_OBJECT (frame_clock), (gpointer *) &frame_clock);
 
   timeline = g_object_new (CLUTTER_TYPE_TIMELINE,
@@ -114,7 +114,7 @@ frame_clock_timeline_basic (void)
   g_main_loop_unref (main_loop);
   g_object_unref (timeline);
   g_assert_null (timeline);
-  clutter_frame_clock_destroy (frame_clock);
+  clutter_frame_clock_destroy (CLUTTER_FRAME_CLOCK (frame_clock));
   g_assert_null (frame_clock);
 }
 
@@ -136,8 +136,8 @@ static void
 frame_clock_timeline_switch (void)
 {
   GMainLoop *main_loop;
-  ClutterFrameClock *frame_clock2;
-  ClutterFrameClock *frame_clock1;
+  MetaFrameClock *frame_clock2;
+  MetaFrameClock *frame_clock1;
   ClutterTimeline *timeline;
   int frame_counter;
   int64_t before_us;
@@ -147,15 +147,13 @@ frame_clock_timeline_switch (void)
 
   main_loop = g_main_loop_new (NULL, FALSE);
 
-  frame_clock1 = clutter_frame_clock_new (refresh_rate,
-                                          0,
-                                          &timeline_frame_listener_iface,
-                                          NULL);
+  frame_clock1 = meta_frame_clock_new (refresh_rate, 0);
+  clutter_frame_clock_set_listener (CLUTTER_FRAME_CLOCK (frame_clock1),
+                                    &timeline_frame_listener_iface, NULL);
   g_object_add_weak_pointer (G_OBJECT (frame_clock1), (gpointer *) &frame_clock1);
-  frame_clock2 = clutter_frame_clock_new (refresh_rate,
-                                          0,
-                                          &timeline_frame_listener_iface,
-                                          NULL);
+  frame_clock2 = meta_frame_clock_new (refresh_rate, 0);
+  clutter_frame_clock_set_listener (CLUTTER_FRAME_CLOCK (frame_clock2),
+                                    &timeline_frame_listener_iface, NULL);
   g_object_add_weak_pointer (G_OBJECT (frame_clock2), (gpointer *) &frame_clock2);
 
   timeline = g_object_new (CLUTTER_TYPE_TIMELINE,
@@ -195,7 +193,8 @@ frame_clock_timeline_switch (void)
    */
   g_assert_cmpint (lateness_us, >, -2 * refresh_interval_us);
 
-  g_assert (clutter_timeline_get_frame_clock (timeline) == frame_clock2);
+  g_assert (clutter_timeline_get_frame_clock (timeline) ==
+            CLUTTER_FRAME_CLOCK (frame_clock2));
 
   /* The duration is 1s, with a 60hz clock, and we switch after 0.5s. To verify
    * we continued to get frames, check that we have a bit more than half of the
@@ -206,13 +205,32 @@ frame_clock_timeline_switch (void)
   g_main_loop_unref (main_loop);
   g_object_unref (timeline);
   g_assert_null (timeline);
-  clutter_frame_clock_destroy (frame_clock1);
+  clutter_frame_clock_destroy (CLUTTER_FRAME_CLOCK (frame_clock1));
   g_assert_null (frame_clock1);
-  clutter_frame_clock_destroy (frame_clock2);
+  clutter_frame_clock_destroy (CLUTTER_FRAME_CLOCK (frame_clock2));
   g_assert_null (frame_clock2);
 }
 
-CLUTTER_TEST_SUITE (
-  CLUTTER_TEST_UNIT ("/frame-clock/timeline/basic", frame_clock_timeline_basic)
-  CLUTTER_TEST_UNIT ("/frame-clock/timeline/switch", frame_clock_timeline_switch)
-)
+static void
+init_tests (void)
+{
+  g_test_add_func ("/frame-clock/timeline/basic",
+                   frame_clock_timeline_basic);
+  g_test_add_func ("/frame-clock/timeline/switch",
+                   frame_clock_timeline_switch);
+}
+
+int
+main (int argc, char *argv[])
+{
+  g_autoptr (MetaContext) context = NULL;
+
+  context = meta_create_test_context (META_CONTEXT_TEST_TYPE_NESTED,
+                                      META_CONTEXT_TEST_FLAG_NO_X11);
+  g_assert (meta_context_configure (context, &argc, &argv, NULL));
+
+  init_tests ();
+
+  return meta_context_test_run_tests (META_CONTEXT_TEST (context),
+                                      META_TEST_RUN_FLAG_NONE);
+}

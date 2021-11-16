@@ -80,6 +80,12 @@ static gint verbose_topics = 0;
 static gboolean is_wayland_compositor = FALSE;
 static int debug_paint_flags = 0;
 
+
+/* A constant added to heuristic max render time to account for variations
+ * in the estimates.
+ */
+int max_render_time_constant_us = 2000;
+
 #ifdef WITH_VERBOSE_MODE
 static FILE* logfile = NULL;
 
@@ -583,4 +589,10 @@ MetaDebugPaintFlag
 meta_get_debug_paint_flags (void)
 {
   return debug_paint_flags;
+}
+
+void
+meta_debug_set_max_render_time_constant (int max_render_time_constant_us)
+{
+  max_render_time_constant_us = max_render_time_constant_us;
 }

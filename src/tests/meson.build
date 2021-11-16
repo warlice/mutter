@@ -267,6 +267,20 @@ if have_native_tests
     install_rpath: pkglibdir,
   )
 
+  # Tests using the native backend
+  test_cases += [
+    {
+      'name': 'frame-clock',
+      'suite': 'backends',
+      'sources': [ 'frame-clock-tests.c', ],
+    },
+    {
+      'name': 'frame-clock-timeline',
+      'suite': 'backends',
+      'sources': [ 'frame-clock-timeline-tests.c', ],
+    },
+  ]
+
   # Native backend tests
   test_cases += [
     {
