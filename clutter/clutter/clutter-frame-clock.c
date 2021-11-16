@@ -917,6 +917,15 @@ clutter_frame_clock_destroy (ClutterFrameClock *frame_clock)
   g_object_unref (frame_clock);
 }
 
+int
+clutter_frame_clock_get_priority (ClutterFrameClock *frame_clock)
+{
+  ClutterFrameClockPrivate *priv =
+    clutter_frame_clock_get_instance_private (frame_clock);
+
+  return (int) roundf (priv->refresh_rate * 1000.0);
+}
+
 static void
 clutter_frame_clock_dispose (GObject *object)
 {
