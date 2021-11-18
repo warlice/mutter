@@ -570,6 +570,15 @@ ensure_x11_unix_dir (GError **error)
       return FALSE;
     }
 
+  /* The original mode may have been modified by umask, so set it again */
+  if (chmod (X11_TMP_UNIX_DIR, 01777) != 0)
+    {
+      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
+                   "Failed to set permissions of directory \"%s\": %s",
+                   X11_TMP_UNIX_DIR, g_strerror (errno));
+      return FALSE;
+    }
+
   return TRUE;
 }
 
