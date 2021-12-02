@@ -14,6 +14,22 @@ custom_target('mutter.desktop',
   install_dir: join_paths(datadir, 'applications'),
 )
 
+desktop_conf = configuration_data()
+desktop_conf.set('bindir', bindir)
+
+i18n.merge_file('org.gnome.Mutter.Sdk.desktop',
+  input: configure_file(
+    input: 'org.gnome.Mutter.Sdk.desktop.in.in',
+    output: 'org.gnome.Mutter.Sdk.desktop.in',
+    configuration: desktop_conf
+  ),
+  output: 'org.gnome.Mutter.Sdk.desktop',
+  po_dir: po_path,
+  install: true,
+  install_dir: desktopdir,
+  type: 'desktop'
+)
+
 # Unconditionally use this dir to avoid a circular dep with gnomecc
 gnome_keybindings_keysdir = join_paths(datadir, 'gnome-control-center/keybindings')
 
@@ -64,3 +80,6 @@ if have_libgudev
     install_dir: join_paths(udev_dir, 'rules.d'),
   )
 endif
+
+subdir('icons')
+subdir('dbus-interfaces')

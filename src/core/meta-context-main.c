@@ -40,6 +40,7 @@
 
 #ifdef HAVE_NATIVE_BACKEND
 #include "backends/native/meta-backend-native.h"
+#include "core/meta-sdk.h"
 #endif
 
 #ifdef HAVE_WAYLAND
@@ -68,11 +69,10 @@ typedef struct _MetaContextMainOptions
 #ifdef HAVE_NATIVE_BACKEND
   gboolean display_server;
   gboolean headless;
-#endif
-  gboolean unsafe_mode;
-#ifdef HAVE_NATIVE_BACKEND
+  gboolean sdk;
   GList *virtual_monitor_infos;
 #endif
+  gboolean unsafe_mode;
 } MetaContextMainOptions;
 
 struct _MetaContextMain
@@ -83,7 +83,11 @@ struct _MetaContextMain
 
   MetaCompositorType compositor_type;
 
+#ifdef HAVE_NATIVE_BACKEND
   GList *persistent_virtual_monitors;
+
+  MetaSdk *sdk;
+#endif
 };
 
 G_DEFINE_TYPE (MetaContextMain, meta_context_main, META_TYPE_CONTEXT)
@@ -121,14 +125,23 @@ check_configuration (MetaContextMain  *context_main,
       return FALSE;
     }
 
-  if (context_main->options.x11.force && context_main->options.headless)
+  if (context_main->options.headless && context_main->options.sdk)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Can't run in both SDK and headless mode");
+      return FALSE;
+    }
+
+  if (context_main->options.x11.force &&
+      (context_main->options.headless || context_main->options.sdk))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Can't run in X11 mode headlessly");
       return FALSE;
     }
 
-  if (context_main->options.display_server && context_main->options.headless)
+  if (context_main->options.display_server &&
+      (context_main->options.headless || context_main->options.sdk))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Can't run in display server mode headlessly");
@@ -241,6 +254,7 @@ determine_compositor_type (MetaContextMain  *context_main,
 #ifdef HAVE_NATIVE_BACKEND
       context_main->options.display_server ||
       context_main->options.headless ||
+      context_main->options.sdk ||
 #endif /* HAVE_NATIVE_BACKEND */
       context_main->options.nested)
     return META_COMPOSITOR_TYPE_WAYLAND;
@@ -378,6 +392,19 @@ add_persistent_virtual_monitors (MetaContextMain  *context_main,
 
   return TRUE;
 }
+
+static gboolean
+initialize_sdk (MetaContext  *context,
+                GError      **error)
+{
+  MetaContextMain *context_main = META_CONTEXT_MAIN (context);
+
+  context_main->sdk = meta_sdk_new (context, error);
+  if (!context_main->sdk)
+    return FALSE;
+
+  return TRUE;
+}
 #endif
 
 static gboolean
@@ -396,6 +423,12 @@ meta_context_main_setup (MetaContext  *context,
 #ifdef HAVE_NATIVE_BACKEND
   if (!add_persistent_virtual_monitors (context_main, error))
     return FALSE;
+
+  if (context_main->options.sdk)
+    {
+      if (!initialize_sdk (context, error))
+        return FALSE;
+    }
 #endif
 
   return TRUE;
@@ -473,7 +506,8 @@ meta_context_main_create_backend (MetaContext  *context,
       if (context_main->options.nested)
         return create_nested_backend (context, error);
 #ifdef HAVE_NATIVE_BACKEND
-      else if (context_main->options.headless)
+      else if (context_main->options.headless ||
+               context_main->options.sdk)
         return create_headless_backend (context, error);
       else
         return create_native_backend (context, error);
@@ -623,6 +657,11 @@ meta_context_main_add_option_entries (MetaContextMain *context_main)
       N_("Run as a headless display server")
     },
     {
+      "sdk", 0, 0, G_OPTION_ARG_NONE,
+      &context_main->options.sdk,
+      N_("Run SDK")
+    },
+    {
       "virtual-monitor", 0, 0, G_OPTION_ARG_CALLBACK,
       add_virtual_monitor_cb,
       N_("Add persistent virtual monitor (WxH or WxH@R)")
@@ -668,6 +707,8 @@ meta_context_main_finalize (GObject *object)
 
   g_list_free_full (context_main->persistent_virtual_monitors, g_object_unref);
   context_main->persistent_virtual_monitors = NULL;
+
+  g_clear_object (&context_main->sdk);
 #endif
 
   G_OBJECT_CLASS (meta_context_main_parent_class)->finalize (object);

@@ -51,4 +51,6 @@ GDBusConnection * meta_remote_desktop_get_connection (MetaRemoteDesktop *remote_
 MetaRemoteDesktop * meta_remote_desktop_new (MetaBackend            *backend,
                                              MetaDbusSessionWatcher *session_watcher);
 
+gboolean meta_remote_desktop_is_enabled (MetaRemoteDesktop *remote_desktop);
+
 #endif /* META_REMOTE_DESKTOP_H */

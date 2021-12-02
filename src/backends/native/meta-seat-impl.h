@@ -215,6 +215,11 @@ void meta_seat_impl_set_keyboard_repeat_in_impl (MetaSeatImpl *seat_impl,
                                                  uint32_t      delay,
                                                  uint32_t      interval);
 
+void meta_seat_impl_update_touch_mode (MetaSeatImpl *seat_impl);
+
+void meta_seat_impl_add_virtual_device (MetaSeatImpl *seat_impl,
+                                        ClutterInputDevice *device);
+
 MetaBarrierManagerNative * meta_seat_impl_get_barrier_manager (MetaSeatImpl *seat_impl);
 
 void meta_seat_impl_set_pointer_constraint (MetaSeatImpl              *seat_impl,
