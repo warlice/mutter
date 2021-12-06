@@ -936,6 +936,7 @@ meta_xwayland_start_xserver (MetaXWaylandManager *manager,
   } x11_extension_names[] = {
     { "SECURITY", META_XWAYLAND_EXTENSION_SECURITY },
     { "XTEST", META_XWAYLAND_EXTENSION_XTEST },
+    { "MIT-SHM", META_XWAYLAND_EXTENSION_MIT_SHM },
   };
 
   int xwayland_client_fd[2];

@@ -42,6 +42,7 @@ typedef enum _MetaXwaylandExtension
 {
   META_XWAYLAND_EXTENSION_SECURITY = (1 << 0),
   META_XWAYLAND_EXTENSION_XTEST = (1 << 1),
+  META_XWAYLAND_EXTENSION_MIT_SHM = (1 << 2),
 } MetaXwaylandExtension;
 
 #define META_TYPE_SETTINGS (meta_settings_get_type ())
