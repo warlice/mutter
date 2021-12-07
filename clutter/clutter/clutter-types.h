@@ -54,6 +54,7 @@ typedef struct _ClutterPaintContext             ClutterPaintContext;
 typedef struct _ClutterPaintNode                ClutterPaintNode;
 typedef struct _ClutterContent                  ClutterContent; /* dummy */
 typedef struct _ClutterScrollActor	        ClutterScrollActor;
+typedef struct _ClutterSnapshot                 ClutterSnapshot;
 typedef struct _ClutterFrameClock               ClutterFrameClock;
 
 typedef struct _ClutterInterval         	ClutterInterval;

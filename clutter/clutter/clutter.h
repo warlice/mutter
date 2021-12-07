@@ -88,6 +88,7 @@
 #include "clutter/clutter-shader-types.h"
 #include "clutter/clutter-swipe-action.h"
 #include "clutter/clutter-snap-constraint.h"
+#include "clutter/clutter-snapshot.h"
 #include "clutter/clutter-stage.h"
 #include "clutter/clutter-stage-manager.h"
 #include "clutter/clutter-stage-view.h"
