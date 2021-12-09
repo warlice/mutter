@@ -19,16 +19,74 @@
 
 #include "clutter-snapshot.h"
 
-#include "clutter/clutter-paint-context.h"
+#include "clutter/clutter-color.h"
+#include "clutter/clutter-paint-context-private.h"
+#include "clutter/clutter-paint-node-private.h"
+#include "clutter/clutter-paint-nodes.h"
+
+typedef struct _ClutterSnapshotState ClutterSnapshotState;
+
+typedef ClutterPaintNode * (* ClutterSnapshotCollectFunc) (ClutterSnapshot            *snapshot,
+                                                           const ClutterSnapshotState *state);
+
+struct _ClutterSnapshotState
+{
+  ClutterSnapshotCollectFunc collect_func;
+  ClutterPaintNode *node;
+};
 
 struct _ClutterSnapshot
 {
   GObject parent_instance;
 
   ClutterPaintContext *paint_context;
+  GArray *states;
 };
 
 G_DEFINE_FINAL_TYPE (ClutterSnapshot, clutter_snapshot, G_TYPE_OBJECT)
+
+static ClutterPaintNode *
+collect_default (ClutterSnapshot            *snapshot,
+                 const ClutterSnapshotState *state)
+{
+  gboolean has_operations = state->node->operations != NULL &&
+                            state->node->operations->len > 0;
+  gboolean has_children = state->node->n_children > 0;
+
+  if (!has_children && !has_operations)
+    return NULL;
+
+  return clutter_paint_node_ref (state->node);
+}
+
+static inline ClutterSnapshotState *
+get_current_state (ClutterSnapshot *snapshot)
+{
+  unsigned int size = snapshot->states->len;
+
+  g_assert (size > 0);
+
+  return &g_array_index (snapshot->states, ClutterSnapshotState, size - 1);
+}
+
+static inline void
+push_state (ClutterSnapshot            *snapshot,
+            ClutterSnapshotCollectFunc  collect_func,
+            ClutterPaintNode           *node)
+{
+  ClutterSnapshotState state = {
+    .collect_func = collect_func,
+    .node = node,
+  };
+
+  g_array_append_val (snapshot->states, state);
+}
+
+static void
+snapshot_state_clear (ClutterSnapshotState *state)
+{
+  g_clear_pointer (&state->node, clutter_paint_node_unref);
+}
 
 static void
 clutter_snapshot_finalize (GObject *object)
@@ -36,6 +94,7 @@ clutter_snapshot_finalize (GObject *object)
   ClutterSnapshot *self = (ClutterSnapshot *)object;
 
   g_clear_pointer (&self->paint_context, clutter_paint_context_unref);
+  g_clear_pointer (&self->states, g_array_unref);
 
   G_OBJECT_CLASS (clutter_snapshot_parent_class)->finalize (object);
 }
@@ -51,6 +110,9 @@ clutter_snapshot_class_init (ClutterSnapshotClass *klass)
 static void
 clutter_snapshot_init (ClutterSnapshot *snapshot)
 {
+  snapshot->states = g_array_new (FALSE, FALSE, sizeof (ClutterSnapshotState));
+  g_array_set_clear_func (snapshot->states,
+                          (GDestroyNotify) snapshot_state_clear);
 }
 
 /**
@@ -64,12 +126,297 @@ clutter_snapshot_init (ClutterSnapshot *snapshot)
 ClutterSnapshot *
 clutter_snapshot_new (ClutterPaintContext *paint_context)
 {
+  ClutterPaintNode *root_node;
   ClutterSnapshot *snapshot;
+  CoglFramebuffer *framebuffer;
 
   g_return_val_if_fail (paint_context != NULL, NULL);
 
   snapshot = g_object_new (CLUTTER_TYPE_SNAPSHOT, NULL);
   snapshot->paint_context = clutter_paint_context_ref (paint_context);
 
+  /* Ensure at least one node */
+  framebuffer = clutter_paint_context_get_base_framebuffer (paint_context);
+  root_node = clutter_root_node_new (framebuffer,
+                                     &COGL_COLOR_INIT (0x00, 0x00, 0x00, 0x00),
+                                     0);
+  push_state (snapshot, collect_default, root_node);
+
   return snapshot;
+}
+
+/**
+ * clutter_snapshot_free_to_node:
+ * @snapshot: a #ClutterSnapshot
+ *
+ * Frees @snapshot and returns the root node of its render tree.
+ *
+ * Returns: (transfer full): a #ClutterPaintNode
+ */
+ClutterPaintNode *
+clutter_snapshot_free_to_node (ClutterSnapshot *snapshot)
+{
+  const ClutterSnapshotState *state;
+  ClutterPaintNode *root_node;
+  unsigned int forgotten_pops = 0;
+  unsigned int i;
+
+  g_return_val_if_fail (CLUTTER_IS_SNAPSHOT (snapshot), NULL);
+
+  g_assert (snapshot->states->len > 0);
+  forgotten_pops = snapshot->states->len - 1;
+
+  for (i = forgotten_pops; i >= 1; i--)
+    clutter_snapshot_pop (snapshot);
+
+  if (forgotten_pops)
+    g_warning ("Too many clutter_snapshot_push_*() calls. %u pops remaining.", forgotten_pops);
+
+  g_assert (snapshot->states->len == 1);
+
+  state = get_current_state (snapshot);
+  root_node = clutter_paint_node_ref (state->node);
+  g_object_unref (snapshot);
+
+  return root_node;
+}
+
+/**
+ * clutter_snapshot_pop:
+ * @snapshot: a #ClutterSnapshot
+ *
+ * Removes the top element from the stack of render nodes, and
+ * appends it to the node underneath it.
+ */
+void
+clutter_snapshot_pop (ClutterSnapshot *snapshot)
+{
+  unsigned int size;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  size = snapshot->states->len;
+
+  if (size > 1)
+    {
+      const ClutterSnapshotState *current_state;
+      const ClutterSnapshotState *parent_state;
+      ClutterPaintNode *node;
+
+      current_state = get_current_state (snapshot);
+      parent_state =
+        &g_array_index (snapshot->states, ClutterSnapshotState, size - 2);
+
+      node = current_state->collect_func (snapshot, current_state);
+
+      if (node)
+        clutter_paint_node_add_child (parent_state->node, current_state->node);
+
+      g_array_remove_index (snapshot->states, size - 1);
+
+      g_clear_pointer (&node, clutter_paint_node_unref);
+    }
+  else
+    {
+      g_warning ("Unexpected pop without a corresponding push");
+    }
+}
+
+/**
+ * clutter_snapshot_add_rectangle:
+ * @snapshot: a #ClutterSnapshot
+ * @rect: a #ClutterActorBox
+ *
+ * Adds a rectangle region to the @snapshot, as described by the
+ * passed @rect. This rectangle will paint the current operation.
+ */
+void
+clutter_snapshot_add_rectangle (ClutterSnapshot       *snapshot,
+                                const ClutterActorBox *rect)
+{
+  const ClutterSnapshotState *current_state;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  if (snapshot->states->len == 1)
+    {
+      g_warning ("No paint operation was pushed");
+      return;
+    }
+
+  current_state = get_current_state (snapshot);
+  clutter_paint_node_add_rectangle (current_state->node, rect);
+}
+
+/**
+ * clutter_snapshot_add_texture_rectangle:
+ * @snapshot: a #ClutterSnapshot
+ * @rect: a #ClutterActorBox
+ * @x_1: the left X coordinate of the texture
+ * @y_1: the top Y coordinate of the texture
+ * @x_2: the right X coordinate of the texture
+ * @y_2: the bottom Y coordinate of the texture
+ *
+ * Adds a rectangle region to the @snapshot, with texture coordinates.
+ */
+void
+clutter_snapshot_add_texture_rectangle (ClutterSnapshot       *snapshot,
+                                        const ClutterActorBox *rect,
+                                        float                  x_1,
+                                        float                  y_1,
+                                        float                  x_2,
+                                        float                  y_2)
+{
+  const ClutterSnapshotState *current_state;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  if (snapshot->states->len == 1)
+    {
+      g_warning ("No paint operation was pushed");
+      return;
+    }
+
+  current_state = get_current_state (snapshot);
+  clutter_paint_node_add_texture_rectangle (current_state->node,
+                                            rect,
+                                            x_1, y_1,
+                                            x_2, y_2);
+}
+
+/**
+ * clutter_snapshot_add_multitexture_rectangle:
+ * @snapshot: a #ClutterSnapshot
+ * @rect: a #ClutterActorBox
+ * @text_coords: array of multitexture values
+ * @text_coords_len: number of items of @text_coords
+ *
+ * Adds a rectangle region to the @snapshot, with multitexture coordinates.
+ */
+void
+clutter_snapshot_add_multitexture_rectangle (ClutterSnapshot       *snapshot,
+                                             const ClutterActorBox *rect,
+                                             const float           *text_coords,
+                                             unsigned int           text_coords_len)
+{
+  const ClutterSnapshotState *current_state;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  if (snapshot->states->len == 1)
+    {
+      g_warning ("No paint operation was pushed");
+      return;
+    }
+
+  current_state = get_current_state (snapshot);
+  clutter_paint_node_add_multitexture_rectangle (current_state->node,
+                                                 rect,
+                                                 text_coords,
+                                                 text_coords_len);
+}
+
+/**
+ * clutter_snapshot_add_rectangles:
+ * @snapshot: a #ClutterSnapshot
+ * @coords: (in) (array length=n_rects) (transfer none): array of
+ *   coordinates containing groups of 4 float values: [x_1, y_1, x_2, y_2] that
+ *   are interpreted as two position coordinates; one for the top left of the
+ *   rectangle (x1, y1), and one for the bottom right of the rectangle
+ *   (x2, y2).
+ * @n_rects: number of rectangles defined in @coords.
+ *
+ * Adds a series of rectangles to @snapshot.
+ *
+ * As a general rule for better performance its recommended to use this API
+ * instead of calling clutter_snapshot_add_rectangle() separately for
+ * multiple rectangles if all of the rectangles will be drawn together.
+ *
+ * See cogl_framebuffer_draw_rectangles().
+ */
+void
+clutter_snapshot_add_rectangles (ClutterSnapshot *snapshot,
+                                 const float     *coords,
+                                 unsigned int     n_rects)
+{
+  const ClutterSnapshotState *current_state;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  if (snapshot->states->len == 1)
+    {
+      g_warning ("No paint operation was pushed");
+      return;
+    }
+
+  current_state = get_current_state (snapshot);
+  clutter_paint_node_add_rectangles (current_state->node, coords, n_rects);
+}
+
+/**
+ * clutter_snapshot_add_texture_rectangles:
+ * @snapshot: a #ClutterSnapshot
+ * @coords: (in) (array length=n_rects) (transfer none): array containing
+ *   groups of 8 float values: [x_1, y_1, x_2, y_2, s_1, t_1, s_2, t_2]
+ *   that have the same meaning as the arguments for
+ *   cogl_framebuffer_draw_textured_rectangle().
+ * @n_rects: number of rectangles defined in @coords.
+ *
+ * Adds a series of rectangles to @snapshot.
+ *
+ * The given texture coordinates should always be normalized such that
+ * (0, 0) corresponds to the top left and (1, 1) corresponds to the
+ * bottom right. To map an entire texture across the rectangle pass
+ * in s_1=0, t_1=0, s_2=1, t_2=1.
+ *
+ * See cogl_framebuffer_draw_textured_rectangles().
+ */
+void
+clutter_snapshot_add_texture_rectangles (ClutterSnapshot *snapshot,
+                                         const float     *coords,
+                                         unsigned int     n_rects)
+{
+  const ClutterSnapshotState *current_state;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  if (snapshot->states->len == 1)
+    {
+      g_warning ("No paint operation was pushed");
+      return;
+    }
+
+  current_state = get_current_state (snapshot);
+  clutter_paint_node_add_texture_rectangles (current_state->node,
+                                             coords,
+                                             n_rects);
+}
+
+/**
+ * clutter_snapshot_add_primitive: (skip)
+ * @snapshot: a #ClutterSnapshot
+ * @primitive: a Cogl primitive
+ *
+ * Adds a region described by a #CoglPrimitive to the @snapshot.
+ *
+ * This function acquires a reference on @primitive, so it is safe
+ * to call cogl_object_unref() when it returns.
+ */
+void
+clutter_snapshot_add_primitive (ClutterSnapshot *snapshot,
+                                CoglPrimitive   *primitive)
+{
+
+  const ClutterSnapshotState *current_state;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  if (snapshot->states->len == 1)
+    {
+      g_warning ("No paint operation was pushed");
+      return;
+    }
+
+  current_state = get_current_state (snapshot);
+  clutter_paint_node_add_primitive (current_state->node, primitive);
 }

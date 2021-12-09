@@ -35,6 +35,43 @@ G_DECLARE_FINAL_TYPE (ClutterSnapshot, clutter_snapshot, CLUTTER, SNAPSHOT, GObj
 CLUTTER_EXPORT
 ClutterSnapshot * clutter_snapshot_new (ClutterPaintContext *paint_context);
 
+CLUTTER_EXPORT
+ClutterPaintNode * clutter_snapshot_free_to_node (ClutterSnapshot *snapshot);
+
+CLUTTER_EXPORT
+void clutter_snapshot_pop (ClutterSnapshot *snapshot);
+
+CLUTTER_EXPORT
+void clutter_snapshot_add_rectangle (ClutterSnapshot       *snapshot,
+                                     const ClutterActorBox *rect);
+
+CLUTTER_EXPORT
+void clutter_snapshot_add_texture_rectangle (ClutterSnapshot       *snapshot,
+                                             const ClutterActorBox *rect,
+                                             float                  x_1,
+                                             float                  y_1,
+                                             float                  x_2,
+                                             float                  y_2);
+
+CLUTTER_EXPORT
+void clutter_snapshot_add_multitexture_rectangle (ClutterSnapshot       *snapshot,
+                                                  const ClutterActorBox *rect,
+                                                  const float           *text_coords,
+                                                  unsigned int           text_coords_len);
+
+CLUTTER_EXPORT
+void clutter_snapshot_add_rectangles (ClutterSnapshot *snapshot,
+                                      const float     *coords,
+                                      unsigned int     n_rects);
+CLUTTER_EXPORT
+void clutter_snapshot_add_texture_rectangles (ClutterSnapshot *snapshot,
+                                              const float     *coords,
+                                              unsigned int     n_rects);
+
+CLUTTER_EXPORT
+void clutter_snapshot_add_primitive (ClutterSnapshot *snapshot,
+                                     CoglPrimitive   *primitive);
+
 G_END_DECLS
 
 #endif /* CLUTTER_SNAPSHOT_H */
