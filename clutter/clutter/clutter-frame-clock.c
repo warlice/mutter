@@ -283,6 +283,12 @@ void
 clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
                                       ClutterFrameInfo  *frame_info)
 {
+#ifdef CLUTTER_ENABLE_DEBUG
+  const char *debug_state =
+    frame_clock->state == CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_TWO ?
+    "Triple buffering" : "Double buffering";
+#endif
+
   COGL_TRACE_BEGIN_SCOPED (ClutterFrameClockNotifyPresented,
                            "Clutter::FrameClock::presented()");
   COGL_TRACE_DESCRIBE (ClutterFrameClockNotifyPresented,
@@ -408,7 +414,8 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
         frame_info->cpu_time_before_buffer_swap_us;
 
       CLUTTER_NOTE (FRAME_TIMINGS,
-                    "update2dispatch %ld µs, dispatch2swap %ld µs, swap2render %ld µs, swap2flip %ld µs",
+                    "%s: update2dispatch %ld µs, dispatch2swap %ld µs, swap2render %ld µs, swap2flip %ld µs",
+                    debug_state,
                     frame_clock->last_dispatch_lateness_us,
                     dispatch_to_swap_us,
                     swap_to_rendering_done_us,
@@ -428,7 +435,8 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
     }
   else
     {
-      CLUTTER_NOTE (FRAME_TIMINGS, "update2dispatch %ld µs",
+      CLUTTER_NOTE (FRAME_TIMINGS, "%s: update2dispatch %ld µs",
+                    debug_state,
                     frame_clock->last_dispatch_lateness_us);
     }
 
