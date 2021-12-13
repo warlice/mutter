@@ -456,6 +456,93 @@ clutter_snapshot_push_color (ClutterSnapshot *snapshot,
 }
 
 /**
+ * clutter_snapshot_push_rotate:
+ * @snapshot: a #ClutterSnapshot
+ * @angle: the rotation angle
+ *
+ * Rotates @snapshot's coordinate system by @angle degrees in 2D space -
+ * or in 3D speak, rotates around the Z axis.
+ */
+void
+clutter_snapshot_push_rotate (ClutterSnapshot *snapshot,
+                              float            angle)
+{
+  graphene_matrix_t rotation;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  graphene_matrix_init_rotate (&rotation, angle, graphene_vec3_z_axis ());
+  clutter_snapshot_push_transform (snapshot, &rotation);
+}
+
+/**
+ * clutter_snapshot_push_rotate_3d:
+ * @snapshot: a #ClutterSnapshot
+ * @angle: the rotation angle
+ * @axis: the rotation angle
+ *
+ * Rotates @snapshot's coordinate system by @angle degrees around @axis
+ */
+void
+clutter_snapshot_push_rotate_3d (ClutterSnapshot       *snapshot,
+                                 float                  angle,
+                                 const graphene_vec3_t *axis)
+{
+  graphene_matrix_t rotation;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_if_fail (axis != NULL);
+
+  graphene_matrix_init_rotate (&rotation, angle, axis);
+  clutter_snapshot_push_transform (snapshot, &rotation);
+}
+
+/**
+ * clutter_snapshot_push_scale:
+ * @snapshot: a #ClutterSnapshot
+ * @factor_x: scaling factor on the X axis
+ * @factor_y: scaling factor on the Y axis
+ *
+ * Scales @snapshot's coordinate system in 2-dimensional space by
+ * the given factors.
+ */
+void
+clutter_snapshot_push_scale (ClutterSnapshot *snapshot,
+                             float            factor_x,
+                             float            factor_y)
+{
+  graphene_matrix_t scale;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  graphene_matrix_init_scale (&scale, factor_x, factor_y, 1.0);
+  clutter_snapshot_push_transform (snapshot, &scale);
+}
+
+/**
+ * clutter_snapshot_push_scale_3d:
+ * @snapshot: a #ClutterSnapshot
+ * @factor_x: scaling factor on the X axis
+ * @factor_y: scaling factor on the Y axis
+ * @factor_z: scaling factor on the Z axis
+ *
+ * Scales @snapshot's coordinate system by the given factors.
+ */
+void
+clutter_snapshot_push_scale_3d (ClutterSnapshot *snapshot,
+                                float            factor_x,
+                                float            factor_y,
+                                float            factor_z)
+{
+  graphene_matrix_t scale;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  graphene_matrix_init_scale (&scale, factor_x, factor_y, factor_z);
+  clutter_snapshot_push_transform (snapshot, &scale);
+}
+
+/**
  * clutter_snapshot_push_texture:
  * @snapshot: a #ClutterSnapshot
  * @texture: a #CoglTexture
@@ -504,4 +591,64 @@ clutter_snapshot_push_texture_full (ClutterSnapshot      *snapshot,
                                            mag_filter);
 
   push_state (snapshot, collect_default, texture_node);
+}
+
+/**
+ * clutter_snapshot_push_transform:
+ * @snapshot: a #ClutterSnapshot
+ * @transform: a #graphene_matrix_t
+ *
+ * Pushes a transform node to @snapshot.
+ */
+void
+clutter_snapshot_push_transform (ClutterSnapshot         *snapshot,
+                                 const graphene_matrix_t *transform)
+{
+  ClutterPaintNode *transform_node;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_if_fail (transform != NULL);
+
+  transform_node = clutter_transform_node_new (transform);
+  push_state (snapshot, collect_default, transform_node);
+}
+
+/**
+ * clutter_snapshot_push_translate:
+ * @snapshot: a #ClutterSnapshot
+ * @point: a #graphene_point_t
+ *
+ * Pushes a 2D translation node to @snapshot.
+ */
+void
+clutter_snapshot_push_translate (ClutterSnapshot        *snapshot,
+                                 const graphene_point_t *point)
+{
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_if_fail (point != NULL);
+
+  clutter_snapshot_push_translate_3d (snapshot,
+                                      &GRAPHENE_POINT3D_INIT (point->x,
+                                                              point->y,
+                                                              0.0));
+}
+
+/**
+ * clutter_snapshot_push_translate_3d:
+ * @snapshot: a #ClutterSnapshot
+ * @point: a #graphene_point3d_t
+ *
+ * Pushes a 3D translation node to @snapshot.
+ */
+void
+clutter_snapshot_push_translate_3d (ClutterSnapshot          *snapshot,
+                                    const graphene_point3d_t *point)
+{
+  graphene_matrix_t translate;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_if_fail (point != NULL);
+
+  graphene_matrix_init_translate (&translate, point);
+  clutter_snapshot_push_transform (snapshot, &translate);
 }

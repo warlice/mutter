@@ -49,6 +49,26 @@ void clutter_snapshot_push_color (ClutterSnapshot *snapshot,
                                   const CoglColor *color);
 
 CLUTTER_EXPORT
+void clutter_snapshot_push_rotate (ClutterSnapshot *snapshot,
+                                   float            angle);
+
+CLUTTER_EXPORT
+void clutter_snapshot_push_rotate_3d (ClutterSnapshot       *snapshot,
+                                      float                  angle,
+                                      const graphene_vec3_t *axis);
+
+CLUTTER_EXPORT
+void clutter_snapshot_push_scale (ClutterSnapshot *snapshot,
+                                  float            factor_x,
+                                  float            factor_y);
+
+CLUTTER_EXPORT
+void clutter_snapshot_push_scale_3d (ClutterSnapshot *snapshot,
+                                     float            factor_x,
+                                     float            factor_y,
+                                     float            factor_z);
+
+CLUTTER_EXPORT
 void clutter_snapshot_push_texture (ClutterSnapshot *snapshot,
                                     CoglTexture     *texture);
 
@@ -58,6 +78,18 @@ void clutter_snapshot_push_texture_full (ClutterSnapshot      *snapshot,
                                          const CoglColor      *blend_color,
                                          ClutterScalingFilter  min_filter,
                                          ClutterScalingFilter  mag_filter);
+
+CLUTTER_EXPORT
+void clutter_snapshot_push_transform (ClutterSnapshot         *snapshot,
+                                      const graphene_matrix_t *transform);
+
+CLUTTER_EXPORT
+void clutter_snapshot_push_translate (ClutterSnapshot        *snapshot,
+                                      const graphene_point_t *point);
+
+CLUTTER_EXPORT
+void clutter_snapshot_push_translate_3d (ClutterSnapshot          *snapshot,
+                                         const graphene_point3d_t *point);
 
 CLUTTER_EXPORT
 void clutter_snapshot_add_rectangle (ClutterSnapshot       *snapshot,
