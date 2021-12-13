@@ -19,7 +19,6 @@
 
 #include "clutter-snapshot.h"
 
-#include "clutter/clutter-color.h"
 #include "clutter/clutter-paint-context-private.h"
 #include "clutter/clutter-paint-node-private.h"
 #include "clutter/clutter-paint-nodes.h"
@@ -419,4 +418,90 @@ clutter_snapshot_add_primitive (ClutterSnapshot *snapshot,
 
   current_state = get_current_state (snapshot);
   clutter_paint_node_add_primitive (current_state->node, primitive);
+}
+
+/**
+ * clutter_snapshot_push_clip:
+ * @snapshot: a #ClutterSnapshot
+ *
+ * Pushes a clip node to @snapshot.
+ */
+void
+clutter_snapshot_push_clip (ClutterSnapshot *snapshot)
+{
+  ClutterPaintNode *clip_node;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  clip_node = clutter_clip_node_new ();
+  push_state (snapshot, collect_default, clip_node);
+}
+
+/**
+ * clutter_snapshot_push_color:
+ * @snapshot: a #ClutterSnapshot
+ *
+ * Pushes a color node to @snapshot.
+ */
+void
+clutter_snapshot_push_color (ClutterSnapshot *snapshot,
+                             const CoglColor *color)
+{
+  ClutterPaintNode *color_node;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  color_node = clutter_color_node_new (color);
+  push_state (snapshot, collect_default, color_node);
+}
+
+/**
+ * clutter_snapshot_push_texture:
+ * @snapshot: a #ClutterSnapshot
+ * @texture: a #CoglTexture
+ *
+ * Pushes a texture node to @snapshot.
+ */
+void
+clutter_snapshot_push_texture (ClutterSnapshot *snapshot,
+                               CoglTexture     *texture)
+{
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_if_fail (COGL_IS_TEXTURE (texture));
+
+  clutter_snapshot_push_texture_full (snapshot,
+                                      texture,
+                                      NULL,
+                                      CLUTTER_SCALING_FILTER_NEAREST,
+                                      CLUTTER_SCALING_FILTER_NEAREST);
+}
+
+/**
+ * clutter_snapshot_push_texture_full:
+ * @snapshot: a #ClutterSnapshot
+ * @texture: a #CoglTexture
+ * @blend_color: (nullable): a #CoglColor used for blending
+ * @min_filter: the minification filter for the texture
+ * @mag_filter: the magnification filter for the texture
+ *
+ * Pushes a texture node to @snapshot. If @color is %NULL, it is assumed
+ * to be fully opaque white.
+ */
+void
+clutter_snapshot_push_texture_full (ClutterSnapshot      *snapshot,
+                                    CoglTexture          *texture,
+                                    const CoglColor      *blend_color,
+                                    ClutterScalingFilter  min_filter,
+                                    ClutterScalingFilter  mag_filter)
+{
+  ClutterPaintNode *texture_node;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  texture_node = clutter_texture_node_new (texture,
+                                           blend_color,
+                                           min_filter,
+                                           mag_filter);
+
+  push_state (snapshot, collect_default, texture_node);
 }

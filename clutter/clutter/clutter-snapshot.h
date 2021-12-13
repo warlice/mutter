@@ -42,6 +42,24 @@ CLUTTER_EXPORT
 void clutter_snapshot_pop (ClutterSnapshot *snapshot);
 
 CLUTTER_EXPORT
+void clutter_snapshot_push_clip (ClutterSnapshot *snapshot);
+
+CLUTTER_EXPORT
+void clutter_snapshot_push_color (ClutterSnapshot *snapshot,
+                                  const CoglColor *color);
+
+CLUTTER_EXPORT
+void clutter_snapshot_push_texture (ClutterSnapshot *snapshot,
+                                    CoglTexture     *texture);
+
+CLUTTER_EXPORT
+void clutter_snapshot_push_texture_full (ClutterSnapshot      *snapshot,
+                                         CoglTexture          *texture,
+                                         const CoglColor      *blend_color,
+                                         ClutterScalingFilter  min_filter,
+                                         ClutterScalingFilter  mag_filter);
+
+CLUTTER_EXPORT
 void clutter_snapshot_add_rectangle (ClutterSnapshot       *snapshot,
                                      const ClutterActorBox *rect);
 
