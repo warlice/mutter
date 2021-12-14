@@ -717,6 +717,7 @@ static void
 handle_scroll_event (MetaWaylandPointer *pointer,
                      const ClutterEvent *event)
 {
+  double scroll_speed;
   struct wl_resource *resource;
   wl_fixed_t x_value = 0, y_value = 0;
   int x_discrete = 0, y_discrete = 0;
@@ -724,6 +725,8 @@ handle_scroll_event (MetaWaylandPointer *pointer,
 
   if (clutter_event_is_pointer_emulated (event))
     return;
+
+  scroll_speed = clutter_event_get_scroll_speed (event);
 
   switch (event->scroll.scroll_source)
     {
@@ -779,6 +782,12 @@ handle_scroll_event (MetaWaylandPointer *pointer,
     default:
       return;
     }
+
+  x_value *= scroll_speed;
+  y_value *= scroll_speed;
+
+  x_discrete = round(x_discrete * scroll_speed);
+  y_discrete = round(y_discrete * scroll_speed);
 
   if (pointer->focus_client)
     {

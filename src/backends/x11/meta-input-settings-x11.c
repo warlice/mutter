@@ -231,6 +231,13 @@ meta_input_settings_x11_set_speed (MetaInputSettings  *settings,
 }
 
 static void
+meta_input_settings_x11_set_scroll_speed (MetaInputSettings  *settings,
+                                          ClutterInputDevice *device,
+                                          gdouble             speed)
+{
+}
+
+static void
 meta_input_settings_x11_set_left_handed (MetaInputSettings  *settings,
                                          ClutterInputDevice *device,
                                          gboolean            enabled)
@@ -903,6 +910,7 @@ meta_input_settings_x11_class_init (MetaInputSettingsX11Class *klass)
   input_settings_class->set_send_events = meta_input_settings_x11_set_send_events;
   input_settings_class->set_matrix = meta_input_settings_x11_set_matrix;
   input_settings_class->set_speed = meta_input_settings_x11_set_speed;
+  input_settings_class->set_scroll_speed = meta_input_settings_x11_set_scroll_speed;
   input_settings_class->set_left_handed = meta_input_settings_x11_set_left_handed;
   input_settings_class->set_tap_enabled = meta_input_settings_x11_set_tap_enabled;
   input_settings_class->set_tap_button_map = meta_input_settings_x11_set_tap_button_map;

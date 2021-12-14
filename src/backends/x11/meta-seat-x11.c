@@ -2140,6 +2140,7 @@ meta_seat_x11_translate_event (MetaSeatX11  *seat,
                                                    &xev->group);
 
             clutter_event_set_scroll_delta (event, delta_x, delta_y);
+            clutter_event_set_scroll_speed (event, 1);
             clutter_event_set_source_device (event, source_device);
             clutter_event_set_device (event, device);
 

@@ -455,6 +455,37 @@ update_device_speed (MetaInputSettings      *input_settings,
 }
 
 static void
+update_device_scroll_speed (MetaInputSettings  *input_settings,
+                            ClutterInputDevice *device)
+{
+  GSettings *settings;
+  ConfigDoubleFunc func;
+  const gchar *key = "scroll-speed";
+
+  func = META_INPUT_SETTINGS_GET_CLASS (input_settings)->set_scroll_speed;
+
+  if (device)
+    {
+      settings = get_settings_for_device_type (input_settings,
+                                               clutter_input_device_get_device_type (device));
+      if (!settings)
+        return;
+
+      settings_device_set_double_setting (input_settings, device, func,
+                                          g_settings_get_double (settings, key));
+    }
+  else
+    {
+      settings = get_settings_for_device_type (input_settings, CLUTTER_POINTER_DEVICE);
+      settings_set_double_setting (input_settings, CLUTTER_POINTER_DEVICE, func,
+                                   g_settings_get_double (settings, key));
+      settings = get_settings_for_device_type (input_settings, CLUTTER_TOUCHPAD_DEVICE);
+      settings_set_double_setting (input_settings, CLUTTER_TOUCHPAD_DEVICE, func,
+                                   g_settings_get_double (settings, key));
+    }
+}
+
+static void
 update_device_natural_scroll (MetaInputSettings      *input_settings,
                               ClutterInputDevice     *device)
 {
@@ -1051,6 +1082,8 @@ meta_input_settings_changed_cb (GSettings  *settings,
         update_mouse_left_handed (input_settings, NULL);
       else if (strcmp (key, "speed") == 0)
         update_device_speed (input_settings, NULL);
+      else if (strcmp (key, "scroll-speed") == 0)
+        update_device_scroll_speed (input_settings, NULL);
       else if (strcmp (key, "natural-scroll") == 0)
         update_device_natural_scroll (input_settings, NULL);
       else if (strcmp (key, "accel-profile") == 0)
@@ -1064,6 +1097,8 @@ meta_input_settings_changed_cb (GSettings  *settings,
         update_touchpad_left_handed (input_settings, NULL);
       else if (strcmp (key, "speed") == 0)
         update_device_speed (input_settings, NULL);
+      else if (strcmp (key, "scroll-speed") == 0)
+        update_device_scroll_speed (input_settings, NULL);
       else if (strcmp (key, "natural-scroll") == 0)
         update_device_natural_scroll (input_settings, NULL);
       else if (strcmp (key, "tap-to-click") == 0)
@@ -1359,6 +1394,7 @@ apply_device_settings (MetaInputSettings  *input_settings,
     meta_input_settings_get_instance_private (input_settings);
 
   update_device_speed (input_settings, device);
+  update_device_scroll_speed (input_settings, device);
   update_device_natural_scroll (input_settings, device);
 
   update_mouse_left_handed (input_settings, device);

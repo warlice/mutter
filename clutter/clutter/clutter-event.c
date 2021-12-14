@@ -2232,3 +2232,22 @@ clutter_event_get_relative_motion (const ClutterEvent *event,
   else
     return FALSE;
 }
+
+void
+clutter_event_set_scroll_speed (ClutterEvent *event,
+                                double       speed)
+{
+  g_return_if_fail (event != NULL);
+  g_return_if_fail (event->type == CLUTTER_SCROLL);
+
+  event->scroll.speed = speed;
+}
+
+double
+clutter_event_get_scroll_speed (const ClutterEvent *event)
+{
+  g_return_val_if_fail (event != NULL, 1);
+  g_return_val_if_fail (event->type == CLUTTER_SCROLL, 1);
+
+  return event->scroll.speed;
+}
