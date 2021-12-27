@@ -32,6 +32,7 @@ struct _ClutterSnapshotState
 {
   ClutterSnapshotCollectFunc collect_func;
   ClutterPaintNode *node;
+  uint32_t n_saves;
 };
 
 struct _ClutterSnapshot
@@ -203,6 +204,15 @@ clutter_snapshot_pop (ClutterSnapshot *snapshot)
       ClutterPaintNode *node;
 
       current_state = get_current_state (snapshot);
+
+      if (current_state->n_saves > 0)
+        {
+          g_warning ("Trying to pop a state saved with clutter_snapshot_save(), "
+                     "but clutter_snapshot_restore() should have been called "
+                     "first.");
+          return;
+        }
+
       parent_state =
         &g_array_index (snapshot->states, ClutterSnapshotState, size - 2);
 
@@ -651,4 +661,69 @@ clutter_snapshot_push_translate_3d (ClutterSnapshot          *snapshot,
 
   graphene_matrix_init_translate (&translate, point);
   clutter_snapshot_push_transform (snapshot, &translate);
+}
+
+/**
+ * clutter_snapshot_save:
+ * @snapshot: a #ClutterSnapshot
+ *
+ * Saves the current state of @snapshot. When the corresponding call to
+ * clutter_snapshot_restore() is executed, @snapshot will return to the
+ * current state.
+ *
+ * All calls to clutter_snapshot_save() must have a corresponding call to
+ * clutter_snapshot_restore().
+ *
+ * Multiple calls to clutter_snapshot_save() can be nested.
+ */
+void
+clutter_snapshot_save (ClutterSnapshot *snapshot)
+{
+  ClutterSnapshotState *current_state;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  current_state = get_current_state (snapshot);
+  current_state->n_saves++;
+}
+
+/**
+ * clutter_snapshot_restore:
+ * @snapshot: a #ClutterSnapshot
+ *
+ * Restores @snapshot to the previously saved state.
+ *
+ * It is a programming error to call this function without a prior call
+ * to clutter_snapshot_save().
+ */
+void
+clutter_snapshot_restore (ClutterSnapshot *snapshot)
+{
+  ClutterSnapshotState *saved_state;
+  unsigned int n_pops = 0;
+  gboolean found_save;
+  int i;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  found_save = FALSE;
+  for (i = snapshot->states->len - 1; i >= 0; i--)
+    {
+      saved_state = &g_array_index (snapshot->states, ClutterSnapshotState, i);
+      found_save |= saved_state->n_saves > 0;
+      if (found_save)
+        break;
+      n_pops++;
+    }
+
+  if (!found_save)
+    {
+      g_warning ("Unpaired call to clutter_snapshot_restore() without a matching clutter_snapshot_save()");
+      return;
+    }
+
+  saved_state->n_saves--;
+
+  while (n_pops-- > 0)
+    clutter_snapshot_pop (snapshot);
 }

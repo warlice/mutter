@@ -122,6 +122,12 @@ CLUTTER_EXPORT
 void clutter_snapshot_add_primitive (ClutterSnapshot *snapshot,
                                      CoglPrimitive   *primitive);
 
+CLUTTER_EXPORT
+void clutter_snapshot_save (ClutterSnapshot *snapshot);
+
+CLUTTER_EXPORT
+void clutter_snapshot_restore (ClutterSnapshot *snapshot);
+
 G_END_DECLS
 
 #endif /* CLUTTER_SNAPSHOT_H */

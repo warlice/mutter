@@ -49,6 +49,37 @@ snapshot_new (void)
   g_assert_nonnull (snapshot);
 }
 
+static void
+snapshot_save_restore (void)
+{
+  g_autoptr (ClutterPaintContext) paint_context = NULL;
+  g_autoptr (ClutterSnapshot) snapshot = NULL;
+
+  paint_context = create_offscreen_paint_context (800, 600);
+  snapshot = clutter_snapshot_new (paint_context);
+  g_assert_nonnull (snapshot);
+
+  clutter_snapshot_save (snapshot);
+  clutter_snapshot_push_translate (snapshot, &GRAPHENE_POINT_INIT (20.0, 20.0));
+  clutter_snapshot_push_scale (snapshot, 10.0, -5.0);
+  clutter_snapshot_push_color (snapshot, &COGL_COLOR_INIT (0xff, 0x00, 0x00, 0x00));
+  clutter_snapshot_restore (snapshot);
+
+
+  clutter_snapshot_save (snapshot); // 1
+  clutter_snapshot_push_translate (snapshot, &GRAPHENE_POINT_INIT (20.0, 20.0));
+  clutter_snapshot_push_scale (snapshot, 10.0, -5.0);
+  clutter_snapshot_save (snapshot); // 2
+  clutter_snapshot_save (snapshot); // 3
+  clutter_snapshot_push_color (snapshot, &COGL_COLOR_INIT (0xff, 0x00, 0x00, 0x00));
+  clutter_snapshot_restore (snapshot); // 3
+  clutter_snapshot_restore (snapshot); // 2
+  clutter_snapshot_push_scale (snapshot, 10.0, -5.0);
+  clutter_snapshot_push_translate (snapshot, &GRAPHENE_POINT_INIT (20.0, 20.0));
+  clutter_snapshot_restore (snapshot); // 1
+}
+
 CLUTTER_TEST_SUITE (
   CLUTTER_TEST_UNIT ("/snapshot/new", snapshot_new)
+  CLUTTER_TEST_UNIT ("/snapshot/save-restore", snapshot_save_restore)
 )
