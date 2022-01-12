@@ -56,12 +56,8 @@ struct _MetaBackground
   MetaBackgroundMonitor *monitors;
   int n_monitors;
 
-  ClutterColor              color;
-
   GFile *file;
   MetaBackgroundImage *background_image;
-
-  CoglTexture *color_texture;
 };
 
 enum
@@ -86,12 +82,6 @@ free_fbos (MetaBackground *self)
       g_clear_object (&monitor->fbo);
       cogl_clear_object (&monitor->texture);
     }
-}
-
-static void
-free_color_texture (MetaBackground *self)
-{
-  cogl_clear_object (&self->color_texture);
 }
 
 static void
@@ -264,8 +254,6 @@ meta_background_dispose (GObject *object)
 {
   MetaBackground        *self = META_BACKGROUND (object);
 
-  free_color_texture (self);
-
   set_file (self, &self->file, &self->background_image, NULL, FALSE);
 
   set_display (self, NULL);
@@ -410,38 +398,6 @@ draw_texture (MetaBackground        *self,
                                             (monitor_area->height - texture_area.y) / (float)texture_area.height);
 }
 
-static void
-ensure_color_texture (MetaBackground *self)
-{
-  if (self->color_texture == NULL)
-    {
-      ClutterBackend *backend = clutter_get_default_backend ();
-      CoglContext *ctx = clutter_backend_get_cogl_context (backend);
-      GError *error = NULL;
-      uint8_t pixels[6];
-      int width, height;
-
-      width = 1;
-      height = 1;
-
-      pixels[0] = self->color.red;
-      pixels[1] = self->color.green;
-      pixels[2] = self->color.blue;
-
-      self->color_texture = COGL_TEXTURE (cogl_texture_2d_new_from_data (ctx, width, height,
-                                                                         COGL_PIXEL_FORMAT_RGB_888,
-                                                                         width * 3,
-                                                                         pixels,
-                                                                         &error));
-
-      if (error != NULL)
-        {
-          meta_warning ("Failed to allocate color texture: %s", error->message);
-          g_error_free (error);
-        }
-    }
-}
-
 static CoglPipeline *
 create_pipeline (void)
 {
@@ -504,14 +460,7 @@ meta_background_get_texture (MetaBackground         *self,
   texture = self->background_image ? meta_background_image_get_texture (self->background_image) : NULL;
 
   if (texture == NULL)
-    {
-      ensure_color_texture (self);
-      if (texture_area)
-        set_texture_area_from_monitor_area (&monitor_area, texture_area);
-      if (wrap_mode)
-        *wrap_mode = COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE;
-      return self->color_texture;
-    }
+    return NULL;
 
   if (monitor->dirty)
     {
@@ -603,19 +552,6 @@ meta_background_new (MetaDisplay *display)
   return g_object_new (META_TYPE_BACKGROUND,
                        "meta-display", display,
                        NULL);
-}
-
-void
-meta_background_set_color (MetaBackground *self,
-                           ClutterColor   *color)
-{
-  g_return_if_fail (META_IS_BACKGROUND (self));
-  g_return_if_fail (color != NULL);
-
-  self->color = *color;
-
-  free_color_texture (self);
-  mark_changed (self);
 }
 
 /**

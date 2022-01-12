@@ -29,9 +29,6 @@
 
 #include "clutter/clutter.h"
 #include "meta/meta-backend.h"
-#include "meta/meta-background-actor.h"
-#include "meta/meta-background-content.h"
-#include "meta/meta-background-group.h"
 #include "meta/meta-monitor-manager.h"
 #include "meta/meta-plugin.h"
 #include "meta/util.h"
@@ -118,8 +115,6 @@ struct _MetaDefaultPluginPrivate
   ClutterTimeline       *tml_switch_workspace2;
   ClutterActor          *desktop1;
   ClutterActor          *desktop2;
-
-  ClutterActor          *background_group;
 
   MetaPluginInfo         info;
 };
@@ -357,63 +352,6 @@ on_switch_workspace_effect_complete (ClutterTimeline *timeline, gpointer data)
 }
 
 static void
-on_monitors_changed (MetaMonitorManager *monitor_manager,
-                     MetaPlugin         *plugin)
-{
-  MetaDefaultPlugin *self = META_DEFAULT_PLUGIN (plugin);
-  MetaDisplay *display = meta_plugin_get_display (plugin);
-
-  int i, n;
-  GRand *rand = g_rand_new_with_seed (123456);
-
-  clutter_actor_destroy_all_children (self->priv->background_group);
-
-  n = meta_display_get_n_monitors (display);
-  for (i = 0; i < n; i++)
-    {
-      MetaBackgroundContent *background_content;
-      ClutterContent *content;
-      MetaRectangle rect;
-      ClutterActor *background_actor;
-      MetaBackground *background;
-      uint8_t red;
-      uint8_t green;
-      uint8_t blue;
-      ClutterColor color;
-
-      meta_display_get_monitor_geometry (display, i, &rect);
-
-      background_actor = meta_background_actor_new (display, i);
-      content = clutter_actor_get_content (background_actor);
-      background_content = META_BACKGROUND_CONTENT (content);
-
-      clutter_actor_set_position (background_actor, rect.x, rect.y);
-      clutter_actor_set_size (background_actor, rect.width, rect.height);
-
-      /* Don't use rand() here, mesa calls srand() internally when
-         parsing the driconf XML, but it's nice if the colors are
-         reproducible.
-      */
-
-      blue = g_rand_int_range (rand, 0, 255);
-      green = g_rand_int_range (rand, 0, 255);
-      red = g_rand_int_range (rand, 0, 255);
-      clutter_color_init (&color, red, green, blue, 255);
-
-      background = meta_background_new (display);
-      meta_background_set_color (background, &color);
-      meta_background_content_set_background (background_content, background);
-      g_object_unref (background);
-
-      meta_background_content_set_vignette (background_content, TRUE, 0.5, 0.5);
-
-      clutter_actor_add_child (self->priv->background_group, background_actor);
-    }
-
-  g_rand_free (rand);
-}
-
-static void
 init_keymap (MetaDefaultPlugin *self)
 {
   g_autoptr (GError) error = NULL;
@@ -478,21 +416,13 @@ start (MetaPlugin *plugin)
 {
   MetaDefaultPlugin *self = META_DEFAULT_PLUGIN (plugin);
   MetaDisplay *display = meta_plugin_get_display (plugin);
-  MetaMonitorManager *monitor_manager = meta_monitor_manager_get ();
-
-  self->priv->background_group = meta_background_group_new ();
-  clutter_actor_insert_child_below (meta_get_window_group_for_display (display),
-                                    self->priv->background_group, NULL);
-
-  g_signal_connect (monitor_manager, "monitors-changed",
-                    G_CALLBACK (on_monitors_changed), plugin);
-
-  on_monitors_changed (monitor_manager, plugin);
+  ClutterActor *stage = meta_get_stage_for_display (display);
 
   if (meta_is_wayland_compositor ())
     init_keymap (self);
 
-  clutter_actor_show (meta_get_stage_for_display (display));
+  clutter_actor_set_background_color (stage, CLUTTER_COLOR_Blue);
+  clutter_actor_show (stage);
 }
 
 static void
