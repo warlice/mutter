@@ -56,9 +56,7 @@ struct _MetaBackground
   MetaBackgroundMonitor *monitors;
   int n_monitors;
 
-  GDesktopBackgroundShading shading_direction;
   ClutterColor              color;
-  ClutterColor              second_color;
 
   GFile *file1;
   MetaBackgroundImage *background_image1;
@@ -442,38 +440,12 @@ ensure_color_texture (MetaBackground *self)
       uint8_t pixels[6];
       int width, height;
 
-      if (self->shading_direction == G_DESKTOP_BACKGROUND_SHADING_SOLID)
-        {
-          width = 1;
-          height = 1;
+      width = 1;
+      height = 1;
 
-          pixels[0] = self->color.red;
-          pixels[1] = self->color.green;
-          pixels[2] = self->color.blue;
-        }
-      else
-        {
-          switch (self->shading_direction)
-            {
-            case G_DESKTOP_BACKGROUND_SHADING_VERTICAL:
-              width = 1;
-              height = 2;
-              break;
-            case G_DESKTOP_BACKGROUND_SHADING_HORIZONTAL:
-              width = 2;
-              height = 1;
-              break;
-            default:
-              g_return_if_reached ();
-            }
-
-          pixels[0] = self->color.red;
-          pixels[1] = self->color.green;
-          pixels[2] = self->color.blue;
-          pixels[3] = self->second_color.red;
-          pixels[4] = self->second_color.green;
-          pixels[5] = self->second_color.blue;
-        }
+      pixels[0] = self->color.red;
+      pixels[1] = self->color.green;
+      pixels[2] = self->color.blue;
 
       self->color_texture = COGL_TEXTURE (cogl_texture_2d_new_from_data (ctx, width, height,
                                                                          COGL_PIXEL_FORMAT_RGB_888,
@@ -738,29 +710,10 @@ void
 meta_background_set_color (MetaBackground *self,
                            ClutterColor   *color)
 {
-  ClutterColor dummy = { 0 };
-
   g_return_if_fail (META_IS_BACKGROUND (self));
   g_return_if_fail (color != NULL);
 
-  meta_background_set_gradient (self,
-                                G_DESKTOP_BACKGROUND_SHADING_SOLID,
-                                color, &dummy);
-}
-
-void
-meta_background_set_gradient (MetaBackground            *self,
-                              GDesktopBackgroundShading  shading_direction,
-                              ClutterColor              *color,
-                              ClutterColor              *second_color)
-{
-  g_return_if_fail (META_IS_BACKGROUND (self));
-  g_return_if_fail (color != NULL);
-  g_return_if_fail (second_color != NULL);
-
-  self->shading_direction = shading_direction;
   self->color = *color;
-  self->second_color = *second_color;
 
   free_color_texture (self);
   mark_changed (self);

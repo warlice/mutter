@@ -54,12 +54,6 @@ void meta_background_set_color    (MetaBackground            *self,
                                    ClutterColor              *color);
 
 META_EXPORT
-void meta_background_set_gradient (MetaBackground            *self,
-                                   GDesktopBackgroundShading  shading_direction,
-                                   ClutterColor              *color,
-                                   ClutterColor              *second_color);
-
-META_EXPORT
 void meta_background_set_file           (MetaBackground            *self,
                                          GFile                     *file);
 
