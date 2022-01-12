@@ -58,14 +58,10 @@ struct _MetaBackground
 
   ClutterColor              color;
 
-  GFile *file1;
-  MetaBackgroundImage *background_image1;
-  GFile *file2;
-  MetaBackgroundImage *background_image2;
+  GFile *file;
+  MetaBackgroundImage *background_image;
 
   CoglTexture *color_texture;
-
-  float blend_factor;
 };
 
 enum
@@ -75,8 +71,6 @@ enum
 };
 
 G_DEFINE_TYPE (MetaBackground, meta_background, G_TYPE_OBJECT)
-
-static gboolean texture_has_alpha (CoglTexture *texture);
 
 static GSList *all_backgrounds = NULL;
 
@@ -173,10 +167,9 @@ meta_background_get_property (GObject      *object,
 static gboolean
 need_prerender (MetaBackground *self)
 {
-  CoglTexture *texture1 = self->background_image1 ? meta_background_image_get_texture (self->background_image1) : NULL;
-  CoglTexture *texture2 = self->background_image2 ? meta_background_image_get_texture (self->background_image2) : NULL;
+  CoglTexture *texture = self->background_image ? meta_background_image_get_texture (self->background_image) : NULL;
 
-  if (texture1 == NULL && texture2 == NULL)
+  if (texture == NULL)
     return FALSE;
 
   return TRUE;
@@ -252,21 +245,15 @@ on_gl_video_memory_purged (MetaBackground *self)
   MetaBackgroundImageCache *cache = meta_background_image_cache_get_default ();
 
   /* The GPU memory that just got invalidated is the texture inside
-   * self->background_image1,2 and/or its mipmaps. However, to save memory the
+   * self->background_image and/or its mipmaps. However, to save memory the
    * original pixbuf isn't kept in RAM so we can't do a simple re-upload. The
    * only copy of the image was the one in texture memory that got invalidated.
    * So we need to do a full reload from disk.
    */
-  if (self->file1)
+  if (self->file)
     {
-      meta_background_image_cache_purge (cache, self->file1);
-      set_file (self, &self->file1, &self->background_image1, self->file1, TRUE);
-    }
-
-  if (self->file2)
-    {
-      meta_background_image_cache_purge (cache, self->file2);
-      set_file (self, &self->file2, &self->background_image2, self->file2, TRUE);
+      meta_background_image_cache_purge (cache, self->file);
+      set_file (self, &self->file, &self->background_image, self->file, TRUE);
     }
 
   mark_changed (self);
@@ -279,8 +266,7 @@ meta_background_dispose (GObject *object)
 
   free_color_texture (self);
 
-  set_file (self, &self->file1, &self->background_image1, NULL, FALSE);
-  set_file (self, &self->file2, &self->background_image2, NULL, FALSE);
+  set_file (self, &self->file, &self->background_image, NULL, FALSE);
 
   set_display (self, NULL);
 
@@ -400,7 +386,7 @@ get_texture_area (MetaBackground          *self,
   *texture_area = image_area;
 }
 
-static gboolean
+static void
 draw_texture (MetaBackground        *self,
               CoglFramebuffer       *framebuffer,
               CoglPipeline          *pipeline,
@@ -409,7 +395,6 @@ draw_texture (MetaBackground        *self,
               float                  monitor_scale)
 {
   cairo_rectangle_int_t texture_area;
-  gboolean bare_region_visible;
 
   get_texture_area (self, monitor_area, monitor_scale, texture, &texture_area);
 
@@ -423,10 +408,6 @@ draw_texture (MetaBackground        *self,
                                             - texture_area.y / (float)texture_area.height,
                                             (monitor_area->width - texture_area.x) / (float)texture_area.width,
                                             (monitor_area->height - texture_area.y) / (float)texture_area.height);
-
-  bare_region_visible = texture_has_alpha (texture);
-
-  return bare_region_visible;
 }
 
 static void
@@ -461,56 +442,20 @@ ensure_color_texture (MetaBackground *self)
     }
 }
 
-typedef enum
-{
-  PIPELINE_REPLACE,
-  PIPELINE_ADD,
-  PIPELINE_OVER_REVERSE,
-} PipelineType;
-
 static CoglPipeline *
-create_pipeline (PipelineType type)
+create_pipeline (void)
 {
-  const char * const blend_strings[3] = {
-    [PIPELINE_REPLACE] = "RGBA = ADD (SRC_COLOR, 0)",
-    [PIPELINE_ADD] = "RGBA = ADD (SRC_COLOR, DST_COLOR)",
-    [PIPELINE_OVER_REVERSE] = "RGBA = ADD (SRC_COLOR * (1 - DST_COLOR[A]), DST_COLOR)",
-  };
-  static CoglPipeline *templates[3];
+  static CoglPipeline *pipeline = NULL;
 
-  if (templates[type] == NULL)
-    {
-      templates[type] = meta_create_texture_pipeline (NULL);
-      cogl_pipeline_set_blend (templates[type], blend_strings[type], NULL);
-    }
+  if (pipeline == NULL)
+      pipeline = meta_create_texture_pipeline (NULL);
 
-  cogl_pipeline_set_layer_filters (templates[type],
+  cogl_pipeline_set_layer_filters (pipeline,
                                    0,
                                    COGL_PIPELINE_FILTER_LINEAR_MIPMAP_LINEAR,
                                    COGL_PIPELINE_FILTER_LINEAR);
 
-  return cogl_pipeline_copy (templates[type]);
-}
-
-static gboolean
-texture_has_alpha (CoglTexture *texture)
-{
-  if (!texture)
-    return FALSE;
-
-  switch (cogl_texture_get_components (texture))
-    {
-    case COGL_TEXTURE_COMPONENTS_A:
-    case COGL_TEXTURE_COMPONENTS_RGBA:
-      return TRUE;
-    case COGL_TEXTURE_COMPONENTS_RG:
-    case COGL_TEXTURE_COMPONENTS_RGB:
-    case COGL_TEXTURE_COMPONENTS_DEPTH:
-      return FALSE;
-    default:
-      g_assert_not_reached ();
-      return FALSE;
-    }
+  return cogl_pipeline_copy (pipeline);
 }
 
 static int
@@ -541,7 +486,7 @@ meta_background_get_texture (MetaBackground         *self,
   MetaBackgroundMonitor *monitor;
   MetaRectangle geometry;
   cairo_rectangle_int_t monitor_area;
-  CoglTexture *texture1, *texture2;
+  CoglTexture *texture;
   float monitor_scale;
 
   g_return_val_if_fail (META_IS_BACKGROUND (self), NULL);
@@ -556,10 +501,9 @@ meta_background_get_texture (MetaBackground         *self,
   monitor_area.width = geometry.width;
   monitor_area.height = geometry.height;
 
-  texture1 = self->background_image1 ? meta_background_image_get_texture (self->background_image1) : NULL;
-  texture2 = self->background_image2 ? meta_background_image_get_texture (self->background_image2) : NULL;
+  texture = self->background_image ? meta_background_image_get_texture (self->background_image) : NULL;
 
-  if (texture1 == NULL && texture2 == NULL)
+  if (texture == NULL)
     {
       ensure_color_texture (self);
       if (texture_area)
@@ -572,7 +516,6 @@ meta_background_get_texture (MetaBackground         *self,
   if (monitor->dirty)
     {
       GError *catch_error = NULL;
-      gboolean bare_region_visible = FALSE;
       int texture_width, texture_height;
 
       if (meta_is_stage_views_scaled ())
@@ -619,71 +562,27 @@ meta_background_get_texture (MetaBackground         *self,
       cogl_framebuffer_orthographic (monitor->fbo, 0, 0,
                                      monitor_area.width, monitor_area.height, -1., 1.);
 
-      if (texture2 != NULL && self->blend_factor != 0.0)
+      cogl_framebuffer_clear4f (monitor->fbo,
+                                COGL_BUFFER_BIT_COLOR,
+                                0.0, 0.0, 0.0, 0.0);
+
+      if (texture != NULL)
         {
-          CoglPipeline *pipeline = create_pipeline (PIPELINE_REPLACE);
+          CoglPipeline *pipeline = create_pipeline ();
           int mipmap_level;
 
-          mipmap_level = get_best_mipmap_level (texture2,
+          mipmap_level = get_best_mipmap_level (texture,
                                                 texture_width,
                                                 texture_height);
 
-          cogl_pipeline_set_color4f (pipeline,
-                                      self->blend_factor, self->blend_factor, self->blend_factor, self->blend_factor);
-          cogl_pipeline_set_layer_texture (pipeline, 0, texture2);
+          cogl_pipeline_set_color4f (pipeline, 1.0, 1.0, 1.0, 1.0);
+          cogl_pipeline_set_layer_texture (pipeline, 0, texture);
           cogl_pipeline_set_layer_wrap_mode (pipeline, 0, COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE);
           cogl_pipeline_set_layer_max_mipmap_level (pipeline, 0, mipmap_level);
 
-          bare_region_visible = draw_texture (self,
-                                              monitor->fbo, pipeline,
-                                              texture2, &monitor_area,
-                                              monitor_scale);
+          draw_texture (self, monitor->fbo, pipeline,
+                        texture, &monitor_area, monitor_scale);
 
-          cogl_object_unref (pipeline);
-        }
-      else
-        {
-          cogl_framebuffer_clear4f (monitor->fbo,
-                                    COGL_BUFFER_BIT_COLOR,
-                                    0.0, 0.0, 0.0, 0.0);
-        }
-
-      if (texture1 != NULL && self->blend_factor != 1.0)
-        {
-          CoglPipeline *pipeline = create_pipeline (PIPELINE_ADD);
-          int mipmap_level;
-
-          mipmap_level = get_best_mipmap_level (texture1,
-                                                texture_width,
-                                                texture_height);
-
-          cogl_pipeline_set_color4f (pipeline,
-                                     (1 - self->blend_factor),
-                                     (1 - self->blend_factor),
-                                     (1 - self->blend_factor),
-                                     (1 - self->blend_factor));
-          cogl_pipeline_set_layer_texture (pipeline, 0, texture1);
-          cogl_pipeline_set_layer_wrap_mode (pipeline, 0, COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE);
-          cogl_pipeline_set_layer_max_mipmap_level (pipeline, 0, mipmap_level);
-
-          bare_region_visible = bare_region_visible || draw_texture (self,
-                                                                     monitor->fbo, pipeline,
-                                                                     texture1, &monitor_area,
-                                                                     monitor_scale);
-
-          cogl_object_unref (pipeline);
-        }
-
-      if (bare_region_visible)
-        {
-          CoglPipeline *pipeline = create_pipeline (PIPELINE_OVER_REVERSE);
-
-          ensure_color_texture (self);
-          cogl_pipeline_set_layer_texture (pipeline, 0, self->color_texture);
-          cogl_framebuffer_draw_rectangle (monitor->fbo,
-                                           pipeline,
-                                           0, 0,
-                                           monitor_area.width, monitor_area.height);
           cogl_object_unref (pipeline);
         }
 
@@ -732,22 +631,8 @@ meta_background_set_file (MetaBackground            *self,
 {
   g_return_if_fail (META_IS_BACKGROUND (self));
 
-  meta_background_set_blend (self, file, NULL, 0.0);
-}
+  set_file (self, &self->file, &self->background_image, file, FALSE);
 
-void
-meta_background_set_blend (MetaBackground          *self,
-                           GFile                   *file1,
-                           GFile                   *file2,
-                           double                   blend_factor)
-{
-  g_return_if_fail (META_IS_BACKGROUND (self));
-  g_return_if_fail (blend_factor >= 0.0 && blend_factor <= 1.0);
-
-  set_file (self, &self->file1, &self->background_image1, file1, FALSE);
-  set_file (self, &self->file2, &self->background_image2, file2, FALSE);
-
-  self->blend_factor = blend_factor;
   mark_changed (self);
 }
 

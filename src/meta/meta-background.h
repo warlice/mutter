@@ -57,10 +57,4 @@ META_EXPORT
 void meta_background_set_file           (MetaBackground            *self,
                                          GFile                     *file);
 
-META_EXPORT
-void meta_background_set_blend          (MetaBackground            *self,
-                                         GFile                     *file1,
-                                         GFile                     *file2,
-                                         double                     blend_factor);
-
 #endif /* META_BACKGROUND_H */
