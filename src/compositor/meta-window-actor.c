@@ -699,7 +699,7 @@ meta_window_actor_after_effects (MetaWindowActor *self)
       meta_window_actor_sync_actor_geometry (self, FALSE);
     }
 
-  clutter_stage_repick_device (stage, clutter_seat_get_pointer (seat));
+  clutter_stage_repick_device (stage, clutter_seat_get_pointer (seat), NULL);
 }
 
 void

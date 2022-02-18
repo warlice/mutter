@@ -1440,7 +1440,7 @@ meta_display_sync_wayland_input_focus (MetaDisplay *display)
   meta_wayland_compositor_set_input_focus (compositor, focus_window);
 
   clutter_stage_repick_device (CLUTTER_STAGE (stage),
-                               clutter_seat_get_pointer (seat));
+                               clutter_seat_get_pointer (seat), NULL);
 #endif
 }
 

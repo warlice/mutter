@@ -13309,7 +13309,7 @@ clutter_actor_update_pointer (ClutterActor *self)
 
   seat = clutter_backend_get_default_seat (clutter_get_default_backend ());
   pointer = clutter_seat_get_pointer (seat);
-  clutter_stage_repick_device (stage, pointer);
+  clutter_stage_repick_device (stage, pointer, NULL);
 }
 
 static void

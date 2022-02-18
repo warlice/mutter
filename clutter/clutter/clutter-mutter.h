@@ -117,8 +117,9 @@ void clutter_stage_get_device_coords (ClutterStage         *stage,
                                       ClutterEventSequence *sequence,
                                       graphene_point_t     *coords);
 CLUTTER_EXPORT
-void clutter_stage_repick_device (ClutterStage       *stage,
-                                  ClutterInputDevice *device);
+void clutter_stage_repick_device (ClutterStage         *stage,
+                                  ClutterInputDevice   *device,
+                                  ClutterEventSequence *sequence);
 
 CLUTTER_EXPORT
 void clutter_get_debug_flags (ClutterDebugFlag     *debug_flags,
