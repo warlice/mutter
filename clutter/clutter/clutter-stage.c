@@ -3203,7 +3203,7 @@ free_pointer_device_entry (PointerDeviceEntry *entry)
   g_free (entry);
 }
 
-void
+static void
 clutter_stage_update_device_entry (ClutterStage         *self,
                                    ClutterInputDevice   *device,
                                    ClutterEventSequence *sequence,
