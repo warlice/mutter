@@ -3178,7 +3178,12 @@ on_device_actor_destroyed (ClutterActor       *actor,
    */
   entry->current_actor = NULL;
   g_clear_pointer (&entry->clear_area, cairo_region_destroy);
-  clutter_stage_repick_device (entry->stage, entry->device, NULL);
+
+  /* Be consistent with clutter_stage_update_devices() and only repick
+   * pointer devices, not touch sequences.
+   */
+  if (entry->sequence == NULL)
+    clutter_stage_repick_device (entry->stage, entry->device, NULL);
 }
 
 static void
