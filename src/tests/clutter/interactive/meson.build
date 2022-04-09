@@ -24,12 +24,10 @@ clutter_tests_interactive_test_sources = [
   'test-text.c',
   'test-text-field.c',
   'test-stage-sizing.c',
-  'test-swipe-action.c',
   'test-cogl-point-sprites.c',
   'test-devices.c',
   'test-content.c',
   'test-keyframe-transition.c',
-  'test-rotate-zoom.c',
   'test-image.c',
 ]
 

@@ -87,11 +87,9 @@
 #include "clutter/clutter-pan-gesture.h"
 #include "clutter/clutter-pipeline-cache.h"
 #include "clutter/clutter-property-transition.h"
-#include "clutter/clutter-rotate-action.h"
 #include "clutter/clutter-settings.h"
 #include "clutter/clutter-shader-effect.h"
 #include "clutter/clutter-shader-types.h"
-#include "clutter/clutter-swipe-action.h"
 #include "clutter/clutter-snap-constraint.h"
 #include "clutter/clutter-stage.h"
 #include "clutter/clutter-stage-view.h"
@@ -101,6 +99,5 @@
 #include "clutter/clutter-transition-group.h"
 #include "clutter/clutter-transition.h"
 #include "clutter/clutter-virtual-input-device.h"
-#include "clutter/clutter-zoom-action.h"
 
 #undef __CLUTTER_H_INSIDE__
