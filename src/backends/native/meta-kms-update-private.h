@@ -169,6 +169,9 @@ GList * meta_kms_update_get_crtc_updates (MetaKmsUpdate *update);
 META_EXPORT_TEST
 GList * meta_kms_update_get_crtc_gammas (MetaKmsUpdate *update);
 
+META_EXPORT_TEST
+gboolean meta_kms_update_needs_allow_modeset (MetaKmsUpdate *update);
+
 MetaKmsCustomPageFlip * meta_kms_update_take_custom_page_flip_func (MetaKmsUpdate *update);
 
 void meta_kms_update_drop_plane_assignment (MetaKmsUpdate *update,

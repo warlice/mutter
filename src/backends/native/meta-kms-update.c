@@ -41,6 +41,8 @@ struct _MetaKmsUpdate
   GList *crtc_updates;
   GList *crtc_gammas;
 
+  gboolean needs_allow_modeset;
+
   MetaKmsCustomPageFlip *custom_page_flip;
 
   GList *page_flip_listeners;
@@ -285,6 +287,8 @@ meta_kms_update_mode_set (MetaKmsUpdate *update,
   };
 
   update->mode_sets = g_list_prepend (update->mode_sets, mode_set);
+
+  update->needs_allow_modeset = TRUE;
 }
 
 static MetaKmsConnectorUpdate *
@@ -672,6 +676,12 @@ meta_kms_update_get_crtc_gammas (MetaKmsUpdate *update)
   return update->crtc_gammas;
 }
 
+gboolean
+meta_kms_update_needs_allow_modeset (MetaKmsUpdate *update)
+{
+  return update->needs_allow_modeset;
+}
+
 void
 meta_kms_update_lock (MetaKmsUpdate *update)
 {
@@ -723,6 +733,7 @@ meta_kms_update_new (MetaKmsDevice *device)
   update = g_new0 (MetaKmsUpdate, 1);
   update->device = device;
   update->sequence_number = sequence_number++;
+  update->needs_allow_modeset = FALSE;
 
   return update;
 }
