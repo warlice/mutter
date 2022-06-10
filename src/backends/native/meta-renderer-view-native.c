@@ -25,6 +25,11 @@
 #include "backends/native/meta-renderer-view-native.h"
 
 #include "clutter/clutter.h"
+#include "backends/meta-output.h"
+#include "backends/native/meta-crtc-kms.h"
+#include "backends/native/meta-kms.h"
+#include "backends/native/meta-kms-device.h"
+#include "backends/native/meta-output-kms.h"
 
 typedef enum _MetaFrameSyncMode
 {
@@ -115,20 +120,24 @@ meta_renderer_view_native_set_frame_sync_actor (MetaRendererViewNative *view_nat
 
 static void
 meta_renderer_view_native_set_frame_sync (MetaRendererViewNative *view_native,
+                                          MetaOutput             *output,
                                           MetaFrameSyncMode       sync_mode)
 {
   ClutterFrameClock *frame_clock =
     clutter_stage_view_get_frame_clock (CLUTTER_STAGE_VIEW (view_native));
+  MetaOutputKms *output_kms = META_OUTPUT_KMS (output);
 
   switch (sync_mode)
     {
     case META_FRAME_SYNC_MODE_ENABLED:
       clutter_frame_clock_set_mode (frame_clock,
                                     CLUTTER_FRAME_CLOCK_MODE_VARIABLE);
+      meta_output_kms_set_vrr_mode (output_kms, TRUE);
       break;
     case META_FRAME_SYNC_MODE_DISABLED:
       clutter_frame_clock_set_mode (frame_clock,
                                     CLUTTER_FRAME_CLOCK_MODE_FIXED);
+      meta_output_kms_set_vrr_mode (output_kms, FALSE);
       break;
     case META_FRAME_SYNC_MODE_INIT:
       g_assert_not_reached ();
@@ -140,12 +149,21 @@ meta_renderer_view_native_set_frame_sync (MetaRendererViewNative *view_native,
 static MetaFrameSyncMode
 meta_renderer_view_native_get_applicable_sync_mode (MetaRendererViewNative *view_native)
 {
-  return META_FRAME_SYNC_MODE_DISABLED;
+  MetaRendererView *view = META_RENDERER_VIEW (view_native);
+  MetaOutput *output = meta_renderer_view_get_output (view);
+
+  if (view_native->frame_sync_actor != NULL &&
+      meta_output_is_vrr_enabled (output))
+    return META_FRAME_SYNC_MODE_ENABLED;
+  else
+    return META_FRAME_SYNC_MODE_DISABLED;
 }
 
 void
 meta_renderer_view_native_maybe_set_frame_sync (MetaRendererViewNative *view_native)
 {
+  MetaRendererView *view;
+  MetaOutput *output;
   MetaFrameSyncMode applicable_sync_mode;
 
   if (G_LIKELY (!view_native->frame_sync_mode_update_queued))
@@ -153,12 +171,19 @@ meta_renderer_view_native_maybe_set_frame_sync (MetaRendererViewNative *view_nat
 
   view_native->frame_sync_mode_update_queued = FALSE;
 
+  view = META_RENDERER_VIEW (view_native);
+  output = meta_renderer_view_get_output (view);
+
+  if (!meta_output_is_vrr_capable (output))
+    return;
+
   applicable_sync_mode =
     meta_renderer_view_native_get_applicable_sync_mode (view_native);
 
   if (applicable_sync_mode != view_native->frame_sync_mode)
     {
       meta_renderer_view_native_set_frame_sync (view_native,
+                                                output,
                                                 applicable_sync_mode);
     }
 }
