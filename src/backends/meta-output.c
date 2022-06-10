@@ -55,6 +55,8 @@ typedef struct _MetaOutputPrivate
 
   gboolean is_underscanning;
 
+  gboolean is_vrr_enabled;
+
   int backlight;
 } MetaOutputPrivate;
 
@@ -177,6 +179,22 @@ meta_output_is_underscanning (MetaOutput *output)
   return priv->is_underscanning;
 }
 
+gboolean
+meta_output_is_vrr_capable (MetaOutput *output)
+{
+  const MetaOutputInfo *output_info = meta_output_get_info (output);
+
+  return output_info->vrr_capable;
+}
+
+gboolean
+meta_output_is_vrr_enabled (MetaOutput *output)
+{
+  MetaOutputPrivate *priv = meta_output_get_instance_private (output);
+
+  return priv->is_vrr_enabled;
+}
+
 void
 meta_output_set_backlight (MetaOutput *output,
                            int         backlight)
@@ -235,6 +253,7 @@ meta_output_assign_crtc (MetaOutput                 *output,
   priv->is_primary = output_assignment->is_primary;
   priv->is_presentation = output_assignment->is_presentation;
   priv->is_underscanning = output_assignment->is_underscanning;
+  priv->is_vrr_enabled = output_assignment->is_vrr_enabled;
 }
 
 void
