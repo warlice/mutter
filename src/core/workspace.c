@@ -1327,6 +1327,28 @@ meta_workspace_get_default_focus_window (MetaWorkspace *workspace)
     }
 }
 
+MetaWindow *
+meta_workspace_topmost_window_on_rect (MetaWorkspace *workspace,
+                                       MetaRectangle *rect)
+{
+  GList *stack = workspace->display->stack->sorted;
+  GList *l;
+
+  for (l = stack; l != NULL; l = l->next)
+    {
+      MetaWindow *window = l->data;
+      MetaRectangle *window_frame_rect = &window->rect;
+
+      if (!meta_window_located_on_workspace (window, workspace))
+        continue;
+
+      if (meta_rectangle_overlap (window_frame_rect, rect))
+        return window;
+    }
+
+  return NULL;
+}
+
 void
 meta_workspace_focus_default_window (MetaWorkspace *workspace,
                                      MetaWindow    *not_this_one,
