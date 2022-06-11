@@ -4274,6 +4274,14 @@ meta_window_get_session_geometry (MetaWindow  *window,
     window->size_hints.height_inc;
 }
 
+gboolean
+meta_window_contains_rect (MetaWindow    *window,
+                           MetaRectangle *rect)
+{
+  return meta_rectangle_contains_rect (&window->buffer_rect,
+                                       rect);
+}
+
 /**
  * meta_window_get_buffer_rect:
  * @window: a #MetaWindow
