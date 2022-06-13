@@ -521,6 +521,26 @@ meta_surface_actor_is_obscured_on_stage_view (MetaSurfaceActor *self,
                                                       stage_view);
 }
 
+gboolean
+meta_surface_actor_contains_rect (MetaSurfaceActor *surface_actor,
+                                  MetaRectangle    *rect)
+{
+  ClutterActor *actor = CLUTTER_ACTOR (surface_actor);
+  MetaRectangle surface_rect;
+  float x, y, width, height;
+
+  clutter_actor_get_position (actor, &x, &y);
+  clutter_actor_get_size (actor, &width, &height);
+
+  surface_rect = META_RECTANGLE_INIT (ceilf (x),
+                                      ceilf (y),
+                                      ceilf (width),
+                                      ceilf (height));
+
+  return meta_rectangle_contains_rect (&surface_rect,
+                                       rect);
+}
+
 void
 meta_surface_actor_set_input_region (MetaSurfaceActor *self,
                                      cairo_region_t   *region)
