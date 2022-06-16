@@ -449,7 +449,24 @@ meta_kms_update_set_vrr_mode (MetaKmsUpdate *update,
 
   update->needs_allow_modeset = TRUE;
 }
+#if 1
+void
+meta_kms_update_set_ie_mode (MetaKmsUpdate *update,
+                              MetaKmsCrtc   *crtc,
+                              gboolean       is_active)
+{
+  MetaKmsCrtcUpdate *crtc_update;
 
+  g_assert (!meta_kms_update_is_locked (update));
+  g_assert (meta_kms_crtc_get_device (crtc) == update->device);
+
+  crtc_update = ensure_crtc_update (update, crtc);
+  crtc_update->ie_mode.has_update = TRUE;
+  crtc_update->ie_mode.is_active = is_active;
+
+  update->needs_allow_modeset = TRUE;
+}
+#endif
 void
 meta_kms_update_add_page_flip_listener (MetaKmsUpdate                       *update,
                                         MetaKmsCrtc                         *crtc,

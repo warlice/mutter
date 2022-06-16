@@ -127,6 +127,9 @@ void meta_kms_update_set_vrr_mode (MetaKmsUpdate *update,
                                    MetaKmsCrtc   *crtc,
                                    gboolean       is_active);
 
+void meta_kms_update_set_ie_mode (MetaKmsUpdate *update,
+                                   MetaKmsCrtc   *crtc,
+                                   gboolean       is_active);
 void meta_kms_plane_assignment_set_fb_damage (MetaKmsPlaneAssignment *plane_assignment,
                                               const int              *rectangles,
                                               int                     n_rectangles);

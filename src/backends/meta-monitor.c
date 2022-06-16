@@ -377,6 +377,26 @@ meta_monitor_is_vrr_enabled (MetaMonitor *monitor)
   return meta_output_is_vrr_enabled (output);
 }
 
+#if 1
+gboolean
+meta_monitor_is_ie_capable (MetaMonitor *monitor)
+{
+  const MetaOutputInfo *output_info =
+    meta_monitor_get_main_output_info (monitor);
+
+  return output_info->ie_capable;
+}
+
+gboolean
+meta_monitor_is_ie_enabled (MetaMonitor *monitor)
+{
+  MetaOutput *output;
+
+  output = meta_monitor_get_main_output (monitor);
+
+  return meta_output_is_ie_enabled (output);
+}
+#endif
 gboolean
 meta_monitor_is_laptop_panel (MetaMonitor *monitor)
 {

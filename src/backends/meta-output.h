@@ -104,6 +104,7 @@ typedef struct _MetaOutputInfo
   gboolean supports_color_transform;
 
   gboolean vrr_capable;
+  gboolean ie_capable;
 
   /*
    * Get a new preferred mode on hotplug events, to handle dynamic guest
@@ -183,6 +184,10 @@ gboolean meta_output_is_underscanning (MetaOutput *output);
 gboolean meta_output_is_vrr_capable (MetaOutput *output);
 
 gboolean meta_output_is_vrr_enabled (MetaOutput *output);
+
+gboolean meta_output_is_ie_capable (MetaOutput *output);
+
+gboolean meta_output_is_ie_enabled (MetaOutput *output);
 
 void meta_output_set_backlight (MetaOutput *output,
                                 int         backlight);

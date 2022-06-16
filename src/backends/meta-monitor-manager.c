@@ -2043,6 +2043,16 @@ meta_monitor_manager_handle_get_current_state (MetaDBusDisplayConfig *skeleton,
                                  g_variant_new_boolean (vrr_enabled));
         }
 
+      if (meta_monitor_is_ie_capable (monitor))
+        {
+          gboolean ie_enabled = meta_monitor_is_ie_enabled (monitor);
+
+          g_variant_builder_add (&monitor_properties_builder, "{sv}",
+                                 "is-ie-enabled",
+                                 g_variant_new_boolean (ie_enabled));
+        }
+
+
       is_builtin = meta_monitor_is_laptop_panel (monitor);
       g_variant_builder_add (&monitor_properties_builder, "{sv}",
                              "is-builtin",
@@ -2365,6 +2375,9 @@ create_monitor_config_from_variant (MetaMonitorManager *manager,
   gboolean enable_vrr = FALSE;
   gboolean set_enable_vrr = FALSE;
 
+  gboolean enable_ie = FALSE;
+  gboolean set_enable_ie = FALSE;
+
   g_variant_get (monitor_config_variant, "(ss@a{sv})",
                  &connector,
                  &mode_id,
@@ -2411,6 +2424,20 @@ create_monitor_config_from_variant (MetaMonitorManager *manager,
           return NULL;
         }
     }
+#if 1
+  set_enable_ie =
+    g_variant_lookup (properties_variant, "enable_ie", "b",
+                      &enable_ie);
+  if (set_enable_ie)
+    {
+      if (enable_ie && !meta_monitor_is_ie_capable (monitor))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Image Enhancer requested but unsupported");
+          return NULL;
+        }
+    }
+#endif
 
   monitor_spec = meta_monitor_spec_clone (meta_monitor_get_spec (monitor));
 
@@ -2422,7 +2449,8 @@ create_monitor_config_from_variant (MetaMonitorManager *manager,
     .monitor_spec = monitor_spec,
     .mode_spec = monitor_mode_spec,
     .enable_underscanning = enable_underscanning,
-    .enable_vrr = enable_vrr
+    .enable_vrr = enable_vrr,
+    .enable_ie = enable_ie
   };
 
   return monitor_config;

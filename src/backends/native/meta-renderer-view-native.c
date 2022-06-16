@@ -133,11 +133,13 @@ meta_renderer_view_native_set_frame_sync (MetaRendererViewNative *view_native,
       clutter_frame_clock_set_mode (frame_clock,
                                     CLUTTER_FRAME_CLOCK_MODE_VARIABLE);
       meta_output_kms_set_vrr_mode (output_kms, TRUE);
+      meta_output_kms_set_ie_mode (output_kms, TRUE);
       break;
     case META_FRAME_SYNC_MODE_DISABLED:
       clutter_frame_clock_set_mode (frame_clock,
                                     CLUTTER_FRAME_CLOCK_MODE_FIXED);
       meta_output_kms_set_vrr_mode (output_kms, FALSE);
+      meta_output_kms_set_ie_mode (output_kms, FALSE);
       break;
     case META_FRAME_SYNC_MODE_INIT:
       g_assert_not_reached ();
@@ -175,6 +177,9 @@ meta_renderer_view_native_maybe_set_frame_sync (MetaRendererViewNative *view_nat
   output = meta_renderer_view_get_output (view);
 
   if (!meta_output_is_vrr_capable (output))
+    return;
+
+  if (!meta_output_is_ie_capable (output))
     return;
 
   applicable_sync_mode =

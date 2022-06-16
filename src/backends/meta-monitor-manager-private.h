@@ -103,6 +103,7 @@ struct _MetaOutputAssignment
   gboolean     is_presentation;
   gboolean     is_underscanning;
   gboolean     is_vrr_enabled;
+  gboolean     is_ie_enabled;
 };
 
 /*

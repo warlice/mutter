@@ -564,6 +564,7 @@ struct _MetaWindow
   unsigned int events_during_ping;
 
   gboolean vrr_supported;
+  gboolean ie_supported;
 };
 
 struct _MetaWindowClass
@@ -835,7 +836,12 @@ void meta_window_set_vrr_supported (MetaWindow *window,
                                     gboolean    vrr_supported);
 
 gboolean meta_window_get_vrr_supported (MetaWindow *window);
+#if 1
+void meta_window_set_ie_supported (MetaWindow *window,
+                                    gboolean    ie_supported);
 
+gboolean meta_window_get_ie_supported (MetaWindow *window);
+#endif
 void meta_window_handle_enter (MetaWindow  *window,
                                guint32      timestamp,
                                guint        root_x,

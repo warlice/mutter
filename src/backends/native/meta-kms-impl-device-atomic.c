@@ -302,7 +302,37 @@ process_crtc_update (MetaKmsImplDevice  *impl_device,
                               error))
         return FALSE;
     }
+#if 1
+  if (crtc_update->ie_mode.has_update &&
+      crtc_update->ie_mode.is_active)
+    {
+      meta_topic (META_DEBUG_KMS,
+                  "[atomic] Setting IE (GHE)  mode on CRTC %u (%s)",
+                  meta_kms_crtc_get_id (crtc),
+                  meta_kms_impl_device_get_path (impl_device));
 
+      if (!add_crtc_property (impl_device,
+                              crtc, req,
+                              META_KMS_CRTC_PROP_GHE,
+                              1,
+                              error))
+        return FALSE;
+    }
+  else if (crtc_update->ie_mode.has_update)
+    {
+      meta_topic (META_DEBUG_KMS,
+                  "[atomic] Unsetting IE (GHE) mode on CRTC %u (%s)",
+                  meta_kms_crtc_get_id (crtc),
+                  meta_kms_impl_device_get_path (impl_device));
+
+      if (!add_crtc_property (impl_device,
+                              crtc, req,
+                              META_KMS_CRTC_PROP_GHE,
+                              0,
+                              error))
+        return FALSE;
+    }
+#endif
   return TRUE;
 }
 

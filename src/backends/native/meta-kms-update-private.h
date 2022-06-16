@@ -92,6 +92,10 @@ typedef struct _MetaKmsCrtcUpdate
     gboolean has_update;
     gboolean is_active;
   } vrr_mode;
+  struct {
+    gboolean has_update;
+    gboolean is_active;
+  } ie_mode;
 } MetaKmsCrtcUpdate;
 
 typedef struct _MetaKmsPageFlipListener

@@ -168,6 +168,7 @@ typedef enum
   STATE_MONITOR_MODE_FLAG,
   STATE_MONITOR_UNDERSCANNING,
   STATE_MONITOR_ENABLE_VRR,
+  STATE_MONITOR_ENABLE_IE,
   STATE_DISABLED,
   STATE_POLICY,
   STATE_STORES,
@@ -456,6 +457,11 @@ handle_start_element (GMarkupParseContext  *context,
           {
             parser->state = STATE_MONITOR_ENABLE_VRR;
           }
+	else if (g_str_equal (element_name, "enable-ie"))
+          {
+            parser->state = STATE_MONITOR_ENABLE_IE;
+          }
+
         else
           {
             g_set_error (error, G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
@@ -553,6 +559,12 @@ handle_start_element (GMarkupParseContext  *context,
       {
         g_set_error (error, G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
                      "Invalid element '%s' under enable-vrr", element_name);
+        return;
+      }
+   case STATE_MONITOR_ENABLE_IE:
+      {
+        g_set_error (error, G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT,
+                     "Invalid element '%s' under enable-ie", element_name);
         return;
       }
 
@@ -833,6 +845,14 @@ handle_end_element (GMarkupParseContext  *context,
     case STATE_MONITOR_ENABLE_VRR:
       {
         g_assert (g_str_equal (element_name, "enable-vrr"));
+
+        parser->state = STATE_MONITOR;
+        return;
+      }
+
+    case STATE_MONITOR_ENABLE_IE:
+      {
+        g_assert (g_str_equal (element_name, "enable-ie"));
 
         parser->state = STATE_MONITOR;
         return;
@@ -1329,6 +1349,14 @@ handle_text (GMarkupParseContext *context,
         return;
       }
 
+    case STATE_MONITOR_ENABLE_IE:
+      {
+        read_bool (text, text_len,
+                   &parser->current_monitor_config->enable_ie,
+                   error);
+        return;
+      }
+
     case STATE_STORE:
       {
         MetaConfigStore store;
@@ -1507,6 +1535,11 @@ append_monitors (GString *buffer,
       if (monitor_config->enable_vrr)
         g_string_append (buffer, "        <enable-vrr>yes</enable-vrr>\n");
       g_string_append (buffer, "      </monitor>\n");
+
+      if (monitor_config->enable_ie)
+        g_string_append (buffer, "        <enable-ie>yes</enable-ie>\n");
+      g_string_append (buffer, "      </monitor>\n");
+      
     }
 }
 

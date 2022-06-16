@@ -75,6 +75,7 @@ typedef struct
   gboolean is_presentation;
   gboolean is_underscanning;
   gboolean is_vrr_enabled;
+  gboolean is_ie_enabled;
 } MetaOutputConfig;
 
 typedef struct _MetaLegacyMonitorsConfig
@@ -608,6 +609,8 @@ handle_text (GMarkupParseContext *context,
           parser->output.is_underscanning = read_bool (text, text_len, error);
         else if (strcmp (parser->output_field, "enable_vrr") == 0)
           parser->output.is_vrr_enabled = read_bool (text, text_len, error);
+	else if (strcmp (parser->output_field, "enable_ie") == 0)
+          parser->output.is_ie_enabled = read_bool (text, text_len, error);
         else
           g_assert_not_reached ();
         return;
@@ -701,7 +704,8 @@ create_monitor_config (MetaOutputKey    *output_key,
     .monitor_spec = monitor_spec,
     .mode_spec = mode_spec,
     .enable_underscanning = output_config->is_underscanning,
-    .enable_vrr = output_config->is_vrr_enabled
+    .enable_vrr = output_config->is_vrr_enabled,
+    .enable_ie = output_config->is_ie_enabled
   };
 
   if (!meta_verify_monitor_config (monitor_config, error))

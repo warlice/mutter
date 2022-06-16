@@ -122,6 +122,10 @@ gboolean meta_monitor_is_vrr_capable (MetaMonitor *monitor);
 
 gboolean meta_monitor_is_vrr_enabled (MetaMonitor *monitor);
 
+gboolean meta_monitor_is_ie_capable (MetaMonitor *monitor);
+
+gboolean meta_monitor_is_ie_enabled (MetaMonitor *monitor);
+
 gboolean meta_monitor_is_laptop_panel (MetaMonitor *monitor);
 
 gboolean meta_monitor_is_same_as (MetaMonitor *monitor,

@@ -61,6 +61,7 @@ typedef struct _MetaKmsConnectorState
   MetaMonitorTransform panel_orientation_transform;
 
   gboolean vrr_capable;
+  gboolean ie_capable;
 } MetaKmsConnectorState;
 
 META_EXPORT_TEST

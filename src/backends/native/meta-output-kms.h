@@ -43,6 +43,9 @@ void meta_output_kms_set_underscan (MetaOutputKms *output_kms,
 void meta_output_kms_set_vrr_mode (MetaOutputKms *output_kms,
                                    gboolean       enabled);
 
+void meta_output_kms_set_ie_mode (MetaOutputKms *output_kms,
+                                   gboolean       enabled);
+
 gboolean meta_output_kms_can_clone (MetaOutputKms *output_kms,
                                     MetaOutputKms *other_output_kms);
 

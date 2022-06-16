@@ -2808,6 +2808,32 @@ meta_window_get_vrr_supported (MetaWindow *window)
   return window->vrr_supported;
 }
 
+#if 1
+/**
+ * meta_window_set_ie_supported:
+ * @window: a #MetaWindow
+ * @ie_supported: whether the window supports variable refresh rate
+ */
+void
+meta_window_set_ie_supported (MetaWindow *window,
+                               gboolean    ie_supported)
+{
+  window->ie_supported = ie_supported;
+}
+
+/**
+ * meta_window_get_ie_supported:
+ * @window: a #MetaWindow
+ *
+ * Return value: %TRUE if the window supports variable refresh rate
+ */
+gboolean
+meta_window_get_ie_supported (MetaWindow *window)
+{
+  return window->ie_supported;
+}
+
+#endif
 static void
 meta_window_get_tile_fraction (MetaWindow   *window,
                                MetaTileMode  tile_mode,

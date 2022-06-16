@@ -97,7 +97,7 @@ buffer_free (Buffer *buffer)
   g_clear_pointer (&buffer->bo, gbm_bo_destroy);
 
   for (i = 0; i < buffer->n_planes; i++)
-    close (buffer->dmabuf_fds[i]);
+    pclose (buffer->dmabuf_fds[i]);
 
   g_free (buffer);
 }

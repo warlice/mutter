@@ -395,6 +395,11 @@ init_properties (MetaKmsCrtc       *crtc,
           .name = "VRR_ENABLED",
           .type = DRM_MODE_PROP_RANGE,
         },
+      [META_KMS_CRTC_PROP_GHE] =
+        {
+          .name = "GHE",
+          .type = DRM_MODE_PROP_ENUM,
+        },
     }
   };
 

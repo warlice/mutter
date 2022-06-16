@@ -347,6 +347,10 @@
 	                            (absence of this means variable refresh
 	                            rate not being supported)
 
+	     "is-ie-enabled" (b): whether image enhancer is enabled
+                                    (absence of this means image enhancer
+                                     not being supported)
+
 	    - "max-screen-size" (ii): the maximum size a screen may have
 				      (absence of this means unlimited screen
 				      size)
@@ -469,6 +473,9 @@
 	                            when variable refresh rate is supported (see
 	                            GetCurrentState).
 
+	    	- "enable_ie" (b): enable image enhancer; may only be set
+                                    when image enhancer is supported (see
+                                    GetCurrentState).
 	@properties may effect the global monitor configuration state. Possible
 	properties are:
 

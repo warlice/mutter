@@ -122,7 +122,33 @@ meta_output_kms_set_vrr_mode (MetaOutputKms *output_kms,
                                 kms_crtc,
                                 enabled);
 }
+#if 1
+void
+meta_output_kms_set_ie_mode (MetaOutputKms *output_kms,
+                              gboolean       enabled)
+{
+  MetaOutput *output = META_OUTPUT (output_kms);
+  const MetaOutputInfo *output_info = meta_output_get_info (output);
+  MetaCrtc *crtc;
+  MetaKmsCrtc *kms_crtc;
+  MetaKmsDevice *kms_device;
+  MetaKms *kms;
+  MetaKmsUpdate *kms_update;
 
+  g_assert (output_info->ie_capable);
+
+  crtc = meta_output_get_assigned_crtc (output);
+  kms_crtc = meta_crtc_kms_get_kms_crtc (META_CRTC_KMS (crtc));
+  kms_device = meta_kms_crtc_get_device (kms_crtc);
+  kms = meta_kms_device_get_kms (kms_device);
+
+  kms_update = meta_kms_ensure_pending_update (kms, kms_device);
+
+  meta_kms_update_set_ie_mode (kms_update,
+                                kms_crtc,
+                                enabled);
+}
+#endif
 static MetaPrivacyScreenState
 meta_output_kms_get_privacy_screen_state (MetaOutput *output)
 {
@@ -432,6 +458,8 @@ meta_output_kms_new (MetaGpuKms        *gpu_kms,
     meta_kms_connector_is_underscanning_supported (kms_connector);
 
   output_info->vrr_capable = connector_state->vrr_capable;
+  
+  output_info->ie_capable = connector_state->ie_capable;
 
   meta_output_info_parse_edid (output_info, connector_state->edid_data);
 

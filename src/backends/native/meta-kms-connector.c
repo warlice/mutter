@@ -301,6 +301,8 @@ state_set_properties (MetaKmsConnectorState *state,
       else if ((prop->flags & DRM_MODE_PROP_RANGE) &&
                strcmp (prop->name, "vrr_capable") == 0)
         state->vrr_capable = drm_connector->prop_values[i];
+      else if (meta_kms_connector_get_connector_type(drm_connector))
+	      state->ie_capable = True;
 
       drmModeFreeProperty (prop);
     }
@@ -545,6 +547,7 @@ meta_kms_connector_state_new (void)
   state->suggested_x = -1;
   state->suggested_y = -1;
   state->vrr_capable = FALSE;
+  state->ie_capable = FALSE;
 
   return state;
 }
@@ -641,6 +644,9 @@ meta_kms_connector_state_changes (MetaKmsConnectorState *state,
     return META_KMS_UPDATE_CHANGE_FULL;
 
   if (state->vrr_capable != new_state->vrr_capable)
+    return META_KMS_UPDATE_CHANGE_FULL;
+
+  if (state->ie_capable != new_state->ie_capable)
     return META_KMS_UPDATE_CHANGE_FULL;
 
   if (state->privacy_screen_state != new_state->privacy_screen_state)
