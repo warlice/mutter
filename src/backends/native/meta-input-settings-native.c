@@ -663,6 +663,15 @@ meta_input_settings_native_set_tablet_aspect_ratio (MetaInputSettings  *settings
 }
 
 static void
+meta_input_settings_native_set_three_finger_drag (MetaInputSettings  *settings,
+                                                  ClutterInputDevice *device,
+                                                  gboolean            enabled)
+{
+  MetaInputDeviceNative *native_device = META_INPUT_DEVICE_NATIVE (device);
+  native_device->three_finger_drag_enabled = enabled;
+}
+
+static void
 meta_input_settings_native_set_tablet_area (MetaInputSettings  *settings,
                                             ClutterInputDevice *device,
                                             gdouble             padding_left,
@@ -830,6 +839,7 @@ meta_input_settings_native_class_init (MetaInputSettingsNativeClass *klass)
   input_settings_class->set_click_method = meta_input_settings_native_set_click_method;
   input_settings_class->set_keyboard_repeat = meta_input_settings_native_set_keyboard_repeat;
   input_settings_class->set_disable_while_typing = meta_input_settings_native_set_disable_while_typing;
+  input_settings_class->set_three_finger_drag = meta_input_settings_native_set_three_finger_drag;
 
   input_settings_class->set_tablet_mapping = meta_input_settings_native_set_tablet_mapping;
   input_settings_class->set_tablet_aspect_ratio = meta_input_settings_native_set_tablet_aspect_ratio;
