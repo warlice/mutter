@@ -325,10 +325,10 @@ data_source_update_user_dnd_action (MetaWaylandDataSource *source,
 {
   enum wl_data_device_manager_dnd_action user_dnd_action = 0;
 
-  if (modifiers & CLUTTER_SHIFT_MASK)
-    user_dnd_action = WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE;
-  else if (modifiers & CLUTTER_CONTROL_MASK)
+  if (modifiers & CLUTTER_CONTROL_MASK)
     user_dnd_action = WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY;
+  else if (modifiers & CLUTTER_SHIFT_MASK)
+    user_dnd_action = WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE;
   else if (modifiers & (CLUTTER_MOD1_MASK | CLUTTER_BUTTON2_MASK))
     user_dnd_action = WL_DATA_DEVICE_MANAGER_DND_ACTION_ASK;
 
