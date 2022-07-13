@@ -107,6 +107,8 @@
  */
 #define MAX_UNMAXIMIZED_WINDOW_AREA .8
 
+#define MINIMUM_HORIZONTAL_TILE_SIZE 640
+
 #define SNAP_SECURITY_LABEL_PREFIX "snap."
 
 /* Each window has a "stamp" which is a non-recycled 64-bit ID. They
@@ -2982,21 +2984,47 @@ meta_window_can_tile_maximized (MetaWindow *window)
 gboolean
 meta_window_can_tile_side_by_side (MetaWindow *window)
 {
-  int monitor;
+  MetaBackend *backend;
+  MetaMonitorManager *monitor_manager;
   MetaRectangle tile_area;
   MetaRectangle client_rect;
+  MetaLogicalMonitor *logical_monitor;
+  int monitor;
+  int required_size;
+  int tile_width;
 
   if (!meta_window_can_tile_maximized (window))
     return FALSE;
 
-  monitor = meta_display_get_current_monitor (window->display);
-  meta_window_get_work_area_for_monitor (window, monitor, &tile_area);
-
-  /* Do not allow tiling in portrait orientation */
-  if (tile_area.height > tile_area.width)
+  if (window->shaded || window->minimized)
     return FALSE;
 
-  tile_area.width /= 2;
+  backend = meta_get_backend ();
+  monitor_manager = meta_backend_get_monitor_manager (backend);
+  monitor = meta_display_get_current_monitor (window->display);
+  logical_monitor =
+    meta_monitor_manager_get_logical_monitor_from_number (monitor_manager,
+                                                          monitor);
+  if (!logical_monitor)
+    return FALSE;
+
+  meta_window_get_work_area_for_logical_monitor (window, logical_monitor,
+                                                 &tile_area);
+
+  required_size = MINIMUM_HORIZONTAL_TILE_SIZE;
+  if (logical_monitor->scale > 1 &&
+      meta_monitor_manager_get_default_layout_mode (monitor_manager) ==
+      META_LOGICAL_MONITOR_LAYOUT_MODE_PHYSICAL)
+    required_size /= logical_monitor->scale;
+
+  tile_width = tile_area.width / 2;
+
+  /* Do not allow tiling in portrait orientation with
+   * small resolution screen */
+  if (tile_area.height > tile_area.width && tile_width < required_size)
+    return FALSE;
+
+  tile_area.width = tile_width;
 
   meta_window_frame_rect_to_client_rect (window, &tile_area, &client_rect);
 
