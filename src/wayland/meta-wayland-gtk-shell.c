@@ -399,7 +399,9 @@ fill_states (struct wl_array    *states,
 
   if (version < GTK_SURFACE1_CONFIGURE_EDGES_SINCE_VERSION &&
       (window->tile_mode == META_TILE_LEFT ||
-       window->tile_mode == META_TILE_RIGHT))
+       window->tile_mode == META_TILE_RIGHT ||
+       window->tile_mode == META_TILE_TOP ||
+       window->tile_mode == META_TILE_BOTTOM))
     add_state_value (states, GTK_SURFACE1_STATE_TILED);
 
   if (version >= GTK_SURFACE1_STATE_TILED_TOP_SINCE_VERSION &&

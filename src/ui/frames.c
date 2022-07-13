@@ -1811,6 +1811,9 @@ get_control (MetaUIFrame *frame, int root_x, int root_y)
   if (flags & META_FRAME_TILED_LEFT || flags & META_FRAME_TILED_RIGHT)
     has_vert = has_horiz = FALSE;
 
+  if (flags & META_FRAME_TILED_TOP || flags & META_FRAME_TILED_BOTTOM)
+    has_vert = has_horiz = FALSE;
+
   if (META_POINT_IN_RECT (x, y, fgeom.title_rect))
     {
       if (has_vert && y <= TOP_RESIZE_HEIGHT && has_north_resize)

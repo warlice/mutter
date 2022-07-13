@@ -671,7 +671,8 @@ test_case_do (TestCase *test,
       MetaWindow *window;
 
       if (argc != 3)
-        BAD_COMMAND("usage: %s <client-id>/<window-id> [right|left]", argv[0]);
+        BAD_COMMAND("usage: %s <client-id>/<window-id> [top|right|left|bottom]",
+                    argv[0]);
 
       MetaTestClient *client;
       const char *window_id;
@@ -690,6 +691,14 @@ test_case_do (TestCase *test,
       else if (strcmp (argv[2], "left") == 0)
         {
           tile_mode = META_TILE_LEFT;
+        }
+      else if (strcmp (argv[2], "top") == 0)
+        {
+          tile_mode = META_TILE_TOP;
+        }
+      else if (strcmp (argv[2], "bottom") == 0)
+        {
+          tile_mode = META_TILE_BOTTOM;
         }
       else
         {

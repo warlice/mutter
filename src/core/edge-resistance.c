@@ -26,6 +26,7 @@
 #include "core/boxes-private.h"
 #include "core/display-private.h"
 #include "core/meta-workspace-manager-private.h"
+#include "core/window-private.h"
 #include "core/workspace-private.h"
 
 /* A simple macro for whether a given window's edges are potentially
@@ -475,7 +476,9 @@ apply_edge_resistance_to_each_side (MetaDisplay             *display,
 
   edge_data = display->grab_edge_resistance_data;
 
-  if (auto_snap && !META_WINDOW_TILED_SIDE_BY_SIDE (window))
+  if (auto_snap &&
+      !META_WINDOW_TILED_SIDE_BY_SIDE (window) &&
+      !META_WINDOW_TILED_TOP_DOWN (window))
     {
       /* Do the auto snapping instead of normal edge resistance; in all
        * cases, we allow snapping to opposite kinds of edges (e.g. left
@@ -510,10 +513,16 @@ apply_edge_resistance_to_each_side (MetaDisplay             *display,
                                         FALSE,
                                         keyboard_op);
     }
-  else if (auto_snap && META_WINDOW_TILED_SIDE_BY_SIDE (window))
+  else if (auto_snap &&
+           (META_WINDOW_TILED_SIDE_BY_SIDE (window) ||
+            META_WINDOW_TILED_TOP_DOWN (window)))
     {
       MetaRectangle workarea;
       guint i;
+      int workarea_start;
+      int workarea_end;
+      int *new_start;
+      int *new_end;
 
       const gfloat tile_edges[] =
         {
@@ -530,6 +539,8 @@ apply_edge_resistance_to_each_side (MetaDisplay             *display,
       new_top = new_outer->y;
       new_right = new_outer->x + new_outer->width;
       new_bottom = new_outer->y + new_outer->height;
+      new_start = NULL;
+      new_end = NULL;
 
       /* When snapping tiled windows, we don't really care about the
        * x and y position, only about the width and height. Also, it
@@ -538,19 +549,37 @@ apply_edge_resistance_to_each_side (MetaDisplay             *display,
        * snapping points of tiled windows - we only care about the
        * work area and the target position.
        */
+      if (META_WINDOW_TILED_SIDE_BY_SIDE (window))
+        {
+          workarea_start = workarea.x;
+          workarea_end = workarea.x + workarea.width;
+          new_start = &new_left;
+          new_end = &new_right;
+        }
+      else if (META_WINDOW_TILED_TOP_DOWN (window))
+        {
+          workarea_start = workarea.y;
+          workarea_end = workarea.y + workarea.height;
+          new_start = &new_top;
+          new_end = &new_bottom;
+        }
+
+      g_assert (new_start && new_end);
+
       for (i = 0; i < G_N_ELEMENTS (tile_edges); i++)
         {
-          guint horizontal_point = workarea.x + floor (workarea.width * tile_edges[i]);
+          guint point = workarea_start +
+            floor ((workarea_end - workarea_start) * tile_edges[i]);
 
-          if (ABS (horizontal_point - new_left) < 16)
+          if (ABS (point - *new_start) < 16)
             {
-              new_left = horizontal_point;
-              new_right = workarea.x + workarea.width;
+              *new_start = point;
+              *new_end = workarea_end;
             }
-          else if (ABS (horizontal_point - new_right) < 16)
+          else if (ABS (point - *new_end) < 16)
             {
-              new_left = workarea.x;
-              new_right = horizontal_point;
+              *new_start = workarea_start;
+              *new_end = point;
             }
         }
     }

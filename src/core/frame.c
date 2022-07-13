@@ -28,6 +28,7 @@
 #include "backends/x11/meta-backend-x11.h"
 #include "core/bell.h"
 #include "core/keybindings-private.h"
+#include "core/window-private.h"
 #include "meta/meta-x11-errors.h"
 #include "x11/meta-x11-display-private.h"
 
@@ -294,11 +295,17 @@ meta_frame_get_flags (MetaFrame *frame)
   if (META_WINDOW_MAXIMIZED (frame->window))
     flags |= META_FRAME_MAXIMIZED;
 
+  if (META_WINDOW_TILED_TOP (frame->window))
+    flags |= META_FRAME_TILED_TOP;
+
   if (META_WINDOW_TILED_LEFT (frame->window))
     flags |= META_FRAME_TILED_LEFT;
 
   if (META_WINDOW_TILED_RIGHT (frame->window))
     flags |= META_FRAME_TILED_RIGHT;
+
+  if (META_WINDOW_TILED_BOTTOM (frame->window))
+    flags |= META_FRAME_TILED_BOTTOM;
 
   if (frame->window->fullscreen)
     flags |= META_FRAME_FULLSCREEN;
