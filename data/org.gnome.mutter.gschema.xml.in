@@ -169,12 +169,12 @@
   <schema id="org.gnome.mutter.keybindings" path="/org/gnome/mutter/keybindings/">
 
     <key name="toggle-tiled-left" type="as">
-      <default><![CDATA[['<Super>Left']]]></default>
+      <default><![CDATA[['<Super>Left', '<Super>KP_4']]]></default>
       <summary>View split on left</summary>
     </key>
 
     <key name="toggle-tiled-right" type="as">
-      <default><![CDATA[['<Super>Right']]]></default>
+      <default><![CDATA[['<Super>Right', '<Super>KP_6']]]></default>
       <summary>View split on right</summary>
     </key>
 
