@@ -84,6 +84,37 @@ get_backend (MetaScreenCastAreaStreamSrc *area_src)
   return meta_screen_cast_get_backend (screen_cast);
 }
 
+static float
+calculate_frame_rate (MetaScreenCastAreaStream *area_stream)
+{
+  ClutterStage *stage;
+  MetaRectangle *area;
+  GList *views, *l;
+  float max_frame_rate = 0.0;
+
+  stage = meta_screen_cast_area_stream_get_stage (area_stream);
+  area = meta_screen_cast_area_stream_get_area (area_stream);
+  views = clutter_stage_peek_stage_views (stage);
+
+  for (l = views; l; l = l->next)
+    {
+      ClutterStageView *view;
+      MetaRectangle view_layout;
+
+      view = l->data;
+      clutter_stage_view_get_layout (view, &view_layout);
+
+      if (meta_rectangle_overlap (area, &view_layout))
+        {
+          float frame_rate = clutter_stage_view_get_refresh_rate (view);
+
+          max_frame_rate = MAX (frame_rate, max_frame_rate);
+        }
+    }
+
+  return max_frame_rate;
+}
+
 static gboolean
 meta_screen_cast_area_stream_src_get_specs (MetaScreenCastStreamSrc *src,
                                             int                     *width,
@@ -100,7 +131,7 @@ meta_screen_cast_area_stream_src_get_specs (MetaScreenCastStreamSrc *src,
 
   *width = (int) roundf (area->width * scale);
   *height = (int) roundf (area->height * scale);
-  *frame_rate = 60.0;
+  *frame_rate = calculate_frame_rate (area_stream);
 
   return TRUE;
 }
