@@ -72,7 +72,11 @@ typedef enum
 {
   META_TILE_NONE,
   META_TILE_LEFT,
+  META_TILE_TOP_LEFT,
+  META_TILE_BOTTOM_LEFT,
   META_TILE_RIGHT,
+  META_TILE_TOP_RIGHT,
+  META_TILE_BOTTOM_RIGHT,
   META_TILE_MAXIMIZED
 } MetaTileMode;
 
@@ -219,7 +223,7 @@ struct _MetaDisplay
   MetaStackTracker *stack_tracker;
 
   guint tile_preview_timeout_id;
-  guint preview_tile_mode : 2;
+  guint preview_tile_mode : 3;
 
   GSList *startup_sequences;
 

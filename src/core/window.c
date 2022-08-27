@@ -2851,6 +2851,8 @@ update_edge_constraints (MetaWindow *window)
       break;
 
     case META_TILE_LEFT:
+    case META_TILE_TOP_LEFT:
+    case META_TILE_BOTTOM_LEFT:
       window->edge_constraints.top = META_EDGE_CONSTRAINT_MONITOR;
 
       if (window->tile_match)
@@ -2863,6 +2865,8 @@ update_edge_constraints (MetaWindow *window)
       break;
 
     case META_TILE_RIGHT:
+    case META_TILE_TOP_RIGHT:
+    case META_TILE_BOTTOM_RIGHT:
       window->edge_constraints.top = META_EDGE_CONSTRAINT_MONITOR;
       window->edge_constraints.right = META_EDGE_CONSTRAINT_MONITOR;
       window->edge_constraints.bottom = META_EDGE_CONSTRAINT_MONITOR;
@@ -5760,6 +5764,7 @@ update_move_maybe_tile (MetaWindow *window,
   MetaLogicalMonitor *logical_monitor;
   MetaDisplay *display = window->display;
   MetaRectangle work_area;
+  gboolean left = FALSE, right = FALSE, top = FALSE, bottom = FALSE;
 
   /* For side-by-side tiling we are interested in the inside vertical
    * edges of the work area of the monitor where the pointer is located,
@@ -5786,18 +5791,38 @@ update_move_maybe_tile (MetaWindow *window,
   /* Check if the cursor is in a position which triggers tiling
    * and set tile_mode accordingly.
    */
-  if (meta_window_can_tile_side_by_side (window) &&
-      x >= logical_monitor->rect.x && x < (work_area.x + shake_threshold))
-    display->preview_tile_mode = META_TILE_LEFT;
-  else if (meta_window_can_tile_side_by_side (window) &&
-           x >= work_area.x + work_area.width - shake_threshold &&
+  if (x >= logical_monitor->rect.x && x < (work_area.x + shake_threshold))
+    left = TRUE;
+  else if (x >= work_area.x + work_area.width - shake_threshold &&
            x < (logical_monitor->rect.x + logical_monitor->rect.width))
-    display->preview_tile_mode = META_TILE_RIGHT;
-  else if (meta_window_can_tile_maximized (window) &&
-           y >= logical_monitor->rect.y && y <= work_area.y)
+    right = TRUE;
+
+  if (y >= logical_monitor->rect.y && y <= work_area.y)
+    top = TRUE;
+  else if (y >= work_area.y + work_area.height - shake_threshold &&
+           y < (logical_monitor->rect.y + logical_monitor->rect.height))
+    bottom = TRUE;
+
+  display->preview_tile_mode = META_TILE_NONE;
+
+  if (meta_window_can_tile_side_by_side (window)) {
+    if (left && top)
+      display->preview_tile_mode = META_TILE_TOP_LEFT;
+    else if (left && bottom)
+      display->preview_tile_mode = META_TILE_BOTTOM_LEFT;
+    else if (left)
+      display->preview_tile_mode = META_TILE_LEFT;
+    else if (right && top)
+      display->preview_tile_mode = META_TILE_TOP_RIGHT;
+    else if (right && bottom)
+      display->preview_tile_mode = META_TILE_BOTTOM_RIGHT;
+    else if (right)
+      display->preview_tile_mode = META_TILE_RIGHT;
+  }
+
+  if (meta_window_can_tile_maximized (window) &&
+      display->preview_tile_mode == META_TILE_NONE && top)
     display->preview_tile_mode = META_TILE_MAXIMIZED;
-  else
-    display->preview_tile_mode = META_TILE_NONE;
 
   if (display->preview_tile_mode != META_TILE_NONE)
     window->tile_monitor_number = logical_monitor->number;
@@ -6442,8 +6467,34 @@ meta_window_get_tile_area (MetaWindow    *window,
   *tile_area = work_area;
   tile_area->width = round (tile_area->width * fraction);
 
-  if (tile_mode == META_TILE_RIGHT)
-    tile_area->x += work_area.width - tile_area->width;
+  switch (tile_mode)
+    {
+    case META_TILE_TOP_LEFT:
+    case META_TILE_TOP_RIGHT:
+      tile_area->height /= 2;
+      break;
+
+    case META_TILE_BOTTOM_LEFT:
+    case META_TILE_BOTTOM_RIGHT:
+      tile_area->height /= 2;
+      tile_area->y += work_area.height - tile_area->height;
+      break;
+
+    default:
+      break;
+    }
+
+  switch (tile_mode)
+    {
+    case META_TILE_TOP_RIGHT:
+    case META_TILE_BOTTOM_RIGHT:
+    case META_TILE_RIGHT:
+      tile_area->x += work_area.width - tile_area->width;
+      break;
+
+    default:
+      break;
+    }
 }
 
 gboolean
