@@ -50,25 +50,7 @@ META_EXPORT
 MetaBackground *meta_background_new (MetaDisplay *display);
 
 META_EXPORT
-void meta_background_set_color    (MetaBackground            *self,
-                                   ClutterColor              *color);
-
-META_EXPORT
-void meta_background_set_gradient (MetaBackground            *self,
-                                   GDesktopBackgroundShading  shading_direction,
-                                   ClutterColor              *color,
-                                   ClutterColor              *second_color);
-
-META_EXPORT
-void meta_background_set_file     (MetaBackground            *self,
-                                   GFile                     *file,
-                                   GDesktopBackgroundStyle    style);
-
-META_EXPORT
-void meta_background_set_blend    (MetaBackground            *self,
-                                   GFile                     *file1,
-                                   GFile                     *file2,
-                                   double                     blend_factor,
-                                   GDesktopBackgroundStyle    style);
+void meta_background_set_file           (MetaBackground            *self,
+                                         GFile                     *file);
 
 #endif /* META_BACKGROUND_H */
