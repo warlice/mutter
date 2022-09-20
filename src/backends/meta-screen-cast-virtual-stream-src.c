@@ -37,11 +37,13 @@ struct _MetaScreenCastVirtualStreamSrc
 
   gboolean cursor_bitmap_invalid;
   gboolean hw_cursor_inhibited;
+  gboolean pointer_visible;
 
   MetaStageWatch *watch;
 
   gulong position_invalidated_handler_id;
   gulong cursor_changed_handler_id;
+  gulong cursor_visibility_changed_handler_id;
   gulong prepare_frame_handler_id;
 
   gulong monitors_changed_handler_id;
@@ -236,6 +238,20 @@ on_monitors_changed (MetaMonitorManager             *monitor_manager,
 }
 
 static void
+cursor_visibility_changed (MetaCursorTracker              *cursor_tracker,
+                           MetaScreenCastVirtualStreamSrc *virtual_src)
+{
+  gboolean pointer_currently_visible;
+  pointer_currently_visible = meta_cursor_tracker_get_pointer_visible (cursor_tracker);
+  if (pointer_currently_visible == virtual_src->pointer_visible)
+    return;
+
+  virtual_src->pointer_visible = pointer_currently_visible;
+  cursor_changed (cursor_tracker, virtual_src);
+}
+
+
+static void
 init_record_callbacks (MetaScreenCastVirtualStreamSrc *virtual_src)
 {
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (virtual_src);
@@ -257,6 +273,10 @@ init_record_callbacks (MetaScreenCastVirtualStreamSrc *virtual_src)
       virtual_src->cursor_changed_handler_id =
         g_signal_connect_after (cursor_tracker, "cursor-changed",
                                 G_CALLBACK (cursor_changed),
+                                virtual_src);
+      virtual_src->cursor_changed_handler_id =
+        g_signal_connect_after (cursor_tracker, "visibility-changed",
+                                G_CALLBACK (cursor_visibility_changed),
                                 virtual_src);
       virtual_src->prepare_frame_handler_id =
         g_signal_connect_after (stage, "prepare-frame",
@@ -329,6 +349,8 @@ meta_screen_cast_virtual_stream_src_disable (MetaScreenCastStreamSrc *src)
   g_clear_signal_handler (&virtual_src->position_invalidated_handler_id,
                           cursor_tracker);
   g_clear_signal_handler (&virtual_src->cursor_changed_handler_id,
+                          cursor_tracker);
+  g_clear_signal_handler (&virtual_src->cursor_visibility_changed_handler_id,
                           cursor_tracker);
   g_clear_signal_handler (&virtual_src->prepare_frame_handler_id,
                           stage);
