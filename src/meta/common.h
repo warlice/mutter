@@ -66,6 +66,8 @@
  * @META_FRAME_ABOVE: frame is above
  * @META_FRAME_TILED_LEFT: frame is tiled to the left
  * @META_FRAME_TILED_RIGHT: frame is tiled to the right
+ * @META_FRAME_TILED_TOP: frame is tiled to the top
+ * @META_FRAME_TILED_BOTTOM: frame is tiled to the bottom
  */
 typedef enum
 {
@@ -84,7 +86,9 @@ typedef enum
   META_FRAME_FULLSCREEN               = 1 << 12,
   META_FRAME_ABOVE                    = 1 << 13,
   META_FRAME_TILED_LEFT               = 1 << 14,
-  META_FRAME_TILED_RIGHT              = 1 << 15
+  META_FRAME_TILED_RIGHT              = 1 << 15,
+  META_FRAME_TILED_TOP                = 1 << 16,
+  META_FRAME_TILED_BOTTOM             = 1 << 17,
 } MetaFrameFlags;
 
 /**

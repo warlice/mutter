@@ -169,13 +169,23 @@
   <schema id="org.gnome.mutter.keybindings" path="/org/gnome/mutter/keybindings/">
 
     <key name="toggle-tiled-left" type="as">
-      <default><![CDATA[['<Super>Left']]]></default>
+      <default><![CDATA[['<Super>Left', '<Super><Ctrl>Right', '<Super>KP_4']]]></default>
       <summary>View split on left</summary>
     </key>
 
     <key name="toggle-tiled-right" type="as">
-      <default><![CDATA[['<Super>Right']]]></default>
+      <default><![CDATA[['<Super>Right', '<Super><Ctrl>Right', '<Super>KP_6']]]></default>
       <summary>View split on right</summary>
+    </key>
+
+    <key name="toggle-tiled-top" type="as">
+      <default><![CDATA[['<Super><Ctrl>Up', '<Super>KP_8']]]></default>
+      <summary>View split on top</summary>
+    </key>
+
+    <key name="toggle-tiled-bottom" type="as">
+      <default><![CDATA[['<Super><Ctrl>Down', '<Super>KP_2']]]></default>
+      <summary>View split on bottom</summary>
     </key>
 
     <key name="tab-popup-select" type="as">

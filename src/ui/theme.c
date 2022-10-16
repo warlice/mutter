@@ -553,6 +553,8 @@ meta_frame_layout_calc_geometry (MetaFrameLayout        *layout,
       rect->visible.height = button_height;
 
       if (flags & META_FRAME_MAXIMIZED ||
+          flags & META_FRAME_TILED_TOP ||
+          flags & META_FRAME_TILED_BOTTOM ||
           flags & META_FRAME_TILED_LEFT ||
           flags & META_FRAME_TILED_RIGHT)
         {
@@ -1186,7 +1188,9 @@ meta_style_info_set_flags (MetaStyleInfo  *style_info,
   if (flags & META_FRAME_MAXIMIZED)
     class_name = "maximized";
   else if (flags & META_FRAME_TILED_LEFT ||
-           flags & META_FRAME_TILED_RIGHT)
+           flags & META_FRAME_TILED_RIGHT ||
+           flags & META_FRAME_TILED_TOP ||
+           flags & META_FRAME_TILED_BOTTOM)
     class_name = "tiled";
 
   for (i = 0; i < META_STYLE_ELEMENT_LAST; i++)

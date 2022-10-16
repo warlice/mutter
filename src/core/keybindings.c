@@ -36,11 +36,13 @@
 #include "backends/x11/meta-backend-x11.h"
 #include "backends/x11/meta-input-device-x11.h"
 #include "compositor/compositor-private.h"
+#include "core/display-private.h"
 #include "core/edge-resistance.h"
 #include "core/frame.h"
 #include "core/keybindings-private.h"
 #include "core/meta-accel-parse.h"
 #include "core/meta-workspace-manager-private.h"
+#include "core/window-private.h"
 #include "core/workspace-private.h"
 #include "meta/compositor.h"
 #include "meta/meta-x11-errors.h"
@@ -3258,20 +3260,35 @@ handle_toggle_tiled (MetaDisplay     *display,
   MetaTileMode mode = binding->handler->data;
 
   if ((META_WINDOW_TILED_LEFT (window) && mode == META_TILE_LEFT) ||
-      (META_WINDOW_TILED_RIGHT (window) && mode == META_TILE_RIGHT))
+      (META_WINDOW_TILED_RIGHT (window) && mode == META_TILE_RIGHT) ||
+      (META_WINDOW_TILED_TOP (window) && mode == META_TILE_TOP) ||
+      (META_WINDOW_TILED_BOTTOM (window) && mode == META_TILE_BOTTOM))
     {
       meta_window_untile (window);
     }
-  else if (meta_window_can_tile_side_by_side (window))
+  else
     {
-      window->tile_monitor_number = window->monitor->number;
       /* Maximization constraints beat tiling constraints, so if the window
        * is maximized, tiling won't have any effect unless we unmaximize it
        * horizontally first; rather than calling meta_window_unmaximize(),
        * we just set the flag and rely on meta_window_tile() syncing it to
        * save an additional roundtrip.
        */
-      window->maximized_horizontally = FALSE;
+      if (mode == META_TILE_RIGHT || mode == META_TILE_LEFT)
+        {
+          if (!meta_window_can_tile_side_by_side (window))
+            return;
+
+          window->maximized_horizontally = FALSE;
+        }
+      else if (mode == META_TILE_TOP || mode == META_TILE_BOTTOM)
+        {
+          if (!meta_window_can_tile_top_down (window))
+            return;
+
+          window->maximized_vertically = FALSE;
+        }
+
       meta_window_tile (window, mode);
     }
 }
@@ -4087,6 +4104,22 @@ init_builtin_key_bindings (MetaDisplay *display)
                           META_KEY_BINDING_IGNORE_AUTOREPEAT,
                           META_KEYBINDING_ACTION_TOGGLE_TILED_RIGHT,
                           handle_toggle_tiled, META_TILE_RIGHT);
+
+  add_builtin_keybinding (display,
+                          "toggle-tiled-top",
+                          mutter_keybindings,
+                          META_KEY_BINDING_PER_WINDOW |
+                          META_KEY_BINDING_IGNORE_AUTOREPEAT,
+                          META_KEYBINDING_ACTION_TOGGLE_TILED_TOP,
+                          handle_toggle_tiled, META_TILE_TOP);
+
+  add_builtin_keybinding (display,
+                          "toggle-tiled-bottom",
+                          mutter_keybindings,
+                          META_KEY_BINDING_PER_WINDOW |
+                          META_KEY_BINDING_IGNORE_AUTOREPEAT,
+                          META_KEYBINDING_ACTION_TOGGLE_TILED_BOTTOM,
+                          handle_toggle_tiled, META_TILE_BOTTOM);
 
   add_builtin_keybinding (display,
                           "toggle-above",

@@ -239,6 +239,7 @@ struct _MetaWindow
     MetaEdgeConstraint left;
   } edge_constraints;
 
+  double tile_vfraction;
   double tile_hfraction;
 
   uint64_t preferred_output_winsys_id;
@@ -634,10 +635,17 @@ struct _MetaWindowClass
 #define META_WINDOW_TILED_SIDE_BY_SIDE(w)      ((w)->maximized_vertically && \
                                                 !(w)->maximized_horizontally && \
                                                  (w)->tile_mode != META_TILE_NONE)
+#define META_WINDOW_TILED_TOP_DOWN(w)           ((w)->maximized_horizontally && \
+                                                !(w)->maximized_vertically && \
+                                                 (w)->tile_mode != META_TILE_NONE)
 #define META_WINDOW_TILED_LEFT(w)     (META_WINDOW_TILED_SIDE_BY_SIDE(w) && \
                                        (w)->tile_mode == META_TILE_LEFT)
 #define META_WINDOW_TILED_RIGHT(w)    (META_WINDOW_TILED_SIDE_BY_SIDE(w) && \
                                        (w)->tile_mode == META_TILE_RIGHT)
+#define META_WINDOW_TILED_TOP(w)      (META_WINDOW_TILED_TOP_DOWN(w) && \
+                                       (w)->tile_mode == META_TILE_TOP)
+#define META_WINDOW_TILED_BOTTOM(w)   (META_WINDOW_TILED_TOP_DOWN(w) && \
+                                       (w)->tile_mode == META_TILE_BOTTOM)
 #define META_WINDOW_TILED_MAXIMIZED(w)(META_WINDOW_MAXIMIZED(w) && \
                                        (w)->tile_mode == META_TILE_MAXIMIZED)
 #define META_WINDOW_ALLOWS_MOVE(w)     ((w)->has_move_func && !(w)->fullscreen)
@@ -799,6 +807,7 @@ void meta_window_update_for_monitors_changed (MetaWindow *window);
 void meta_window_on_all_workspaces_changed (MetaWindow *window);
 
 gboolean meta_window_should_attach_to_parent (MetaWindow *window);
+gboolean meta_window_can_tile_top_down       (MetaWindow *window);
 gboolean meta_window_can_tile_side_by_side   (MetaWindow *window);
 
 void meta_window_compute_tile_match (MetaWindow *window);
