@@ -15528,6 +15528,18 @@ clutter_actor_finish_layout (ClutterActor *self,
 
   if (priv->needs_visible_paint_volume_update)
     {
+      /* The way visible_paint_volume works is a bit tricky, so here's a small overview:
+       *
+       *  - The visible_paint_volume is meant to be a reflection of what's currently
+       *    visible on the screen, it's used for creating the redraw clip and
+       *    culling.
+       *  - visible_paint_volume gets updated during redraw cycles and only then,
+       *    so that it always reflects the state that was last painted to the screen.
+       *  - If the stage decides to do a clipped redraw of the actor,
+       *    visible_paint_volume gets updated early in
+       *    clutter_actor_get_redraw_clip() and we don't need to update it in
+       *    clutter_actor_finish_layout().
+       */
       ensure_paint_volume (self);
 
       if (priv->has_paint_volume)
@@ -19181,8 +19193,20 @@ clutter_actor_get_redraw_clip (ClutterActor       *self,
   if (!priv->visible_paint_volume_valid || !priv->has_paint_volume)
     return FALSE;
 
-  _clutter_paint_volume_set_from_volume (dst_old_pv, &priv->visible_paint_volume);
-  _clutter_paint_volume_set_from_volume (dst_new_pv, &priv->paint_volume);
+  if (priv->needs_visible_paint_volume_update)
+    {
+      _clutter_paint_volume_set_from_volume (dst_old_pv, &priv->visible_paint_volume);
+
+      _clutter_paint_volume_copy_static (&priv->paint_volume,
+                                         &priv->visible_paint_volume);
+      _clutter_paint_volume_transform_relative (&priv->visible_paint_volume,
+                                                NULL); /* eye coordinates */
+
+      priv->visible_paint_volume_valid = TRUE;
+      priv->needs_visible_paint_volume_update = FALSE;
+    }
+
+  _clutter_paint_volume_set_from_volume (dst_new_pv, &priv->visible_paint_volume);
 
   return TRUE;
 }
