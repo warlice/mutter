@@ -15477,19 +15477,48 @@ update_stage_views (ClutterActor *self)
   ClutterActorPrivate *priv = self->priv;
   g_autoptr (GList) old_stage_views = NULL;
   ClutterStage *stage;
+  GList *all_views;
   graphene_rect_t bounding_rect;
-
-  old_stage_views = g_steal_pointer (&priv->stage_views);
 
   if (priv->needs_allocation)
     {
       g_warning ("Can't update stage views actor %s is on because it needs an "
                  "allocation.", _clutter_actor_get_debug_name (self));
+  old_stage_views = g_steal_pointer (&priv->stage_views);
       goto out;
     }
 
   stage = CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
   g_return_if_fail (stage);
+
+  all_views = clutter_stage_peek_stage_views (stage);
+
+/* We take a few fast paths when there only is a single stage view globally,
+   note that this introduces special behavior for the "just a single view" case
+   compared to the "multiple views" case: If an actor is zero-size or located outside
+   the stage, it will have a stage view set in the "single view" case */
+  if (all_views && all_views->next == NULL)
+    {
+      if (priv->stage_views && priv->stage_views->next == NULL) {
+        if (priv->stage_views->data == all_views->data) {
+  //g_warning("hit the very fast path");
+          return;
+  }
+
+//g_warning("hit the less fast path");
+        priv->stage_views->data = all_views->data;
+        g_signal_emit (self, actor_signals[STAGE_VIEWS_CHANGED], 0);
+      }
+
+/* now we either have zero views or multiple views */
+      old_stage_views = g_steal_pointer (&priv->stage_views);
+
+      priv->stage_views = g_list_prepend (NULL, all_views->data);
+      g_signal_emit (self, actor_signals[STAGE_VIEWS_CHANGED], 0);
+      return;
+    }
+
+  old_stage_views = g_steal_pointer (&priv->stage_views);
 
   clutter_actor_get_transformed_extents (self, &bounding_rect);
 
