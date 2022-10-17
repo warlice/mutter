@@ -15478,12 +15478,13 @@ update_stage_views (ClutterActor *self)
   g_autoptr (GList) old_stage_views = NULL;
   ClutterStage *stage;
   GList *all_views;
+  ClutterActorBox stage_paint_box;
   graphene_rect_t bounding_rect;
 
-  if (priv->needs_allocation)
+  if (!priv->visible_paint_volume_valid)
     {
-      g_warning ("Can't update stage views actor %s is on because it needs an "
-                 "allocation.", _clutter_actor_get_debug_name (self));
+      g_warning ("Can't update stage views actor %s is on because "
+                 "!visible_paint_volume_valid.", _clutter_actor_get_debug_name (self));
   old_stage_views = g_steal_pointer (&priv->stage_views);
       goto out;
     }
@@ -15520,11 +15521,17 @@ update_stage_views (ClutterActor *self)
 
   old_stage_views = g_steal_pointer (&priv->stage_views);
 
-  clutter_actor_get_transformed_extents (self, &bounding_rect);
+  _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                             stage,
+                                             &stage_paint_box);
 
-  if (bounding_rect.size.width == 0.0 ||
-      bounding_rect.size.height == 0.0)
+  if (clutter_actor_box_get_area (&stage_paint_box) == 0.0)
     goto out;
+
+  bounding_rect = GRAPHENE_RECT_INIT (stage_paint_box.x1,
+                                      stage_paint_box.y1,
+                                      stage_paint_box.x2 - stage_paint_box.x1,
+                                      stage_paint_box.y2 - stage_paint_box.y1);
 
   priv->stage_views = clutter_stage_get_views_for_rect (stage,
                                                         &bounding_rect);
