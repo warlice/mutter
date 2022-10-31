@@ -73,12 +73,6 @@
 
 #define MAX_FRUSTA 64
 
-typedef struct _QueueRedrawEntry
-{
-  gboolean has_clip;
-  ClutterPaintVolume clip;
-} QueueRedrawEntry;
-
 typedef struct _PickRecord
 {
   graphene_point_t vertex[4];
@@ -124,7 +118,6 @@ struct _ClutterStagePrivate
   GArray *paint_volume_stack;
 
   GSList *pending_relayouts;
-  GHashTable *pending_queue_redraws;
 
   int update_freeze_count;
 
@@ -178,7 +171,6 @@ static guint stage_signals[LAST_SIGNAL] = { 0, };
 
 static const ClutterColor default_stage_color = { 255, 255, 255, 255 };
 
-static void free_queue_redraw_entry (QueueRedrawEntry *entry);
 static void free_pointer_device_entry (PointerDeviceEntry *entry);
 static void clutter_stage_update_view_perspective (ClutterStage *stage);
 static void clutter_stage_set_viewport (ClutterStage *stage,
@@ -913,7 +905,6 @@ clutter_stage_finish_layout (ClutterStage *stage)
 
       priv->actor_needs_immediate_relayout = FALSE;
       clutter_stage_maybe_relayout (actor);
-      clutter_stage_maybe_finish_queue_redraws (stage);
     }
 
   g_warn_if_fail (!priv->actor_needs_immediate_relayout);
@@ -1204,8 +1195,6 @@ clutter_stage_dispose (GObject *object)
     }
 
   clutter_actor_destroy_all_children (CLUTTER_ACTOR (object));
-
-  g_hash_table_remove_all (priv->pending_queue_redraws);
 
   g_slist_free_full (priv->pending_relayouts,
                      (GDestroyNotify) g_object_unref);
@@ -1586,11 +1575,6 @@ clutter_stage_init (ClutterStage *self)
   clutter_stage_set_title (self, g_get_prgname ());
   clutter_stage_set_key_focus (self, NULL);
   clutter_stage_set_viewport (self, geom.width, geom.height);
-
-  priv->pending_queue_redraws =
-    g_hash_table_new_full (NULL, NULL,
-                           g_object_unref,
-                           (GDestroyNotify) free_queue_redraw_entry);
 
   priv->paint_volume_stack =
     g_array_new (FALSE, FALSE, sizeof (ClutterPaintVolume));
@@ -2374,7 +2358,7 @@ gboolean
 clutter_stage_is_redraw_queued_on_view (ClutterStage     *stage,
                                         ClutterStageView *view)
 {
-  clutter_stage_maybe_finish_queue_redraws (stage);
+  clutter_stage_finish_layout (stage);
 
   return clutter_stage_view_has_redraw_clip (view);
 }
@@ -2486,7 +2470,6 @@ clutter_stage_queue_actor_redraw (ClutterStage             *stage,
                                   const ClutterPaintVolume *clip)
 {
   ClutterStagePrivate *priv = stage->priv;
-  QueueRedrawEntry *entry = NULL;
 
   CLUTTER_NOTE (CLIPPING, "stage_queue_actor_redraw (actor=%s, clip=%p): ",
                 _clutter_actor_get_debug_name (actor), clip);
@@ -2504,68 +2487,11 @@ clutter_stage_queue_actor_redraw (ClutterStage             *stage,
 
       priv->pending_finish_queue_redraws = TRUE;
     }
-
-  entry = g_hash_table_lookup (priv->pending_queue_redraws, actor);
-
-  if (entry)
-    {
-      /* Ignore all requests to queue a redraw for an actor if a full
-       * (non-clipped) redraw of the actor has already been queued. */
-      if (!entry->has_clip)
-        {
-          CLUTTER_NOTE (CLIPPING, "Bail from stage_queue_actor_redraw (%s): "
-                        "Unclipped redraw of actor already queued",
-                        _clutter_actor_get_debug_name (actor));
-          return;
-        }
-
-      /* If queuing a clipped redraw and a clipped redraw has
-       * previously been queued for this actor then combine the latest
-       * clip together with the existing clip */
-      if (clip)
-        clutter_paint_volume_union (&entry->clip, clip);
-      else
-        {
-          clutter_paint_volume_free (&entry->clip);
-          entry->has_clip = FALSE;
-        }
-    }
-  else
-    {
-      entry = g_new0 (QueueRedrawEntry, 1);
-
-      if (clip)
-        {
-          entry->has_clip = TRUE;
-          _clutter_paint_volume_init_static (&entry->clip, actor);
-          _clutter_paint_volume_set_from_volume (&entry->clip, clip);
-        }
-      else
-        entry->has_clip = FALSE;
-
-      g_hash_table_insert (priv->pending_queue_redraws,
-                           g_object_ref (actor), entry);
-    }
-}
-
-static void
-free_queue_redraw_entry (QueueRedrawEntry *entry)
-{
-  if (entry->has_clip)
-    clutter_paint_volume_free (&entry->clip);
-  g_free (entry);
 }
 
 void
-clutter_stage_dequeue_actor_redraw (ClutterStage *self,
-                                    ClutterActor *actor)
-{
-  g_hash_table_remove (self->priv->pending_queue_redraws, actor);
-}
-
-static void
-add_to_stage_clip (ClutterStage       *stage,
-                   ClutterPaintVolume *redraw_clip)
+clutter_stage_add_to_redraw_clip (ClutterStage       *stage,
+                                  ClutterPaintVolume *redraw_clip)
 {
   ClutterStageWindow *stage_window;
   ClutterActorBox bounding_box;
@@ -2616,74 +2542,6 @@ add_to_stage_clip (ClutterStage       *stage,
   stage_clip.height = intersection_box.y2 - stage_clip.y;
 
   clutter_stage_add_redraw_clip (stage, &stage_clip);
-}
-
-void
-clutter_stage_maybe_finish_queue_redraws (ClutterStage *stage)
-{
-  ClutterStagePrivate *priv = stage->priv;
-  GHashTableIter iter;
-  gpointer key, value;
-
-  COGL_TRACE_BEGIN_SCOPED (ClutterStageFinishQueueRedraws, "FinishQueueRedraws");
-
-  if (!priv->pending_finish_queue_redraws)
-    return;
-
-  priv->pending_finish_queue_redraws = FALSE;
-
-  g_hash_table_iter_init (&iter, priv->pending_queue_redraws);
-  while (g_hash_table_iter_next (&iter, &key, &value))
-    {
-      ClutterActor *redraw_actor = key;
-      QueueRedrawEntry *entry = value;
-
-      g_hash_table_iter_steal (&iter);
-
-      if (clutter_actor_is_mapped (redraw_actor))
-        {
-          ClutterPaintVolume old_actor_pv, new_actor_pv;
-
-          _clutter_paint_volume_init_static (&old_actor_pv, NULL);
-          _clutter_paint_volume_init_static (&new_actor_pv, NULL);
-
-          if (entry->has_clip)
-            {
-              add_to_stage_clip (stage, &entry->clip);
-            }
-          else if (clutter_actor_get_redraw_clip (redraw_actor,
-                                                  &old_actor_pv,
-                                                  &new_actor_pv))
-            {
-              /* Add both the old paint volume of the actor (which is
-               * currently visible on the screen) and the new paint volume
-               * (which will be visible on the screen after this redraw)
-               * to the redraw clip.
-               * The former we do to ensure the old texture on the screen
-               * will be fully painted over in case the actor was moved.
-               */
-              add_to_stage_clip (stage, &old_actor_pv);
-              add_to_stage_clip (stage, &new_actor_pv);
-            }
-          else
-            {
-              /* If there's no clip we can use, we have to trigger an
-               * unclipped full stage redraw.
-               */
-              add_to_stage_clip (stage, NULL);
-            }
-        }
-
-      g_object_unref (redraw_actor);
-      free_queue_redraw_entry (entry);
-
-      /* get_paint_volume() vfuncs might queue redraws and can cause our
-       * iterator to now be invalidated. So start over. This isn't wasting
-       * any time since we already stole (removed) the elements previously
-       * visited.
-       */
-      g_hash_table_iter_init (&iter, priv->pending_queue_redraws);
-    }
 }
 
 void
