@@ -30,7 +30,6 @@
 #include <X11/extensions/Xcomposite.h>
 
 #include "cogl/winsys/cogl-texture-pixmap-x11.h"
-#include "compositor/meta-cullable.h"
 #include "compositor/meta-shaped-texture-private.h"
 #include "compositor/meta-window-actor-private.h"
 #include "core/window-private.h"

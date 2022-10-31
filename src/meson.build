@@ -286,8 +286,6 @@ mutter_sources = [
   'compositor/meta-compositor-server.h',
   'compositor/meta-compositor-view.c',
   'compositor/meta-compositor-view.h',
-  'compositor/meta-cullable.c',
-  'compositor/meta-cullable.h',
   'compositor/meta-dnd-actor.c',
   'compositor/meta-dnd-actor-private.h',
   'compositor/meta-dnd.c',

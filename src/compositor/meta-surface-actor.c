@@ -21,7 +21,6 @@
 
 #include "clutter/clutter.h"
 #include "compositor/clutter-utils.h"
-#include "compositor/meta-cullable.h"
 #include "compositor/meta-shaped-texture-private.h"
 #include "compositor/meta-window-actor-private.h"
 #include "compositor/region-utils.h"
@@ -41,11 +40,8 @@ typedef struct _MetaSurfaceActorPrivate
   guint frozen : 1;
 } MetaSurfaceActorPrivate;
 
-static void cullable_iface_init (MetaCullableInterface *iface);
-
-G_DEFINE_ABSTRACT_TYPE_WITH_CODE (MetaSurfaceActor, meta_surface_actor, CLUTTER_TYPE_ACTOR,
-                                  G_ADD_PRIVATE (MetaSurfaceActor)
-                                  G_IMPLEMENT_INTERFACE (META_TYPE_CULLABLE, cullable_iface_init));
+G_DEFINE_TYPE_WITH_PRIVATE (MetaSurfaceActor, meta_surface_actor,
+                            CLUTTER_TYPE_ACTOR)
 
 enum
 {
@@ -374,47 +370,6 @@ gboolean
 meta_surface_actor_is_opaque (MetaSurfaceActor *self)
 {
   return META_SURFACE_ACTOR_GET_CLASS (self)->is_opaque (self);
-}
-
-static void
-meta_surface_actor_cull_out (MetaCullable   *cullable,
-                             cairo_region_t *unobscured_region,
-                             cairo_region_t *clip_region)
-{
-}
-
-static gboolean
-meta_surface_actor_is_untransformed (MetaCullable *cullable)
-{
-  ClutterActor *actor = CLUTTER_ACTOR (cullable);
-  MetaWindowActor *window_actor;
-  float width, height;
-  graphene_point3d_t verts[4];
-  int geometry_scale;
-
-  clutter_actor_get_size (actor, &width, &height);
-  clutter_actor_get_abs_allocation_vertices (actor, verts);
-
-  window_actor = meta_window_actor_from_actor (actor);
-  geometry_scale = meta_window_actor_get_geometry_scale (window_actor);
-
-  return meta_actor_vertices_are_untransformed (verts,
-                                                width * geometry_scale,
-                                                height * geometry_scale,
-                                                NULL);
-}
-
-static void
-meta_surface_actor_reset_culling (MetaCullable *cullable)
-{
-}
-
-static void
-cullable_iface_init (MetaCullableInterface *iface)
-{
-  iface->cull_out = meta_surface_actor_cull_out;
-  iface->is_untransformed = meta_surface_actor_is_untransformed;
-  iface->reset_culling = meta_surface_actor_reset_culling;
 }
 
 static void

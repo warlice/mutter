@@ -24,8 +24,6 @@
 #include "compositor/meta-background-actor-private.h"
 #include "compositor/meta-background-content-private.h"
 
-#include "compositor/meta-cullable.h"
-
 enum
 {
   PROP_META_DISPLAY = 1,
@@ -42,10 +40,7 @@ struct _MetaBackgroundActor
   MetaBackgroundContent *content;
 };
 
-static void cullable_iface_init (MetaCullableInterface *iface);
-
-G_DEFINE_TYPE_WITH_CODE (MetaBackgroundActor, meta_background_actor, CLUTTER_TYPE_ACTOR,
-                         G_IMPLEMENT_INTERFACE (META_TYPE_CULLABLE, cullable_iface_init));
+G_DEFINE_TYPE (MetaBackgroundActor, meta_background_actor, CLUTTER_TYPE_ACTOR);
 
 static void
 maybe_create_content (MetaBackgroundActor *self)
@@ -165,37 +160,4 @@ meta_background_actor_new (MetaDisplay *display,
                        NULL);
 
   return CLUTTER_ACTOR (self);
-}
-
-static void
-meta_background_actor_cull_out (MetaCullable   *cullable,
-                                cairo_region_t *unobscured_region,
-                                cairo_region_t *clip_region)
-{
-  MetaBackgroundActor *self = META_BACKGROUND_ACTOR (cullable);
-
-  if (!self->content)
-    return;
-
-  meta_background_content_cull_out (self->content,
-                                    unobscured_region,
-                                    clip_region);
-}
-
-static void
-meta_background_actor_reset_culling (MetaCullable *cullable)
-{
-  MetaBackgroundActor *self = META_BACKGROUND_ACTOR (cullable);
-
-  if (!self->content)
-    return;
-
-  meta_background_content_reset_culling (self->content);
-}
-
-static void
-cullable_iface_init (MetaCullableInterface *iface)
-{
-  iface->cull_out = meta_background_actor_cull_out;
-  iface->reset_culling = meta_background_actor_reset_culling;
 }

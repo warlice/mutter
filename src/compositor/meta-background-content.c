@@ -82,7 +82,6 @@
 #include "compositor/clutter-utils.h"
 #include "compositor/cogl-utils.h"
 #include "compositor/meta-background-private.h"
-#include "compositor/meta-cullable.h"
 #include "meta/display.h"
 
 typedef enum

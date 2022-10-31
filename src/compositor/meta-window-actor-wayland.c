@@ -23,7 +23,6 @@
 #include "config.h"
 
 #include "compositor/clutter-utils.h"
-#include "compositor/meta-cullable.h"
 #include "compositor/meta-surface-actor-wayland.h"
 #include "compositor/meta-window-actor-wayland.h"
 #include "compositor/region-utils.h"
@@ -38,13 +37,9 @@ struct _MetaSurfaceContainerActorWayland
   MetaWindowActor *window_actor;
 };
 
-static void surface_container_cullable_iface_init (MetaCullableInterface *iface);
-
-G_DEFINE_TYPE_WITH_CODE (MetaSurfaceContainerActorWayland,
+G_DEFINE_TYPE (MetaSurfaceContainerActorWayland,
                          meta_surface_container_actor_wayland,
-                         CLUTTER_TYPE_ACTOR,
-                         G_IMPLEMENT_INTERFACE (META_TYPE_CULLABLE,
-                                                surface_container_cullable_iface_init))
+                         CLUTTER_TYPE_ACTOR)
 
 struct _MetaWindowActorWayland
 {
@@ -53,12 +48,8 @@ struct _MetaWindowActorWayland
   MetaSurfaceContainerActorWayland *surface_container;
 };
 
-static void cullable_iface_init (MetaCullableInterface *iface);
-
-G_DEFINE_TYPE_WITH_CODE (MetaWindowActorWayland, meta_window_actor_wayland,
-                         META_TYPE_WINDOW_ACTOR,
-                         G_IMPLEMENT_INTERFACE (META_TYPE_CULLABLE,
-                                                cullable_iface_init))
+G_DEFINE_TYPE (MetaWindowActorWayland, meta_window_actor_wayland,
+                         META_TYPE_WINDOW_ACTOR)
 
 typedef struct _SurfaceTreeTraverseData
 {
@@ -78,50 +69,6 @@ surface_container_new (MetaWindowActor *window_actor)
   return surface_container;
 }
 
-static void
-surface_container_cull_out (MetaCullable   *cullable,
-                            cairo_region_t *unobscured_region,
-                            cairo_region_t *clip_region)
-{
-  meta_cullable_cull_out_children (cullable, unobscured_region, clip_region);
-}
-
-static gboolean
-surface_container_is_untransformed (MetaCullable *cullable)
-{
-  MetaSurfaceContainerActorWayland *surface_container =
-    META_SURFACE_CONTAINER_ACTOR_WAYLAND (cullable);
-  ClutterActor *actor = CLUTTER_ACTOR (cullable);
-  MetaWindowActor *window_actor;
-  float width, height;
-  graphene_point3d_t verts[4];
-  int geometry_scale;
-
-  clutter_actor_get_size (actor, &width, &height);
-  clutter_actor_get_abs_allocation_vertices (actor, verts);
-
-  window_actor = surface_container->window_actor;
-  geometry_scale = meta_window_actor_get_geometry_scale (window_actor);
-
-  return meta_actor_vertices_are_untransformed (verts,
-                                                width * geometry_scale,
-                                                height * geometry_scale,
-                                                NULL);
-}
-
-static void
-surface_container_reset_culling (MetaCullable *cullable)
-{
-  meta_cullable_reset_culling_children (cullable);
-}
-
-static void
-surface_container_cullable_iface_init (MetaCullableInterface *iface)
-{
-  iface->cull_out = surface_container_cull_out;
-  iface->is_untransformed = surface_container_is_untransformed;
-  iface->reset_culling = surface_container_reset_culling;
-}
 
 static void
 surface_container_dispose (GObject *object)
@@ -233,63 +180,6 @@ meta_window_actor_wayland_rebuild_surface_tree (MetaWindowActor *actor)
                    -1,
                    set_surface_actor_index,
                    &traverse_data);
-}
-
-static cairo_region_t *
-calculate_background_cull_region (MetaWindowActorWayland *self)
-{
-  MetaWindowActor *window_actor = META_WINDOW_ACTOR (self);
-  int geometry_scale;
-  cairo_rectangle_int_t rect;
-
-  geometry_scale = meta_window_actor_get_geometry_scale (window_actor);
-  rect = (cairo_rectangle_int_t) {
-    .x = 0,
-    .y = 0,
-    .width = clutter_actor_get_width (self->background) * geometry_scale,
-    .height = clutter_actor_get_height (self->background) * geometry_scale,
-  };
-
-  return cairo_region_create_rectangle (&rect);
-}
-
-static void
-meta_window_actor_wayland_cull_out (MetaCullable   *cullable,
-                                    cairo_region_t *unobscured_region,
-                                    cairo_region_t *clip_region)
-{
-  MetaWindowActorWayland *self =
-    META_WINDOW_ACTOR_WAYLAND (cullable);
-
-  meta_cullable_cull_out_children (META_CULLABLE (self),
-                                   unobscured_region,
-                                   clip_region);
-  if (self->background)
-    {
-      cairo_region_t *background_cull_region;
-
-      background_cull_region = calculate_background_cull_region (self);
-
-      if (unobscured_region)
-        cairo_region_subtract (unobscured_region, background_cull_region);
-      if (clip_region)
-        cairo_region_subtract (clip_region, background_cull_region);
-
-      cairo_region_destroy (background_cull_region);
-    }
-}
-
-static void
-meta_window_actor_wayland_reset_culling (MetaCullable *cullable)
-{
-  meta_cullable_reset_culling_children (cullable);
-}
-
-static void
-cullable_iface_init (MetaCullableInterface *iface)
-{
-  iface->cull_out = meta_window_actor_wayland_cull_out;
-  iface->reset_culling = meta_window_actor_wayland_reset_culling;
 }
 
 static MetaSurfaceActor *

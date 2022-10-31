@@ -27,7 +27,6 @@
 #include "backends/meta-logical-monitor.h"
 #include "clutter/clutter-frame-clock.h"
 #include "compositor/compositor-private.h"
-#include "compositor/meta-cullable.h"
 #include "compositor/meta-shaped-texture-private.h"
 #include "compositor/meta-surface-actor.h"
 #include "compositor/meta-surface-actor-x11.h"
@@ -106,10 +105,8 @@ struct _MetaWindowActorX11
   gboolean is_frozen;
 };
 
-static void cullable_iface_init (MetaCullableInterface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (MetaWindowActorX11, meta_window_actor_x11, META_TYPE_WINDOW_ACTOR,
-                         G_IMPLEMENT_INTERFACE (META_TYPE_CULLABLE, cullable_iface_init))
+G_DEFINE_TYPE (MetaWindowActorX11, meta_window_actor_x11, META_TYPE_WINDOW_ACTOR)
 
 /* Each time the application updates the sync request counter to a new even value
  * value, we queue a frame into the windows list of frames. Once we're painting
@@ -1699,29 +1696,6 @@ meta_window_actor_x11_constructed (GObject *object)
   if (window->extended_sync_request_counter &&
       !meta_window_updates_are_frozen (window))
     meta_window_actor_queue_frame_drawn (actor, FALSE);
-}
-
-static void
-meta_window_actor_x11_cull_out (MetaCullable   *cullable,
-                                cairo_region_t *unobscured_region,
-                                cairo_region_t *clip_region)
-{
-  meta_cullable_cull_out_children (cullable,
-                                   unobscured_region,
-                                   clip_region);
-}
-
-static void
-meta_window_actor_x11_reset_culling (MetaCullable *cullable)
-{
-  meta_cullable_reset_culling_children (cullable);
-}
-
-static void
-cullable_iface_init (MetaCullableInterface *iface)
-{
-  iface->cull_out = meta_window_actor_x11_cull_out;
-  iface->reset_culling = meta_window_actor_x11_reset_culling;
 }
 
 static void
