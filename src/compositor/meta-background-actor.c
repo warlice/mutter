@@ -199,20 +199,3 @@ cullable_iface_init (MetaCullableInterface *iface)
   iface->cull_out = meta_background_actor_cull_out;
   iface->reset_culling = meta_background_actor_reset_culling;
 }
-
-/**
- * meta_background_actor_get_clip_region:
- * @self: a #MetaBackgroundActor
- *
- * Return value (transfer none): a #cairo_region_t that represents the part of
- * the background not obscured by other #MetaBackgroundActor or
- * #MetaWindowActor objects.
- */
-cairo_region_t *
-meta_background_actor_get_clip_region (MetaBackgroundActor *self)
-{
-  if (!self->content)
-    return NULL;
-
-  return meta_background_content_get_clip_region (self->content);
-}
