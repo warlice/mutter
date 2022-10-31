@@ -15553,7 +15553,9 @@ clutter_actor_get_resource_scale (ClutterActor *self)
 }
 
 static void
-add_actor_to_redraw_clip (ClutterActor *self)
+add_actor_to_redraw_clip (ClutterActor       *self,
+                          gboolean            actor_moved,
+                          ClutterPaintVolume *old_visible_paint_volume)
 {
   ClutterActorPrivate *priv = self->priv;
   ClutterStage *stage = CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
@@ -15562,35 +15564,29 @@ add_actor_to_redraw_clip (ClutterActor *self)
     {
       clutter_stage_add_to_redraw_clip (stage, &priv->next_redraw_clip);
     }
-  else
+  else if (actor_moved)
     {
-      ensure_paint_volume (self);
-
       /* For a clipped redraw to work we need both the old paint volume and the new
        * one, if any is missing we'll need to do an unclipped redraw.
        */
-      if (!priv->visible_paint_volume_valid || !priv->has_paint_volume)
-        {
-          clutter_stage_add_to_redraw_clip (stage, NULL);
-        }
-      else
-        {
-          clutter_stage_add_to_redraw_clip (stage, &priv->visible_paint_volume);
+      if (old_visible_paint_volume == NULL || !priv->visible_paint_volume_valid)
+        goto full_stage_redraw;
 
-          if (priv->needs_visible_paint_volume_update)
-            {
-              _clutter_paint_volume_copy_static (&priv->paint_volume,
-                                                 &priv->visible_paint_volume);
-              _clutter_paint_volume_transform_relative (&priv->visible_paint_volume,
-                                                        NULL); /* eye coordinates */
-
-              priv->visible_paint_volume_valid = TRUE;
-              priv->needs_visible_paint_volume_update = FALSE;
-
-              clutter_stage_add_to_redraw_clip (stage, &priv->visible_paint_volume);
-            }
-        }
+      clutter_stage_add_to_redraw_clip (stage, old_visible_paint_volume);
+      clutter_stage_add_to_redraw_clip (stage, &priv->visible_paint_volume);
     }
+  else
+    {
+      if (!priv->visible_paint_volume_valid)
+        goto full_stage_redraw;
+
+      clutter_stage_add_to_redraw_clip (stage, &priv->visible_paint_volume);
+    }
+
+  return;
+
+full_stage_redraw:
+  clutter_stage_add_to_redraw_clip (stage, NULL);
 }
 
 static gboolean
@@ -15723,6 +15719,9 @@ clutter_actor_finish_layout (ClutterActor *self,
 {
   ClutterActorPrivate *priv = self->priv;
   ClutterActor *child;
+  gboolean actor_moved = FALSE;
+  gboolean old_visible_paint_volume_valid = FALSE;
+  ClutterPaintVolume old_visible_paint_volume;
 
   if (!priv->needs_finish_layout)
     return;
@@ -15732,15 +15731,13 @@ clutter_actor_finish_layout (ClutterActor *self,
       CLUTTER_ACTOR_IN_DESTRUCTION (self))
     return;
 
-  if (priv->needs_redraw)
-    {
-      add_actor_to_redraw_clip (self);
-      priv->needs_redraw = FALSE;
-    }
-
   if (priv->needs_visible_paint_volume_update)
     {
       ensure_paint_volume (self);
+
+      actor_moved = TRUE;
+      old_visible_paint_volume = priv->visible_paint_volume;
+      old_visible_paint_volume_valid = priv->visible_paint_volume_valid;
 
       if (priv->has_paint_volume)
         {
@@ -15760,6 +15757,14 @@ clutter_actor_finish_layout (ClutterActor *self,
       update_resource_scale (self, use_max_scale);
 
       priv->needs_update_stage_views = FALSE;
+    }
+
+  if (priv->needs_redraw)
+    {
+      add_actor_to_redraw_clip (self,
+                                actor_moved,
+                                old_visible_paint_volume_valid ? &old_visible_paint_volume : NULL);
+      priv->needs_redraw = FALSE;
     }
 
   priv->needs_finish_layout = FALSE;
