@@ -242,10 +242,19 @@ meta_surface_actor_paint (ClutterActor        *actor,
                           ClutterPaintContext *paint_context)
 {
   MetaSurfaceActor *self = META_SURFACE_ACTOR (actor);
+  cairo_region_t *unobscured_region = NULL;
   const cairo_region_t *redraw_clip;
   cairo_region_t *repaint_region;
   ClutterActorClass *parent_actor_class =
     CLUTTER_ACTOR_CLASS (meta_surface_actor_parent_class);
+
+  unobscured_region =
+    stage_region_to_actor_region (actor,
+                                  clutter_actor_peek_unobscured_region (actor));
+
+  set_unobscured_region (self, unobscured_region);
+  if (unobscured_region)
+    cairo_region_destroy (unobscured_region);
 
   redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
   if (!redraw_clip)
@@ -372,34 +381,6 @@ meta_surface_actor_cull_out (MetaCullable   *cullable,
                              cairo_region_t *unobscured_region,
                              cairo_region_t *clip_region)
 {
-  MetaSurfaceActor *surface_actor = META_SURFACE_ACTOR (cullable);
-  MetaSurfaceActorPrivate *priv =
-    meta_surface_actor_get_instance_private (surface_actor);
-  uint8_t opacity = clutter_actor_get_opacity (CLUTTER_ACTOR (cullable));
-
-  set_unobscured_region (surface_actor, unobscured_region);
-
-  if (opacity == 0xff)
-    {
-      cairo_region_t *opaque_region;
-      cairo_region_t *scaled_opaque_region;
-
-      opaque_region = meta_shaped_texture_get_opaque_region (priv->texture);
-
-      if (!opaque_region)
-        return;
-
-      scaled_opaque_region = get_scaled_region (surface_actor,
-                                                opaque_region,
-                                                IN_STAGE_PERSPECTIVE);
-
-      if (unobscured_region)
-        cairo_region_subtract (unobscured_region, scaled_opaque_region);
-      if (clip_region)
-        cairo_region_subtract (clip_region, scaled_opaque_region);
-
-      cairo_region_destroy (scaled_opaque_region);
-    }
 }
 
 static gboolean
