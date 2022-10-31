@@ -15730,9 +15730,23 @@ add_actor_to_redraw_clip (ClutterActor       *self,
   ClutterActorPrivate *priv = self->priv;
   ClutterStage *stage = CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
 
+  cairo_region_t *intersection;
+
+  /* The intersection checks here are removing opaque actors on top of us, so
+   * essentially z-level culling for everything on top of us.
+   * The z-level culling for everything below us happens during painting
+   * in clutter_actor_paint().
+   */
+
   if (priv->has_next_redraw_clip)
     {
-      clutter_stage_add_to_redraw_clip (stage, &priv->next_redraw_clip);
+      intersection =
+        clutter_paint_volume_intersects_region (&priv->next_redraw_clip,
+                                                stage,
+                                                priv->unobscured_without_children);
+
+      if (intersection)
+        clutter_stage_add_redraw_region (stage, intersection);
     }
   else if (actor_moved)
     {
@@ -15742,17 +15756,39 @@ add_actor_to_redraw_clip (ClutterActor       *self,
       if (old_visible_paint_volume == NULL || !priv->visible_paint_volume_valid)
         goto full_stage_redraw;
 
-      clutter_stage_add_to_redraw_clip (stage, old_visible_paint_volume);
-      clutter_stage_add_to_redraw_clip (stage, &priv->visible_paint_volume);
+      intersection =
+        clutter_paint_volume_intersects_region (old_visible_paint_volume,
+                                                stage,
+                                                priv->unobscured_without_children);
+
+      if (intersection)
+        clutter_stage_add_redraw_region (stage, intersection);
+
+      g_clear_pointer (&intersection, cairo_region_destroy);
+
+      intersection =
+        clutter_paint_volume_intersects_region (&priv->visible_paint_volume,
+                                                stage,
+                                                priv->unobscured_without_children);
+
+      if (intersection)
+        clutter_stage_add_redraw_region (stage, intersection);
     }
   else
     {
       if (!priv->visible_paint_volume_valid)
         goto full_stage_redraw;
 
-      clutter_stage_add_to_redraw_clip (stage, &priv->visible_paint_volume);
+      intersection =
+        clutter_paint_volume_intersects_region (&priv->visible_paint_volume,
+                                                stage,
+                                                priv->unobscured_without_children);
+
+      if (intersection)
+        clutter_stage_add_redraw_region (stage, intersection);
     }
 
+  g_clear_pointer (&intersection, cairo_region_destroy);
   return;
 
 full_stage_redraw:

@@ -161,6 +161,8 @@ void clutter_stage_maybe_invalidate_focus (ClutterStage *self,
 void clutter_stage_add_to_redraw_clip (ClutterStage       *self,
                                        ClutterPaintVolume *clip);
 
+void clutter_stage_add_redraw_region (ClutterStage   *stage,
+                                      cairo_region_t *region);
 
 G_END_DECLS
 

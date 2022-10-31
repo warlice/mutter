@@ -223,6 +223,48 @@ clutter_stage_get_preferred_height (ClutterActor *self,
     *natural_height_p = geom.height;
 }
 
+void
+clutter_stage_add_redraw_region (ClutterStage   *stage,
+                                 cairo_region_t *region)
+{
+  GList *l;
+  gboolean is_last_view = FALSE;
+
+  for (l = clutter_stage_peek_stage_views (stage); l; l = l->next)
+    {
+      ClutterStageView *view = l->data;
+
+      if (!region)
+        {
+          clutter_stage_view_add_redraw_clip (view, NULL);
+        }
+      else
+        {
+          cairo_rectangle_int_t view_layout;
+
+          clutter_stage_view_get_layout (view, &view_layout);
+
+          /* For the last view (aka for the common single-view case), we can
+           * manage without a copy.
+           */
+          if (l->next == NULL)
+            {
+              cairo_region_intersect_rectangle (region, &view_layout);
+              clutter_stage_view_add_redraw_region (view, region);
+            }
+          else
+            {
+              cairo_region_t *annoying_copy = cairo_region_copy (region);
+
+              cairo_region_intersect_rectangle (annoying_copy, &view_layout);
+              clutter_stage_view_add_redraw_region (view, annoying_copy);
+
+              cairo_region_destroy (annoying_copy);
+            }
+        }
+    }
+}
+
 static void
 clutter_stage_add_redraw_clip (ClutterStage          *stage,
                                cairo_rectangle_int_t *clip)

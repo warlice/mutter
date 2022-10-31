@@ -1123,3 +1123,34 @@ clutter_paint_volume_to_box (ClutterPaintVolume *pv,
 
   graphene_box_init_from_points (box, vertex_count, pv->vertices);
 }
+
+cairo_region_t *
+clutter_paint_volume_intersects_region (ClutterPaintVolume *pv,
+                                        ClutterStage       *stage,
+                                        cairo_region_t     *region)
+{
+  ClutterActorBox box;
+  graphene_rect_t tmp_rect;
+  cairo_rectangle_int_t rect;
+  cairo_region_t *intersection;
+
+  _clutter_paint_volume_get_stage_paint_box (pv, stage, &box);
+  tmp_rect = (graphene_rect_t) {
+    .origin.x = box.x1,
+    .origin.y = box.y1,
+    .size.width = box.x2 - box.x1,
+    .size.height = box.y2 - box.y1
+  };
+  _clutter_util_rectangle_int_extents (&tmp_rect, &rect);
+
+  intersection = cairo_region_create_rectangle (&rect);
+  cairo_region_intersect (intersection, region);
+
+  if (cairo_region_is_empty (intersection))
+    {
+      cairo_region_destroy (intersection);
+      return NULL;
+    }
+
+  return intersection;
+}

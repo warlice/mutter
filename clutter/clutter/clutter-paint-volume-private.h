@@ -136,6 +136,10 @@ void                _clutter_paint_volume_transform_relative   (ClutterPaintVolu
 void                clutter_paint_volume_to_box                (ClutterPaintVolume *pv,
                                                                 graphene_box_t     *box);
 
+cairo_region_t * clutter_paint_volume_intersects_region (ClutterPaintVolume *pv,
+                                        ClutterStage       *stage,
+                                        cairo_region_t     *region);
+
 G_END_DECLS
 
 #endif /* __CLUTTER_PAINT_VOLUME_PRIVATE_H__ */
