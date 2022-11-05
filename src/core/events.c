@@ -382,7 +382,8 @@ meta_display_handle_event (MetaDisplay        *display,
 
   gesture_tracker = meta_display_get_gesture_tracker (display);
 
-  if (meta_gesture_tracker_handle_event (gesture_tracker, event))
+  if ((event->any.flags & CLUTTER_EVENT_FLAG_SYNTHETIC) == 0 &&
+      meta_gesture_tracker_handle_event (gesture_tracker, event))
     {
       bypass_wayland = bypass_clutter = TRUE;
       goto out;
