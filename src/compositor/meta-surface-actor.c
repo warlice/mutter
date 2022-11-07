@@ -147,31 +147,6 @@ set_unobscured_region (MetaSurfaceActor *surface_actor,
     }
 }
 
-static void
-set_clip_region (MetaSurfaceActor *surface_actor,
-                 cairo_region_t   *clip_region)
-{
-  MetaSurfaceActorPrivate *priv =
-    meta_surface_actor_get_instance_private (surface_actor);
-  MetaShapedTexture *stex = priv->texture;
-
-  if (clip_region && !cairo_region_is_empty (clip_region))
-    {
-      cairo_region_t *region;
-
-      region = get_scaled_region (surface_actor,
-                                  clip_region,
-                                  IN_ACTOR_PERSPECTIVE);
-      meta_shaped_texture_set_clip_region (stex, region);
-
-      cairo_region_destroy (region);
-    }
-  else
-    {
-      meta_shaped_texture_set_clip_region (stex, clip_region);
-    }
-}
-
 static gboolean
 transform_stage_rect_to_actor (ClutterActor          *to_actor,
                                cairo_rectangle_int_t *rect)
@@ -239,8 +214,6 @@ meta_surface_actor_paint (ClutterActor        *actor,
 {
   MetaSurfaceActor *self = META_SURFACE_ACTOR (actor);
   cairo_region_t *unobscured_region = NULL;
-  const cairo_region_t *redraw_clip;
-  cairo_region_t *repaint_region;
   ClutterActorClass *parent_actor_class =
     CLUTTER_ACTOR_CLASS (meta_surface_actor_parent_class);
 
@@ -252,21 +225,8 @@ meta_surface_actor_paint (ClutterActor        *actor,
   if (unobscured_region)
     cairo_region_destroy (unobscured_region);
 
-  redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
-  if (!redraw_clip)
-    goto paint_actor;
-
-  repaint_region = clutter_actor_get_region_to_repaint (actor, redraw_clip);
-  if (!repaint_region)
-    goto paint_actor;
-
-  set_clip_region (self, repaint_region);
-  cairo_region_destroy (repaint_region);
-
 paint_actor:
   parent_actor_class->paint (actor, paint_context);
-
-  set_clip_region (self, NULL);
 }
 
 static void
