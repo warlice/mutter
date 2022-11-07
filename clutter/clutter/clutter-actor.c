@@ -13266,51 +13266,19 @@ clutter_animatable_iface_init (ClutterAnimatableInterface *iface)
   iface->get_actor = clutter_actor_get_actor;
 }
 
-/**
- * clutter_actor_transform_stage_point:
- * @self: A #ClutterActor
- * @x: (in): x screen coordinate of the point to unproject
- * @y: (in): y screen coordinate of the point to unproject
- * @x_out: (out) (nullable): return location for the unprojected x coordinance
- * @y_out: (out) (nullable): return location for the unprojected y coordinance
- *
- * This function translates screen coordinates (@x, @y) to
- * coordinates relative to the actor. For example, it can be used to translate
- * screen events from global screen coordinates into actor-local coordinates.
- *
- * The conversion can fail, notably if the transform stack results in the
- * actor being projected on the screen as a mere line.
- *
- * The conversion should not be expected to be pixel-perfect due to the
- * nature of the operation. In general the error grows when the skewing
- * of the actor rectangle on screen increases.
- *
- * This function can be computationally intensive.
- *
- * This function only works when the allocation is up-to-date, i.e. inside of
- * the #ClutterActorClass.paint() implementation
- *
- * Return value: %TRUE if conversion was successful.
- */
-gboolean
-clutter_actor_transform_stage_point (ClutterActor *self,
-				     gfloat        x,
-				     gfloat        y,
-				     gfloat       *x_out,
-				     gfloat       *y_out)
+static gboolean
+transform_stage_points_internal (ClutterActor     *self,
+                                 graphene_point_t *points,
+                                 size_t            n_points)
 {
+  ClutterActorPrivate *priv = self->priv;
   graphene_point3d_t v[4];
   double ST[3][3];
   double RQ[3][3];
   int du, dv;
   double px, py;
   double det;
-  float xf, yf, wf;
-  ClutterActorPrivate *priv;
-
-  g_return_val_if_fail (CLUTTER_IS_ACTOR (self), FALSE);
-
-  priv = self->priv;
+  unsigned int i;
 
   /* This implementation is based on the quad -> quad projection algorithm
    * described by Paul Heckbert in:
@@ -13418,21 +13386,67 @@ clutter_actor_transform_stage_point (ClutterActor *self,
   if (fabs (det) <= DBL_EPSILON)
     return FALSE;
 
-  /*
-   * Now transform our point with the ST matrix; the notional w
-   * coordinate is 1, hence the last part is simply added.
-   */
-  xf = x * ST[0][0] + y * ST[1][0] + ST[2][0];
-  yf = x * ST[0][1] + y * ST[1][1] + ST[2][1];
-  wf = x * ST[0][2] + y * ST[1][2] + ST[2][2];
+  for (i = 0; i < n_points; i++)
+    {
+      graphene_point_t *point = &points[i];
+      float wf;
+
+      wf = point->x * ST[0][2] + point->y * ST[1][2] + ST[2][2];
+      point->x = (point->x * ST[0][0] + point->y * ST[1][0] + ST[2][0]) / wf;
+      point->y = (point->x * ST[0][1] + point->y * ST[1][1] + ST[2][1]) / wf;
+    }
+
+  return TRUE;
+}
+
+/**
+ * clutter_actor_transform_stage_point:
+ * @self: A #ClutterActor
+ * @x: (in): x screen coordinate of the point to unproject
+ * @y: (in): y screen coordinate of the point to unproject
+ * @x_out: (out) (nullable): return location for the unprojected x coordinance
+ * @y_out: (out) (nullable): return location for the unprojected y coordinance
+ *
+ * This function translates screen coordinates (@x, @y) to
+ * coordinates relative to the actor. For example, it can be used to translate
+ * screen events from global screen coordinates into actor-local coordinates.
+ *
+ * The conversion can fail, notably if the transform stack results in the
+ * actor being projected on the screen as a mere line.
+ *
+ * The conversion should not be expected to be pixel-perfect due to the
+ * nature of the operation. In general the error grows when the skewing
+ * of the actor rectangle on screen increases.
+ *
+ * This function can be computationally intensive.
+ *
+ * This function only works when the allocation is up-to-date, i.e. inside of
+ * the #ClutterActorClass.paint() implementation
+ *
+ * Return value: %TRUE if conversion was successful.
+ */
+gboolean
+clutter_actor_transform_stage_point (ClutterActor *self,
+				     gfloat        x,
+				     gfloat        y,
+				     gfloat       *x_out,
+				     gfloat       *y_out)
+{
+  graphene_point_t point = {
+    .x = x,
+    .y = y,
+  };
+
+  g_return_val_if_fail (CLUTTER_IS_ACTOR (self), FALSE);
+
+  if (!transform_stage_points_internal (self, &point, 1))
+    return FALSE;
 
   if (x_out)
-    *x_out = xf / wf;
+    *x_out = point.x;
 
   if (y_out)
-    *y_out = yf / wf;
-
-#undef DET
+    *y_out = point.y;
 
   return TRUE;
 }
@@ -19778,4 +19792,115 @@ clutter_actor_invalidate_opaque_region (ClutterActor *self)
       iter->priv->needs_finish_layout = TRUE;
       iter = iter->priv->parent;
     }
+}
+
+static cairo_region_t *
+stage_region_to_actor_region (ClutterActor         *actor,
+                              const cairo_region_t *region)
+{
+  int n_rects, i;
+  graphene_point_t *points;
+  g_autofree graphene_point_t *points_freeme = NULL;
+  cairo_rectangle_int_t *rects;
+  g_autofree cairo_rectangle_int_t *rects_freeme = NULL;
+
+  if (region == NULL)
+    return NULL;
+
+  n_rects = cairo_region_num_rectangles (region);
+
+  if (n_rects == 0)
+    return NULL;
+
+  if (n_rects < 64)
+    {
+      points = g_newa (graphene_point_t, n_rects * 2);
+      rects = g_newa (cairo_rectangle_int_t, n_rects);
+    }
+  else
+    {
+      points = points_freeme = g_new (graphene_point_t, n_rects * 2);
+      rects = rects_freeme = g_new (cairo_rectangle_int_t, n_rects);
+    }
+
+  for (i = 0; i < n_rects; i++)
+    {
+      graphene_point_t *point_top_left, *point_bottom_right;
+      cairo_rectangle_int_t rect;
+
+      point_top_left = &points[i * 2];
+      point_bottom_right = &points[i * 2 + 1];
+      cairo_region_get_rectangle (region, i, &rect);
+
+      point_top_left->x = rect.x;
+      point_top_left->y = rect.y;
+      point_bottom_right->x = rect.x + rect.width;
+      point_bottom_right->y = rect.y + rect.height;
+    }
+
+  if (!transform_stage_points_internal (actor, points, n_rects * 2))
+    return NULL;
+
+  for (i = 0; i < n_rects; i++)
+    {
+      cairo_rectangle_int_t *rect = &rects[i];
+      graphene_point_t *point_top_left, *point_bottom_right;
+
+      point_top_left = &points[i * 2];
+      point_bottom_right = &points[i * 2 + 1];
+
+      /* Get the extending int rectangle that contains the whole transformed one. */
+      rect->x = floorf (point_top_left->x);
+      rect->y = floorf (point_top_left->y);
+      rect->width = ceilf (point_bottom_right->x) - rect->x;
+      rect->height = ceilf (point_bottom_right->y) - rect->y;
+    }
+
+  return cairo_region_create_rectangles (rects, n_rects);
+}
+
+cairo_region_t *
+clutter_actor_get_region_to_repaint (ClutterActor         *self,
+                                     const cairo_region_t *redraw_clip)
+{
+  ClutterActorPrivate *priv;
+  cairo_region_t *local_clip;
+
+  g_return_val_if_fail (CLUTTER_IS_ACTOR (self), NULL);
+
+  priv = self->priv;
+
+  /* No way I'm making this work with clones */
+  if (priv->in_cloned_branch > 0)
+    return NULL;
+
+  local_clip = cairo_region_copy (redraw_clip);
+
+  /* First intersect the clip with our visible paint volume to avoid extra work */
+  if (priv->visible_paint_volume_valid)
+    {
+      ClutterStage *stage =
+        CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
+      ClutterActorBox stage_paint_rect;
+      graphene_rect_t tmp_rect;
+      cairo_rectangle_int_t stage_paint_rect_int;
+
+      _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                                 stage,
+                                                 &stage_paint_rect);
+      tmp_rect = (graphene_rect_t) {
+        .origin.x = stage_paint_rect.x1,
+        .origin.y = stage_paint_rect.y1,
+        .size.width = stage_paint_rect.x2 - stage_paint_rect.x1,
+        .size.height = stage_paint_rect.y2 - stage_paint_rect.y1
+      };
+      _clutter_util_rectangle_int_extents (&tmp_rect, &stage_paint_rect_int);
+      cairo_region_intersect_rectangle (local_clip, &stage_paint_rect_int);
+    }
+
+  /* Now let's intersect with the unobscured region */
+  cairo_region_intersect (local_clip, priv->unobscured_without_children);
+
+  /* Finally transform it all to actor local coordinates */
+  return stage_region_to_actor_region (self, local_clip);
 }

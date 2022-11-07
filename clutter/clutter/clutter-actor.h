@@ -933,6 +933,10 @@ void clutter_actor_invalidate_paint_volume (ClutterActor *self);
 CLUTTER_EXPORT
 void clutter_actor_invalidate_opaque_region (ClutterActor *self);
 
+CLUTTER_EXPORT
+cairo_region_t * clutter_actor_get_region_to_repaint (ClutterActor         *self,
+                                                      const cairo_region_t *redraw_clip);
+
 G_END_DECLS
 
 #endif /* __CLUTTER_ACTOR_H__ */
