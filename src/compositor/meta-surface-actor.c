@@ -458,45 +458,13 @@ meta_surface_actor_update_area (MetaSurfaceActor *self,
 {
   MetaSurfaceActorPrivate *priv =
     meta_surface_actor_get_instance_private (self);
-  gboolean repaint_scheduled = FALSE;
   cairo_rectangle_int_t clip;
 
   if (meta_shaped_texture_update_area (priv->texture, x, y, width, height, &clip))
     {
-      cairo_region_t *unobscured_region;
-
-      unobscured_region = effective_unobscured_region (self);
-
-      if (unobscured_region)
-        {
-          cairo_region_t *intersection;
-
-          if (cairo_region_is_empty (unobscured_region))
-            return;
-
-          intersection = cairo_region_copy (unobscured_region);
-          cairo_region_intersect_rectangle (intersection, &clip);
-
-          if (!cairo_region_is_empty (intersection))
-            {
-              cairo_rectangle_int_t damage_rect;
-
-              cairo_region_get_extents (intersection, &damage_rect);
-              clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (self), &damage_rect);
-              repaint_scheduled = TRUE;
-            }
-
-          cairo_region_destroy (intersection);
-        }
-      else
-        {
-          clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (self), &clip);
-          repaint_scheduled = TRUE;
-        }
+      clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (self), &clip);
+      g_signal_emit (self, signals[REPAINT_SCHEDULED], 0);
     }
-
-  if (repaint_scheduled)
-    g_signal_emit (self, signals[REPAINT_SCHEDULED], 0);
 }
 
 gboolean
