@@ -1061,6 +1061,9 @@ _clutter_paint_volume_get_stage_paint_box (const ClutterPaintVolume *pv,
 
   _clutter_paint_volume_get_bounding_box (&projected_pv, box);
 
+  clutter_paint_volume_free (&projected_pv);
+  return;
+
   if (pv->is_2d && pv->actor &&
       clutter_actor_get_z_position (pv->actor) == 0)
     {
@@ -1069,10 +1072,10 @@ _clutter_paint_volume_get_stage_paint_box (const ClutterPaintVolume *pv,
        * in this case.
        */
       clutter_paint_volume_free (&projected_pv);
-      box->x1 = CLUTTER_NEARBYINT (box->x1);
-      box->y1 = CLUTTER_NEARBYINT (box->y1);
-      box->x2 = CLUTTER_NEARBYINT (box->x2);
-      box->y2 = CLUTTER_NEARBYINT (box->y2);
+      box->x1 = floorf (box->x1);
+      box->y1 = floorf (box->y1);
+      box->x2 = ceilf (box->x2);
+      box->y2 = ceilf (box->y2);
       return;
     }
 
