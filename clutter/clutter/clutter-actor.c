@@ -15976,10 +15976,10 @@ actor_region_to_stage_region (ClutterActor         *self,
       point_bottom_right = &points[i * 2 + 1];
 
       /* Get the extending int rectangle that contains the whole transformed one. */
-      rect->x = floorf (point_top_left->x);
-      rect->y = floorf (point_top_left->y);
-      rect->width = ceilf (point_bottom_right->x) - rect->x;
-      rect->height = ceilf (point_bottom_right->y) - rect->y;
+      rect->x = ceilf (point_top_left->x);
+      rect->y = ceilf (point_top_left->y);
+      rect->width = floorf (point_bottom_right->x) - rect->x;
+      rect->height = floorf (point_bottom_right->y) - rect->y;
     }
 
   return cairo_region_create_rectangles (rects, n_rects);
