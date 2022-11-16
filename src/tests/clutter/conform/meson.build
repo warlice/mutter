@@ -34,6 +34,7 @@ clutter_conform_tests_classes_tests = [
 clutter_conform_tests_general_tests = [
   'binding-pool',
   'color',
+  'event-delivery',
   'frame-clock',
   'frame-clock-timeline',
   'grab',
@@ -64,7 +65,10 @@ foreach test : clutter_conform_tests
       '@0@.c'.format(test),
       clutter_test_utils,
     ],
-    include_directories: clutter_includes,
+    include_directories: [
+      clutter_includes,
+      clutter_tests_includes,
+    ],
     c_args: clutter_tests_conform_c_args,
     link_args: clutter_tests_conform_link_args,
     dependencies: [
