@@ -89,9 +89,6 @@ struct _MetaShapedTexture
   /* The region containing only fully opaque pixels */
   cairo_region_t *opaque_region;
 
-  /* MetaCullable regions, see that documentation for more details */
-  cairo_region_t *clip_region;
-
   gboolean size_invalid;
   MetaMonitorTransform transform;
   gboolean has_viewport_src_rect;
@@ -213,15 +210,6 @@ meta_shaped_texture_ensure_size_valid (MetaShapedTexture *stex)
     update_size (stex);
 }
 
-void
-meta_shaped_texture_set_clip_region (MetaShapedTexture *stex,
-                                     cairo_region_t    *clip_region)
-{
-  g_clear_pointer (&stex->clip_region, cairo_region_destroy);
-  if (clip_region)
-    stex->clip_region = cairo_region_reference (clip_region);
-}
-
 static void
 meta_shaped_texture_reset_pipelines (MetaShapedTexture *stex)
 {
@@ -247,7 +235,6 @@ meta_shaped_texture_dispose (GObject *object)
   meta_shaped_texture_reset_pipelines (stex);
 
   g_clear_pointer (&stex->opaque_region, cairo_region_destroy);
-  g_clear_pointer (&stex->clip_region, cairo_region_destroy);
 
   g_clear_pointer (&stex->snippet, cogl_object_unref);
 
@@ -576,12 +563,13 @@ do_paint_content (MetaShapedTexture   *stex,
                   ClutterPaintNode    *root_node,
                   ClutterPaintContext *paint_context,
                   ClutterActorBox     *alloc,
-                  uint8_t              opacity)
+                  uint8_t              opacity,
+                  cairo_region_t      *region_to_repaint)
 {
   int dst_width, dst_height;
   cairo_rectangle_int_t content_rect;
   gboolean use_opaque_region;
-  cairo_region_t *blended_tex_region;
+  cairo_region_t *blended_repaint_region, *opaque_repaint_region;
   CoglContext *ctx;
   CoglPipelineFilter min_filter, mag_filter;
   MetaTransforms transforms;
@@ -662,97 +650,93 @@ do_paint_content (MetaShapedTexture   *stex,
 
   if (use_opaque_region)
     {
-      if (stex->clip_region)
-        blended_tex_region = cairo_region_copy (stex->clip_region);
-      else
-        blended_tex_region = cairo_region_create_rectangle (&content_rect);
+      if (region_to_repaint)
+        {
+          blended_repaint_region = cairo_region_copy (region_to_repaint);
+          cairo_region_subtract (blended_repaint_region, stex->opaque_region);
 
-      cairo_region_subtract (blended_tex_region, stex->opaque_region);
+          opaque_repaint_region = g_steal_pointer (&region_to_repaint);
+          cairo_region_intersect (opaque_repaint_region, stex->opaque_region);
+        }
+      else
+        {
+          blended_repaint_region = cairo_region_create_rectangle (&content_rect);
+          cairo_region_subtract (blended_repaint_region, stex->opaque_region);
+
+          opaque_repaint_region = cairo_region_reference (stex->opaque_region);
+        }
     }
   else
     {
-      if (stex->clip_region)
-        blended_tex_region = cairo_region_reference (stex->clip_region);
+      if (region_to_repaint)
+        blended_repaint_region = g_steal_pointer (&region_to_repaint);
       else
-        blended_tex_region = NULL;
+        blended_repaint_region = NULL;
+
+      opaque_repaint_region = NULL;
     }
+
+  g_assert (region_to_repaint == NULL); 
 
   /* Limit to how many separate rectangles we'll draw; beyond this just
    * fall back and draw the whole thing */
 #define MAX_RECTS 16
 
-  if (blended_tex_region)
+  if (blended_repaint_region)
     {
-      int n_rects = cairo_region_num_rectangles (blended_tex_region);
+      int n_rects = cairo_region_num_rectangles (blended_repaint_region);
       if (n_rects > MAX_RECTS)
         {
           /* Fall back to taking the fully blended path. */
-          use_opaque_region = FALSE;
-
-          g_clear_pointer (&blended_tex_region, cairo_region_destroy);
+          g_clear_pointer (&opaque_repaint_region, cairo_region_destroy);
+          g_clear_pointer (&blended_repaint_region, cairo_region_destroy);
         }
     }
 
   /* First, paint the unblended parts, which are part of the opaque region. */
-  if (use_opaque_region)
+  if (opaque_repaint_region && !cairo_region_is_empty (opaque_repaint_region))
     {
-      cairo_region_t *region;
-      int n_rects;
-      int i;
+      CoglPipeline *opaque_pipeline;
+      int i, n_rects;
 
-      if (stex->clip_region)
+      opaque_pipeline = get_unblended_pipeline (stex, ctx, paint_tex);
+      cogl_pipeline_set_layer_texture (opaque_pipeline, 0, paint_tex);
+      cogl_pipeline_set_layer_filters (opaque_pipeline, 0, min_filter, mag_filter);
+
+      n_rects = cairo_region_num_rectangles (opaque_repaint_region);
+      for (i = 0; i < n_rects; i++)
         {
-          region = cairo_region_copy (stex->clip_region);
-          cairo_region_intersect (region, stex->opaque_region);
-        }
-      else
-        {
-          region = cairo_region_reference (stex->opaque_region);
-        }
+          cairo_rectangle_int_t rect;
+          cairo_region_get_rectangle (opaque_repaint_region, i, &rect);
+          paint_clipped_rectangle_node (stex, root_node,
+                                        opaque_pipeline,
+                                        &rect, alloc);
 
-      if (!cairo_region_is_empty (region))
-        {
-          CoglPipeline *opaque_pipeline;
-
-          opaque_pipeline = get_unblended_pipeline (stex, ctx, paint_tex);
-          cogl_pipeline_set_layer_texture (opaque_pipeline, 0, paint_tex);
-          cogl_pipeline_set_layer_filters (opaque_pipeline, 0, min_filter, mag_filter);
-
-          n_rects = cairo_region_num_rectangles (region);
-          for (i = 0; i < n_rects; i++)
+          if (G_UNLIKELY (debug_paint_opaque_region))
             {
-              cairo_rectangle_int_t rect;
-              cairo_region_get_rectangle (region, i, &rect);
+              CoglPipeline *opaque_overlay_pipeline;
+
+              opaque_overlay_pipeline = get_opaque_overlay_pipeline (ctx);
               paint_clipped_rectangle_node (stex, root_node,
-                                            opaque_pipeline,
+                                            opaque_overlay_pipeline,
                                             &rect, alloc);
-
-              if (G_UNLIKELY (debug_paint_opaque_region))
-                {
-                  CoglPipeline *opaque_overlay_pipeline;
-
-                  opaque_overlay_pipeline = get_opaque_overlay_pipeline (ctx);
-                  paint_clipped_rectangle_node (stex, root_node,
-                                                opaque_overlay_pipeline,
-                                                &rect, alloc);
-                }
             }
         }
-
-      cairo_region_destroy (region);
     }
+
+  g_clear_pointer (&opaque_repaint_region, cairo_region_destroy);
 
   /* Now, go ahead and paint the blended parts. */
 
   /* We have three cases:
-   *   1) blended_tex_region has rectangles - paint the rectangles.
-   *   2) blended_tex_region is empty - don't paint anything
-   *   3) blended_tex_region is NULL - paint fully-blended.
+   *   1) blended_repaint_region has rectangles - paint the rectangles.
+   *   2) blended_repaint_region is empty - don't paint anything
+   *   3) blended_repaint_region is NULL - paint fully-blended.
    *
    *   1) and 3) are the times where we have to paint stuff. This tests
    *   for 1) and 3).
    */
-  if (!blended_tex_region || !cairo_region_is_empty (blended_tex_region))
+  if (!blended_repaint_region || !cairo_region_is_empty (blended_repaint_region))
     {
       CoglPipeline *blended_pipeline;
 
@@ -774,16 +758,16 @@ do_paint_content (MetaShapedTexture   *stex,
       cogl_color_init_from_4ub (&color, opacity, opacity, opacity, opacity);
       cogl_pipeline_set_color (blended_pipeline, &color);
 
-      if (blended_tex_region)
+      if (blended_repaint_region)
         {
-          /* 1) blended_tex_region is not empty. Paint the rectangles. */
+          /* 1) blended_repaint_region is not empty. Paint the rectangles. */
           int i;
-          int n_rects = cairo_region_num_rectangles (blended_tex_region);
+          int n_rects = cairo_region_num_rectangles (blended_repaint_region);
 
           for (i = 0; i < n_rects; i++)
             {
               cairo_rectangle_int_t rect;
-              cairo_region_get_rectangle (blended_tex_region, i, &rect);
+              cairo_region_get_rectangle (blended_repaint_region, i, &rect);
 
               if (!gdk_rectangle_intersect (&content_rect, &rect, &rect))
                 continue;
@@ -811,7 +795,7 @@ do_paint_content (MetaShapedTexture   *stex,
           clutter_paint_node_set_static_name (node, "MetaShapedTexture (unclipped)");
           clutter_paint_node_add_child (root_node, node);
 
-          /* 3) blended_tex_region is NULL. Do a full paint. */
+          /* 3) blended_repaint_region is NULL. Do a full paint. */
           clutter_paint_node_add_rectangle (node, alloc);
 
           if (G_UNLIKELY (debug_paint_opaque_region))
@@ -830,7 +814,7 @@ do_paint_content (MetaShapedTexture   *stex,
         }
     }
 
-  g_clear_pointer (&blended_tex_region, cairo_region_destroy);
+  g_clear_pointer (&blended_repaint_region, cairo_region_destroy);
 }
 
 static void
@@ -842,9 +826,8 @@ meta_shaped_texture_paint_content (ClutterContent      *content,
   MetaShapedTexture *stex = META_SHAPED_TEXTURE (content);
   ClutterActorBox alloc;
   uint8_t opacity;
-
-  if (stex->clip_region && cairo_region_is_empty (stex->clip_region))
-    return;
+  const cairo_region_t *redraw_clip;
+  cairo_region_t *region_to_repaint;
 
   /* The GL EXT_texture_from_pixmap extension does allow for it to be
    * used together with SGIS_generate_mipmap, however this is very
@@ -867,7 +850,15 @@ meta_shaped_texture_paint_content (ClutterContent      *content,
   opacity = clutter_actor_get_paint_opacity (actor);
   clutter_actor_get_content_box (actor, &alloc);
 
-  do_paint_content (stex, root_node, paint_context, &alloc, opacity);
+  redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
+  region_to_repaint = redraw_clip
+    ? clutter_actor_get_region_to_repaint (actor, redraw_clip)
+    : NULL;
+
+  // FIXME: we pretend geometry scaling doesn't exist right now, I can live
+  // with that, but some people might not think that way.
+
+  do_paint_content (stex, root_node, paint_context, &alloc, opacity, region_to_repaint);
 }
 
 static gboolean
@@ -888,11 +879,18 @@ meta_shaped_texture_get_preferred_size (ClutterContent *content,
   return TRUE;
 }
 
+static cairo_region_t *
+get_texture_opaque_region (ClutterContent *stex)
+{
+  return cairo_region_reference (META_SHAPED_TEXTURE (stex)->opaque_region);
+}
+
 static void
 clutter_content_iface_init (ClutterContentInterface *iface)
 {
   iface->paint_content = meta_shaped_texture_paint_content;
   iface->get_preferred_size = meta_shaped_texture_get_preferred_size;
+  iface->get_opaque_region = get_texture_opaque_region;
 }
 
 void
@@ -1119,9 +1117,14 @@ void
 meta_shaped_texture_set_opaque_region (MetaShapedTexture *stex,
                                        cairo_region_t    *opaque_region)
 {
+  if (cairo_region_equal (stex->opaque_region, opaque_region))
+    return;
+
   g_clear_pointer (&stex->opaque_region, cairo_region_destroy);
   if (opaque_region)
     stex->opaque_region = cairo_region_reference (opaque_region);
+
+  clutter_content_invalidate_opaque_region (CLUTTER_CONTENT (stex));
 }
 
 cairo_region_t *

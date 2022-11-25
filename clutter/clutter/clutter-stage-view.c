@@ -940,6 +940,39 @@ maybe_mark_full_redraw (ClutterStageView  *view,
 }
 
 void
+clutter_stage_view_add_redraw_region (ClutterStageView *view,
+                                      cairo_region_t   *region)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+
+  if (priv->has_redraw_clip && !priv->redraw_clip)
+    return;
+
+  if (!region)
+    {
+      g_clear_pointer (&priv->redraw_clip, cairo_region_destroy);
+      priv->has_redraw_clip = TRUE;
+      return;
+    }
+
+  if (cairo_region_is_empty (region))
+    return;
+
+  if (!priv->redraw_clip)
+    {
+      priv->redraw_clip = cairo_region_reference (region);
+    }
+  else
+    {
+      cairo_region_union (priv->redraw_clip, region);
+      maybe_mark_full_redraw (view, &priv->redraw_clip);
+    }
+
+  priv->has_redraw_clip = TRUE;
+}
+
+void
 clutter_stage_view_add_redraw_clip (ClutterStageView            *view,
                                     const cairo_rectangle_int_t *clip)
 {
@@ -1234,7 +1267,6 @@ handle_frame_clock_frame (ClutterFrameClock *frame_clock,
   clutter_stage_emit_before_update (stage, view);
 
   clutter_stage_maybe_relayout (CLUTTER_ACTOR (stage));
-  clutter_stage_maybe_finish_queue_redraws (stage);
 
   clutter_stage_finish_layout (stage);
 

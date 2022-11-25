@@ -46,6 +46,9 @@ void clutter_stage_view_invalidate_projection (ClutterStageView *view);
 void clutter_stage_view_set_projection (ClutterStageView        *view,
                                         const graphene_matrix_t *matrix);
 
+void clutter_stage_view_add_redraw_region (ClutterStageView *view,
+                                           cairo_region_t   *region);
+
 CLUTTER_EXPORT
 void clutter_stage_view_add_redraw_clip (ClutterStageView            *view,
                                          const cairo_rectangle_int_t *clip);

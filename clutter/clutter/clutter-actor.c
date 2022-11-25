@@ -689,6 +689,8 @@ struct _ClutterActorPrivate
   /* the cached transformation matrix; see apply_transform() */
   graphene_matrix_t transform;
 
+  graphene_matrix_t absolute_modelview;
+
   float resource_scale;
 
   guint8 opacity;
@@ -804,6 +806,35 @@ struct _ClutterActorPrivate
 
   unsigned int n_pointers;
 
+  gboolean has_next_redraw_clip;
+  ClutterPaintVolume next_redraw_clip;
+
+  /* The cached opaque region of the actor in stage coordinate space */
+  cairo_region_t *opaque_region;
+
+  /* The region that's not obscured by actors painted on top of this one
+   * (not including our own children). If this region doesn't intersect
+   * with our paint volume (ie. the region/rect painted to by us and our
+   * children), we can cull out the whole subtree.
+   */
+  cairo_region_t *unobscured_without_children;
+
+  /* The region that's not obscured by actors painted on top of this one
+   * (including our own children). If this region doesn't intersect with
+   * our allocation, we can skip painting our own texture.
+   */
+  cairo_region_t *unobscured_including_children;
+
+  /* The unobscured_including_children region including not only our own
+   * children, but also this actor (this region is equivalent to the
+   * unobscured_without_children region of the actor painted directly
+   * underneath this one).
+   * This region is the only region we actually store, the other two regions
+   * (unobscured_without_children and unobscured_including_children) are
+   * only references to unobscured_region of a different actor.
+   */
+  cairo_region_t *unobscured_region;
+
   /* bitfields: KEEP AT THE END */
 
   /* fixed position and sizes */
@@ -842,9 +873,15 @@ struct _ClutterActorPrivate
   guint needs_x_expand              : 1;
   guint needs_y_expand              : 1;
   guint needs_paint_volume_update   : 1;
+  guint needs_visible_paint_volume_update : 1;
   guint had_effects_on_last_paint_volume_update : 1;
   guint needs_update_stage_views    : 1;
   guint clear_stage_views_needs_stage_views_changed : 1;
+  guint needs_finish_layout : 1;
+  guint needs_redraw : 1;
+  guint has_inverse_transform       : 1;
+  guint absolute_modelview_valid : 1;
+  guint needs_opaque_region_update  : 1;
 };
 
 enum
@@ -1509,6 +1546,8 @@ queue_update_paint_volume (ClutterActor *actor)
   while (actor)
     {
       actor->priv->needs_paint_volume_update = TRUE;
+      actor->priv->needs_visible_paint_volume_update = TRUE;
+      actor->priv->needs_finish_layout = TRUE;
       actor = actor->priv->parent;
     }
 }
@@ -1534,6 +1573,16 @@ clutter_actor_real_map (ClutterActor *self)
       priv->needs_allocation = FALSE;
 
       clutter_actor_queue_relayout (self);
+
+      /* Set needs_finish_layout to ensure unobscured regions get updated */
+      priv->needs_finish_layout = TRUE;
+
+      iter = priv->parent;
+      while (iter && !iter->priv->needs_finish_layout)
+        {
+          iter->priv->needs_finish_layout = TRUE;
+          iter = iter->priv->parent;
+        }
     }
 
   /* notify on parent mapped before potentially mapping
@@ -1651,18 +1700,20 @@ clutter_actor_real_unmap (ClutterActor *self)
 
   if (priv->unmapped_paint_branch_counter == 0)
     {
-      /* clear the contents of the visible paint volume, so that hiding + moving +
-       * showing will not result in the wrong area being repainted
-       */
-      _clutter_paint_volume_init_static (&priv->visible_paint_volume, NULL);
-      priv->visible_paint_volume_valid = TRUE;
-
       if (priv->parent && !CLUTTER_ACTOR_IN_DESTRUCTION (priv->parent))
         {
           if (G_UNLIKELY (priv->parent->flags & CLUTTER_ACTOR_NO_LAYOUT))
             clutter_actor_queue_redraw (priv->parent);
           else
             clutter_actor_queue_relayout (priv->parent);
+
+          /* Set needs_finish_layout to ensure unobscured regions get updated */
+          iter = priv->parent;
+          while (iter && !iter->priv->needs_finish_layout)
+            {
+              iter->priv->needs_finish_layout = TRUE;
+              iter = iter->priv->parent;
+            }
         }
     }
 
@@ -2148,9 +2199,6 @@ unrealize_actor_after_children_cb (ClutterActor *self,
       priv->parent->flags & CLUTTER_ACTOR_NO_LAYOUT)
     clutter_stage_dequeue_actor_relayout (CLUTTER_STAGE (stage), self);
 
-  if (stage != NULL)
-    clutter_stage_dequeue_actor_redraw (CLUTTER_STAGE (stage), self);
-
   if (priv->unmapped_paint_branch_counter == 0)
     priv->allocation = (ClutterActorBox) CLUTTER_ACTOR_BOX_UNINITIALIZED;
 
@@ -2480,6 +2528,14 @@ static void
 absolute_geometry_changed (ClutterActor *actor)
 {
   actor->priv->needs_update_stage_views = TRUE;
+  actor->priv->needs_visible_paint_volume_update = TRUE;
+  actor->priv->absolute_modelview_valid = FALSE;
+  actor->priv->needs_opaque_region_update = TRUE;
+
+  actor->priv->needs_finish_layout = TRUE;
+  /* needs_finish_layout is already TRUE on the whole parent tree thanks
+   * to queue_update_paint_volume() that was called by transform_changed().
+   */
 }
 
 static ClutterActorTraverseVisitFlags
@@ -2859,8 +2915,6 @@ clutter_actor_apply_transform_to_point (ClutterActor             *self,
  * instead.
  *
  */
-/* XXX: We should consider caching the stage relative modelview along with
- * the actor itself */
 static void
 _clutter_actor_get_relative_transformation_matrix (ClutterActor      *self,
                                                    ClutterActor      *ancestor,
@@ -3100,6 +3154,30 @@ _clutter_actor_apply_relative_transformation_matrix (ClutterActor      *self,
   if (self == ancestor)
     return;
 
+  if (ancestor == NULL)
+    {
+      ClutterActorPrivate *priv = self->priv;
+
+      if (!priv->absolute_modelview_valid)
+        {
+          graphene_matrix_init_identity (&priv->absolute_modelview);
+
+          if (priv->parent != NULL)
+            {
+              _clutter_actor_apply_relative_transformation_matrix (priv->parent,
+                                                                   NULL,
+                                                                   &priv->absolute_modelview);
+            }
+
+          _clutter_actor_apply_modelview_transform (self, &priv->absolute_modelview);
+
+          priv->absolute_modelview_valid = TRUE;
+        }
+
+      graphene_matrix_multiply (&priv->absolute_modelview, matrix, matrix);
+      return;
+    }
+
   if (self->priv->parent != NULL)
     _clutter_actor_apply_relative_transformation_matrix (self->priv->parent,
                                                          ancestor,
@@ -3107,7 +3185,37 @@ _clutter_actor_apply_relative_transformation_matrix (ClutterActor      *self,
 
   _clutter_actor_apply_modelview_transform (self, matrix);
 }
+#if 0
+graphene_matrix_t *
+clutter_actor_get_absolute_modelview (ClutterActor *self)
+{
+  ClutterActorPrivate *priv = self->priv;
 
+  if (priv->absolute_modelview_valid) {
+    return &priv->absolute_modelview;
+  }
+
+  graphene_matrix_init_identity (&priv->absolute_modelview);
+
+  if (priv->parent == NULL)
+    {
+      /* No parents, this must be the stage... */
+
+    }
+  else
+    {
+      graphene_matrix_multiply (&priv->absolute_modelview,
+                                clutter_actor_get_absolute_modelview (priv->parent),
+                                &priv->absolute_modelview);
+    }
+
+  _clutter_actor_apply_modelview_transform (self,
+                                            &priv->absolute_modelview);
+
+  priv->absolute_modelview_valid = TRUE;
+  return &priv->absolute_modelview;
+}
+#endif
 static void
 _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                                        ClutterPaintVolume *pv,
@@ -3750,6 +3858,7 @@ clutter_actor_paint (ClutterActor        *self,
       /* annoyingly gcc warns if uninitialized even though
        * the initialization is redundant :-( */
       ClutterCullResult result = CLUTTER_CULL_RESULT_IN;
+      const cairo_region_t *redraw_clip;
 
       success = should_cull_out
         ? cull_actor (self, paint_context, &result)
@@ -3759,6 +3868,55 @@ clutter_actor_paint (ClutterActor        *self,
         _clutter_actor_paint_cull_result (self, success, result, actor_node);
       else if (result == CLUTTER_CULL_RESULT_OUT && success)
         return;
+
+      redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
+
+      if (!clutter_paint_context_is_drawing_off_stage (paint_context) &&
+          priv->unobscured_without_children &&
+          redraw_clip)
+        {
+          /* The intersection checks here are implementing z-level culling for
+           * this actor and everything painted underneath it in the z-plane.
+           * The z-level culling for actors above us happens before the paint stage
+           * in add_actor_to_redraw_clip().
+           */
+
+          cairo_region_t *intersection = cairo_region_copy (redraw_clip);
+          gboolean culled_out;
+
+          if (priv->visible_paint_volume_valid)
+            {
+              ClutterActorBox stage_paint_rect;
+              graphene_rect_t tmp_rect;
+              cairo_rectangle_int_t stage_paint_rect_int;
+
+              _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                                         _clutter_actor_get_stage_internal (self),
+                                                         &stage_paint_rect);
+              tmp_rect = (graphene_rect_t) {
+                .origin.x = stage_paint_rect.x1,
+                .origin.y = stage_paint_rect.y1,
+                .size.width = stage_paint_rect.x2 - stage_paint_rect.x1,
+                .size.height = stage_paint_rect.y2 - stage_paint_rect.y1
+              };
+              _clutter_util_rectangle_int_extents (&tmp_rect, &stage_paint_rect_int);
+              cairo_region_intersect_rectangle (intersection, &stage_paint_rect_int);
+            }
+
+          cairo_region_intersect (intersection, priv->unobscured_without_children);
+
+          culled_out = cairo_region_is_empty (intersection);
+          cairo_region_destroy (intersection);
+
+          if (culled_out)
+            return;
+
+// FIXME: use a fast check for this that doesn't heap allocate
+//          if (!cairo_region_check_intersects (priv->unobscured_without_children,
+//                                              redraw_clip,
+//                                              &stage_paint_rect))
+//            return;
+        }
     }
 
   if (priv->effects == NULL)
@@ -3813,6 +3971,52 @@ clutter_actor_continue_paint (ClutterActor        *self,
     {
       CoglFramebuffer *framebuffer;
       ClutterPaintNode *dummy;
+      const cairo_region_t *redraw_clip;
+
+      redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
+
+      if (priv->inhibit_culling_counter == 0 &&
+          !in_clone_paint () &&
+          !clutter_paint_context_is_drawing_off_stage (paint_context) &&
+          priv->unobscured_including_children &&
+          redraw_clip)
+        {
+          cairo_region_t *intersection = cairo_region_copy (redraw_clip);
+          gboolean culled_out;
+
+          if (priv->visible_paint_volume_valid)
+            {
+              ClutterActorBox stage_paint_rect;
+              graphene_rect_t tmp_rect;
+              cairo_rectangle_int_t stage_paint_rect_int;
+
+              _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                                         _clutter_actor_get_stage_internal (self),
+                                                         &stage_paint_rect);
+              tmp_rect = (graphene_rect_t) {
+                .origin.x = stage_paint_rect.x1,
+                .origin.y = stage_paint_rect.y1,
+                .size.width = stage_paint_rect.x2 - stage_paint_rect.x1,
+                .size.height = stage_paint_rect.y2 - stage_paint_rect.y1
+              };
+              _clutter_util_rectangle_int_extents (&tmp_rect, &stage_paint_rect_int);
+              cairo_region_intersect_rectangle (intersection, &stage_paint_rect_int);
+            }
+
+          cairo_region_intersect (intersection, priv->unobscured_including_children);
+
+          culled_out = cairo_region_is_empty (intersection);
+          cairo_region_destroy (intersection);
+
+          if (culled_out)
+            goto paint_children;
+
+// FIXME: use a fast check for this that doesn't heap allocate
+//          if (!cairo_region_check_intersects (priv->unobscured_including_children,
+//                                              redraw_clip,
+//                                              &stage_paint_rect))
+//            goto paint_children;
+        }
 
       /* XXX - this will go away in 2.0, when we can get rid of this
        * stuff and switch to a pure retained render tree of PaintNodes
@@ -3829,6 +4033,7 @@ clutter_actor_continue_paint (ClutterActor        *self,
       clutter_actor_paint_node (self, dummy, paint_context);
       clutter_paint_node_unref (dummy);
 
+paint_children:
       CLUTTER_ACTOR_GET_CLASS (self)->paint (self, paint_context);
     }
   else
@@ -4695,6 +4900,7 @@ clutter_actor_set_clip_rect (ClutterActor          *self,
     priv->has_clip = FALSE;
 
   queue_update_paint_volume (self);
+  clutter_actor_invalidate_opaque_region (self);
   clutter_actor_queue_redraw (self);
 
   g_object_notify_by_pspec (obj, obj_props[PROP_CLIP_RECT]);
@@ -5529,6 +5735,10 @@ clutter_actor_dispose (GObject *object)
     }
 
   g_clear_pointer (&priv->stage_views, g_list_free);
+
+  g_clear_pointer (&priv->unobscured_without_children, cairo_region_destroy);
+  g_clear_pointer (&priv->unobscured_including_children, cairo_region_destroy);
+  g_clear_pointer (&priv->unobscured_region, cairo_region_destroy);
 
   G_OBJECT_CLASS (clutter_actor_parent_class)->dispose (object);
 }
@@ -7587,7 +7797,9 @@ clutter_actor_init (ClutterActor *self)
   priv->needs_height_request = TRUE;
   priv->needs_allocation = TRUE;
   priv->needs_paint_volume_update = TRUE;
+  priv->needs_visible_paint_volume_update = TRUE;
   priv->needs_update_stage_views = TRUE;
+  priv->needs_finish_layout = TRUE;
 
   priv->cached_width_age = 1;
   priv->cached_height_age = 1;
@@ -7595,11 +7807,10 @@ clutter_actor_init (ClutterActor *self)
   priv->opacity_override = -1;
   priv->enable_model_view_transform = TRUE;
 
-  /* We're not visible yet,  so the visible_paint_volume is empty */
-  _clutter_paint_volume_init_static (&priv->visible_paint_volume, NULL);
-  priv->visible_paint_volume_valid = TRUE;
-
   priv->transform_valid = FALSE;
+  priv->absolute_modelview_valid = FALSE;
+
+  priv->needs_opaque_region_update = TRUE;
 
   /* the default is to stretch the content, to match the
    * current behaviour of basically all actors. also, it's
@@ -7684,7 +7895,7 @@ _clutter_actor_queue_redraw_full (ClutterActor             *self,
    * The process starts in clutter_actor_queue_redraw() which is a
    * wrapper for this function. Additionally, an effect can queue a
    * redraw by wrapping this function in clutter_effect_queue_repaint().
-   *
+   *FIXME
    * This functions queues an entry in a list associated with the
    * stage which is a list of actors that queued a redraw while
    * updating the timelines, performing layouting and processing other
@@ -7735,6 +7946,51 @@ _clutter_actor_queue_redraw_full (ClutterActor             *self,
   /* ignore queueing a redraw on stages that are being destroyed */
   if (CLUTTER_ACTOR_IN_DESTRUCTION (stage))
     return;
+
+  if (priv->needs_redraw)
+    {
+      /* Ignore all requests to queue a redraw for an actor if a full
+       * (non-clipped) redraw of the actor has already been queued. */
+      if (!priv->has_next_redraw_clip)
+        {
+          CLUTTER_NOTE (CLIPPING, "Bail from stage_queue_actor_redraw (%s): "
+                        "Unclipped redraw of actor already queued",
+                        _clutter_actor_get_debug_name (self));
+          return;
+        }
+
+      /* If queuing a clipped redraw and a clipped redraw has
+       * previously been queued for this actor then combine the latest
+       * clip together with the existing clip */
+      if (volume)
+        clutter_paint_volume_union (&priv->next_redraw_clip, volume);
+      else
+        {
+          clutter_paint_volume_free (&priv->next_redraw_clip);
+          priv->has_next_redraw_clip = FALSE;
+        }
+    }
+  else
+    {
+      if (volume)
+        {
+          priv->has_next_redraw_clip = TRUE;
+          _clutter_paint_volume_init_static (&priv->next_redraw_clip, self);
+          _clutter_paint_volume_set_from_volume (&priv->next_redraw_clip, volume);
+        }
+      else
+        priv->has_next_redraw_clip = FALSE;
+
+      priv->needs_redraw = TRUE;
+    }
+
+  ClutterActor *iter = self;
+  while (iter && !iter->priv->needs_finish_layout)
+    {
+      iter->priv->needs_finish_layout = TRUE;
+      iter = iter->priv->parent;
+    }
+
 
   clutter_stage_queue_actor_redraw (CLUTTER_STAGE (stage),
                                     self,
@@ -10272,6 +10528,16 @@ clutter_actor_get_scale_z (ClutterActor *self)
   return _clutter_actor_get_transform_info_or_defaults (self)->scale_z;
 }
 
+static ClutterActorTraverseVisitFlags
+invalidate_opaque_region_cb (ClutterActor *actor,
+                             int           depth,
+                             gpointer      user_data)
+{
+  clutter_actor_invalidate_opaque_region (actor);
+
+  return CLUTTER_ACTOR_TRAVERSE_VISIT_CONTINUE;
+}
+
 static inline void
 clutter_actor_set_opacity_internal (ClutterActor *self,
                                     guint8        opacity)
@@ -10281,6 +10547,12 @@ clutter_actor_set_opacity_internal (ClutterActor *self,
   if (priv->opacity != opacity)
     {
       priv->opacity = opacity;
+
+      _clutter_actor_traverse (self,
+                               CLUTTER_ACTOR_TRAVERSE_DEPTH_FIRST,
+                               invalidate_opaque_region_cb,
+                               NULL,
+                               NULL);
 
       /* Queue a redraw from the flatten effect so that it can use
          its cached image if available instead of having to redraw the
@@ -10742,6 +11014,7 @@ clutter_actor_set_clip (ClutterActor *self,
   priv->has_clip = TRUE;
 
   queue_update_paint_volume (self);
+  clutter_actor_invalidate_opaque_region (self);
   clutter_actor_queue_redraw (self);
 
   g_object_notify_by_pspec (obj, obj_props[PROP_CLIP_RECT]);
@@ -10765,6 +11038,7 @@ clutter_actor_remove_clip (ClutterActor *self)
   self->priv->has_clip = FALSE;
 
   queue_update_paint_volume (self);
+  clutter_actor_invalidate_opaque_region (self);
   clutter_actor_queue_redraw (self);
 
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_HAS_CLIP]);
@@ -12995,51 +13269,19 @@ clutter_animatable_iface_init (ClutterAnimatableInterface *iface)
   iface->get_actor = clutter_actor_get_actor;
 }
 
-/**
- * clutter_actor_transform_stage_point:
- * @self: A #ClutterActor
- * @x: (in): x screen coordinate of the point to unproject
- * @y: (in): y screen coordinate of the point to unproject
- * @x_out: (out) (nullable): return location for the unprojected x coordinance
- * @y_out: (out) (nullable): return location for the unprojected y coordinance
- *
- * This function translates screen coordinates (@x, @y) to
- * coordinates relative to the actor. For example, it can be used to translate
- * screen events from global screen coordinates into actor-local coordinates.
- *
- * The conversion can fail, notably if the transform stack results in the
- * actor being projected on the screen as a mere line.
- *
- * The conversion should not be expected to be pixel-perfect due to the
- * nature of the operation. In general the error grows when the skewing
- * of the actor rectangle on screen increases.
- *
- * This function can be computationally intensive.
- *
- * This function only works when the allocation is up-to-date, i.e. inside of
- * the #ClutterActorClass.paint() implementation
- *
- * Return value: %TRUE if conversion was successful.
- */
-gboolean
-clutter_actor_transform_stage_point (ClutterActor *self,
-				     gfloat        x,
-				     gfloat        y,
-				     gfloat       *x_out,
-				     gfloat       *y_out)
+static gboolean
+transform_stage_points_internal (ClutterActor     *self,
+                                 graphene_point_t *points,
+                                 size_t            n_points)
 {
+  ClutterActorPrivate *priv = self->priv;
   graphene_point3d_t v[4];
   double ST[3][3];
   double RQ[3][3];
   int du, dv;
   double px, py;
   double det;
-  float xf, yf, wf;
-  ClutterActorPrivate *priv;
-
-  g_return_val_if_fail (CLUTTER_IS_ACTOR (self), FALSE);
-
-  priv = self->priv;
+  unsigned int i;
 
   /* This implementation is based on the quad -> quad projection algorithm
    * described by Paul Heckbert in:
@@ -13147,21 +13389,67 @@ clutter_actor_transform_stage_point (ClutterActor *self,
   if (fabs (det) <= DBL_EPSILON)
     return FALSE;
 
-  /*
-   * Now transform our point with the ST matrix; the notional w
-   * coordinate is 1, hence the last part is simply added.
-   */
-  xf = x * ST[0][0] + y * ST[1][0] + ST[2][0];
-  yf = x * ST[0][1] + y * ST[1][1] + ST[2][1];
-  wf = x * ST[0][2] + y * ST[1][2] + ST[2][2];
+  for (i = 0; i < n_points; i++)
+    {
+      graphene_point_t *point = &points[i];
+      float wf;
+
+      wf = point->x * ST[0][2] + point->y * ST[1][2] + ST[2][2];
+      point->x = (point->x * ST[0][0] + point->y * ST[1][0] + ST[2][0]) / wf;
+      point->y = (point->x * ST[0][1] + point->y * ST[1][1] + ST[2][1]) / wf;
+    }
+
+  return TRUE;
+}
+
+/**
+ * clutter_actor_transform_stage_point:
+ * @self: A #ClutterActor
+ * @x: (in): x screen coordinate of the point to unproject
+ * @y: (in): y screen coordinate of the point to unproject
+ * @x_out: (out) (nullable): return location for the unprojected x coordinance
+ * @y_out: (out) (nullable): return location for the unprojected y coordinance
+ *
+ * This function translates screen coordinates (@x, @y) to
+ * coordinates relative to the actor. For example, it can be used to translate
+ * screen events from global screen coordinates into actor-local coordinates.
+ *
+ * The conversion can fail, notably if the transform stack results in the
+ * actor being projected on the screen as a mere line.
+ *
+ * The conversion should not be expected to be pixel-perfect due to the
+ * nature of the operation. In general the error grows when the skewing
+ * of the actor rectangle on screen increases.
+ *
+ * This function can be computationally intensive.
+ *
+ * This function only works when the allocation is up-to-date, i.e. inside of
+ * the #ClutterActorClass.paint() implementation
+ *
+ * Return value: %TRUE if conversion was successful.
+ */
+gboolean
+clutter_actor_transform_stage_point (ClutterActor *self,
+				     gfloat        x,
+				     gfloat        y,
+				     gfloat       *x_out,
+				     gfloat       *y_out)
+{
+  graphene_point_t point = {
+    .x = x,
+    .y = y,
+  };
+
+  g_return_val_if_fail (CLUTTER_IS_ACTOR (self), FALSE);
+
+  if (!transform_stage_points_internal (self, &point, 1))
+    return FALSE;
 
   if (x_out)
-    *x_out = xf / wf;
+    *x_out = point.x;
 
   if (y_out)
-    *y_out = yf / wf;
-
-#undef DET
+    *y_out = point.y;
 
   return TRUE;
 }
@@ -14769,6 +15057,7 @@ clutter_actor_set_clip_to_allocation (ClutterActor *self,
       priv->clip_to_allocation = clip_set;
 
       queue_update_paint_volume (self);
+      clutter_actor_invalidate_opaque_region (self);
       clutter_actor_queue_redraw (self);
 
       g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_CLIP_TO_ALLOCATION]);
@@ -15294,6 +15583,7 @@ clear_stage_views_cb (ClutterActor *actor,
   g_autoptr (GList) old_stage_views = NULL;
 
   actor->priv->needs_update_stage_views = TRUE;
+  actor->priv->needs_finish_layout = TRUE;
 
   old_stage_views = g_steal_pointer (&actor->priv->stage_views);
 
@@ -15428,6 +15718,79 @@ clutter_actor_get_resource_scale (ClutterActor *self)
   return ceilf (clutter_actor_get_real_resource_scale (self));
 }
 
+static void
+add_actor_to_redraw_clip (ClutterActor       *self,
+                          gboolean            actor_moved,
+                          ClutterPaintVolume *old_visible_paint_volume)
+{
+  ClutterActorPrivate *priv = self->priv;
+  ClutterStage *stage = CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
+
+  cairo_region_t *intersection;
+
+  /* The intersection checks here are removing opaque actors on top of us, so
+   * essentially z-level culling for everything on top of us.
+   * The z-level culling for everything below us happens during painting
+   * in clutter_actor_paint().
+   */
+
+  if (priv->has_next_redraw_clip)
+    {
+      intersection =
+        clutter_paint_volume_intersects_region (&priv->next_redraw_clip,
+                                                stage,
+                                                priv->unobscured_without_children);
+
+      if (intersection)
+        clutter_stage_add_redraw_region (stage, intersection);
+    }
+  else if (actor_moved)
+    {
+      /* For a clipped redraw to work we need both the old paint volume and the new
+       * one, if any is missing we'll need to do an unclipped redraw.
+       */
+      if (old_visible_paint_volume == NULL || !priv->visible_paint_volume_valid)
+        goto full_stage_redraw;
+
+      intersection =
+        clutter_paint_volume_intersects_region (old_visible_paint_volume,
+                                                stage,
+                                                priv->unobscured_without_children);
+
+      if (intersection)
+        clutter_stage_add_redraw_region (stage, intersection);
+
+      g_clear_pointer (&intersection, cairo_region_destroy);
+
+      intersection =
+        clutter_paint_volume_intersects_region (&priv->visible_paint_volume,
+                                                stage,
+                                                priv->unobscured_without_children);
+
+      if (intersection)
+        clutter_stage_add_redraw_region (stage, intersection);
+    }
+  else
+    {
+      if (!priv->visible_paint_volume_valid)
+        goto full_stage_redraw;
+
+      intersection =
+        clutter_paint_volume_intersects_region (&priv->visible_paint_volume,
+                                                stage,
+                                                priv->unobscured_without_children);
+
+      if (intersection)
+        clutter_stage_add_redraw_region (stage, intersection);
+    }
+
+  g_clear_pointer (&intersection, cairo_region_destroy);
+  return;
+
+full_stage_redraw:
+  clutter_stage_add_to_redraw_clip (stage, NULL);
+}
+
 static gboolean
 sorted_lists_equal (GList *list_a,
                     GList *list_b)
@@ -15457,25 +15820,61 @@ update_stage_views (ClutterActor *self)
   ClutterActorPrivate *priv = self->priv;
   g_autoptr (GList) old_stage_views = NULL;
   ClutterStage *stage;
+  GList *all_views;
+  ClutterActorBox stage_paint_box;
   graphene_rect_t bounding_rect;
 
-  old_stage_views = g_steal_pointer (&priv->stage_views);
-
-  if (priv->needs_allocation)
+  if (!priv->visible_paint_volume_valid)
     {
-      g_warning ("Can't update stage views actor %s is on because it needs an "
-                 "allocation.", _clutter_actor_get_debug_name (self));
+      g_warning ("Can't update stage views actor %s is on because "
+                 "!visible_paint_volume_valid.", _clutter_actor_get_debug_name (self));
+  old_stage_views = g_steal_pointer (&priv->stage_views);
       goto out;
     }
 
   stage = CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
   g_return_if_fail (stage);
 
-  clutter_actor_get_transformed_extents (self, &bounding_rect);
+  all_views = clutter_stage_peek_stage_views (stage);
 
-  if (bounding_rect.size.width == 0.0 ||
-      bounding_rect.size.height == 0.0)
+/* We take a few fast paths when there only is a single stage view globally,
+   note that this introduces special behavior for the "just a single view" case
+   compared to the "multiple views" case: If an actor is zero-size or located outside
+   the stage, it will have a stage view set in the "single view" case */
+  if (all_views && all_views->next == NULL)
+    {
+      if (priv->stage_views && priv->stage_views->next == NULL) {
+        if (priv->stage_views->data == all_views->data) {
+  //g_warning("hit the very fast path");
+          return;
+  }
+
+//g_warning("hit the less fast path");
+        priv->stage_views->data = all_views->data;
+        g_signal_emit (self, actor_signals[STAGE_VIEWS_CHANGED], 0);
+      }
+
+/* now we either have zero views or multiple views */
+      old_stage_views = g_steal_pointer (&priv->stage_views);
+
+      priv->stage_views = g_list_prepend (NULL, all_views->data);
+      g_signal_emit (self, actor_signals[STAGE_VIEWS_CHANGED], 0);
+      return;
+    }
+
+  old_stage_views = g_steal_pointer (&priv->stage_views);
+
+  _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                             stage,
+                                             &stage_paint_box);
+
+  if (clutter_actor_box_get_area (&stage_paint_box) == 0.0)
     goto out;
+
+  bounding_rect = GRAPHENE_RECT_INIT (stage_paint_box.x1,
+                                      stage_paint_box.y1,
+                                      stage_paint_box.x2 - stage_paint_box.x1,
+                                      stage_paint_box.y2 - stage_paint_box.y1);
 
   priv->stage_views = clutter_stage_get_views_for_rect (stage,
                                                         &bounding_rect);
@@ -15516,29 +15915,350 @@ update_resource_scale (ClutterActor *self,
     g_signal_emit (self, actor_signals[RESOURCE_SCALE_CHANGED], 0);
 }
 
+static cairo_region_t *
+actor_region_to_stage_region (ClutterActor         *self,
+                              const cairo_region_t *region)
+{
+  int n_rects, i;
+  graphene_point3d_t *points;
+  g_autofree graphene_point3d_t *points_freeme = NULL;
+  cairo_rectangle_int_t *rects;
+  g_autofree cairo_rectangle_int_t *rects_freeme = NULL;
+
+  if (region == NULL)
+    return NULL;
+
+  n_rects = cairo_region_num_rectangles (region);
+
+  if (n_rects == 0)
+    return NULL;
+
+  if (n_rects < 64)
+    {
+      points = g_newa (graphene_point3d_t, n_rects * 2);
+      rects = g_newa (cairo_rectangle_int_t, n_rects);
+    }
+  else
+    {
+      points = points_freeme = g_new (graphene_point3d_t, n_rects * 2);
+      rects = rects_freeme = g_new (cairo_rectangle_int_t, n_rects);
+    }
+
+  for (i = 0; i < n_rects; i++)
+    {
+      graphene_point3d_t *point_top_left, *point_bottom_right;
+      cairo_rectangle_int_t rect;
+
+      point_top_left = &points[i * 2];
+      point_bottom_right = &points[i * 2 + 1];
+      cairo_region_get_rectangle (region, i, &rect);
+
+      point_top_left->x = rect.x;
+      point_top_left->y = rect.y;
+      point_top_left->z = 0;
+      point_bottom_right->x = rect.x + rect.width;
+      point_bottom_right->y = rect.y + rect.height;
+      point_bottom_right->z = 0;
+    }
+
+  _clutter_actor_fully_transform_vertices (self, points, points, n_rects * 2);
+
+  for (i = 0; i < n_rects; i++)
+    {
+      cairo_rectangle_int_t *rect = &rects[i];
+      graphene_point3d_t *point_top_left, *point_bottom_right;
+
+      point_top_left = &points[i * 2];
+      point_bottom_right = &points[i * 2 + 1];
+
+      /* Get the extending int rectangle that contains the whole transformed one. */
+      rect->x = ceilf (point_top_left->x);
+      rect->y = ceilf (point_top_left->y);
+      rect->width = floorf (point_bottom_right->x) - rect->x;
+      rect->height = floorf (point_bottom_right->y) - rect->y;
+    }
+
+  return cairo_region_create_rectangles (rects, n_rects);
+}
+
+static cairo_region_t *
+get_content_opaque_region (ClutterActor *self)
+{
+  ClutterActorPrivate *priv = self->priv;
+  cairo_region_t *opaque_region = NULL;
+
+  if (clutter_actor_get_paint_opacity_internal (self) < 255)
+    return NULL;
+
+  if (priv->bg_color_set &&
+      priv->bg_color.alpha == 255)
+    {
+      ClutterActorBox box;
+      graphene_rect_t tmp;
+      cairo_rectangle_int_t rect;
+
+      ensure_paint_volume (self);
+
+      _clutter_paint_volume_get_bounding_box (&priv->paint_volume, &box);
+
+      tmp = (graphene_rect_t) {
+        .origin.x = box.x1,
+        .origin.y = box.y1,
+        .size.width = box.x2 - box.x1,
+        .size.height = box.y2 - box.y1,
+      };
+      clutter_util_rectangle_int_contained (&tmp, &rect);
+
+      opaque_region = cairo_region_create_rectangle (&rect);
+    }
+
+  if (priv->content)
+    {
+      cairo_region_t *content_opaque_region;
+
+      // FIXME: make sure to scale the region in case the content is painted with a different size
+      content_opaque_region = clutter_content_get_opaque_region (priv->content);
+
+      if (content_opaque_region)
+        {
+          if (opaque_region)
+            {
+              cairo_region_union (opaque_region, content_opaque_region);
+              cairo_region_destroy (content_opaque_region);
+            }
+          else
+            {
+              opaque_region = g_steal_pointer (&content_opaque_region);
+            }
+        }
+    }
+
+  return opaque_region;
+}
+
+static gboolean
+needs_modify_opaque_region (ClutterActor *self)
+{
+  ClutterActorPrivate *priv = self->priv;
+
+  if (priv->has_clip)
+    return TRUE;
+
+  if (priv->clip_to_allocation)
+    return TRUE;
+
+  return FALSE;
+}
+
+static void
+transform_rect_to_stage (ClutterActor    *actor,
+                         graphene_rect_t *rect)
+{
+  graphene_point3d_t vertices[2];
+
+  vertices[0].x = rect->origin.x;
+  vertices[0].y = rect->origin.y;
+  vertices[0].z = 0;
+  vertices[1].x = rect->origin.x + rect->size.width;
+  vertices[1].y = rect->origin.y + rect->size.height;
+  vertices[1].z = 0;
+
+  _clutter_actor_fully_transform_vertices (actor, vertices, vertices, 2);
+
+  rect->origin.x = vertices[0].x;
+  rect->origin.y = vertices[0].y;
+  rect->size.width = vertices[1].x - rect->origin.x;
+  rect->size.height = vertices[1].y - rect->origin.y;
+}
+
+static cairo_region_t *
+modify_opaque_region (ClutterActor   *self,
+                      cairo_region_t *opaque_region)
+{
+  ClutterActorPrivate *priv = self->priv;
+
+  if (priv->has_clip)
+    {
+      graphene_rect_t clip = priv->clip;
+      cairo_rectangle_int_t clip_rect;
+
+      transform_rect_to_stage (self, &clip);
+      clutter_util_rectangle_int_contained (&clip, &clip_rect);
+
+      cairo_region_intersect_rectangle (opaque_region, &clip_rect);
+    }
+  else if (priv->clip_to_allocation)
+    {
+      graphene_rect_t clip = { 0, };
+      cairo_rectangle_int_t clip_rect;
+
+      clip.size.width = clutter_actor_box_get_width (&priv->allocation);
+      clip.size.height = clutter_actor_box_get_height (&priv->allocation);
+
+      transform_rect_to_stage (self, &clip);
+      clutter_util_rectangle_int_contained (&clip, &clip_rect);
+
+      cairo_region_intersect_rectangle (opaque_region, &clip_rect);
+    }
+
+  return opaque_region;
+}
+
+static void
+update_unobscured_region (ClutterActor *self,
+                          cairo_region_t *unobscured_region)
+{
+  ClutterActorPrivate *priv = self->priv;
+  gboolean has_opaque_region;
+  gboolean modify_region_including_children_needed;
+  gboolean has_effect_on_unobscured_region;
+  cairo_region_t *new_unobscured_region;
+
+  if (priv->needs_opaque_region_update)
+    {
+      cairo_region_t *opaque_region =
+        get_content_opaque_region (self);
+
+      priv->opaque_region = actor_region_to_stage_region (self, opaque_region);
+      priv->needs_opaque_region_update = FALSE;
+
+      g_clear_pointer (&opaque_region, cairo_region_destroy);
+    }
+
+  has_opaque_region =
+    priv->opaque_region && !cairo_region_is_empty (priv->opaque_region);
+  modify_region_including_children_needed = needs_modify_opaque_region (self);
+
+  has_effect_on_unobscured_region =
+    has_opaque_region || modify_region_including_children_needed;
+
+  if (!has_effect_on_unobscured_region)
+    {
+      g_clear_pointer (&priv->unobscured_region, cairo_region_destroy);
+      return;
+    }
+
+  new_unobscured_region = cairo_region_copy (unobscured_region);
+
+  if (has_opaque_region)
+    cairo_region_subtract (new_unobscured_region, priv->opaque_region);
+
+  if (modify_region_including_children_needed)
+    {
+      cairo_region_t *opaque_region_including_children;
+
+      /* We use a small trick to get the opaque region including our
+       * children: Subtract our unobscured_region from the unobscured
+       * region of the previous actor.
+       */
+      opaque_region_including_children = cairo_region_copy (priv->unobscured_without_children);
+      cairo_region_subtract (opaque_region_including_children, new_unobscured_region);
+
+      cairo_region_union (new_unobscured_region, opaque_region_including_children);
+
+      opaque_region_including_children =
+        modify_opaque_region (self, opaque_region_including_children);
+
+      if (cairo_region_is_empty (opaque_region_including_children))
+        {
+          g_clear_pointer (&opaque_region_including_children, cairo_region_destroy);
+          g_clear_pointer (&new_unobscured_region, cairo_region_destroy);
+          g_clear_pointer (&priv->unobscured_region, cairo_region_destroy);
+          return;
+        }
+
+      cairo_region_subtract (new_unobscured_region, opaque_region_including_children);
+      g_clear_pointer (&opaque_region_including_children, cairo_region_destroy);
+    }
+
+  /* Small optimization, if the unobscured_region we pass to the next
+   * actor didn't change after all, keep the old one so the next actors
+   * won't have to update their regions.
+   */
+  if (cairo_region_equal (priv->unobscured_region, new_unobscured_region))
+    {
+      g_clear_pointer (&new_unobscured_region, cairo_region_destroy);
+      return;
+    }
+
+  cairo_region_destroy (priv->unobscured_region);
+  priv->unobscured_region = g_steal_pointer (&new_unobscured_region);
+}
+
 void
 clutter_actor_finish_layout (ClutterActor *self,
-                             gboolean      use_max_scale)
+                             gboolean      use_max_scale,
+                             cairo_region_t **unobscured_region)
 {
   ClutterActorPrivate *priv = self->priv;
   ClutterActor *child;
+  gboolean unobscured_without_children_changed;
+  gboolean unobscured_including_children_changed;
+  gboolean actor_moved = FALSE;
+  gboolean old_visible_paint_volume_valid = FALSE;
+  ClutterPaintVolume old_visible_paint_volume;
 
   if ((!CLUTTER_ACTOR_IS_MAPPED (self) &&
        !clutter_actor_has_mapped_clones (self)) ||
       CLUTTER_ACTOR_IN_DESTRUCTION (self))
     return;
 
-  ensure_paint_volume (self);
+  unobscured_without_children_changed =
+    priv->unobscured_without_children != *unobscured_region;
 
-  if (priv->has_paint_volume)
+  if (!priv->needs_finish_layout &&
+      !unobscured_without_children_changed)
     {
-      _clutter_paint_volume_copy_static (&priv->paint_volume,
-                                         &priv->visible_paint_volume);
-      _clutter_paint_volume_transform_relative (&priv->visible_paint_volume,
-                                                NULL); /* eye coordinates */
+      if (priv->unobscured_region)
+        *unobscured_region = priv->unobscured_region;
+      else
+        *unobscured_region = priv->unobscured_including_children;
+
+      return;
     }
 
-  priv->visible_paint_volume_valid = priv->has_paint_volume;
+//g_warning("ACTOR %p doing a finish layout because opaque %d, unobscured %d, visible pv %d, stage views %d, redraw %d", self, priv->needs_opaque_region_update,  unobscured_without_children_changed, priv->needs_visible_paint_volume_update, priv->needs_update_stage_views, priv->needs_redraw);
+
+  if (unobscured_without_children_changed)
+    {
+      cairo_region_destroy (priv->unobscured_without_children);
+      priv->unobscured_without_children = cairo_region_reference (*unobscured_region);
+    }
+
+  for (child = priv->last_child; child; child = child->priv->prev_sibling)
+    clutter_actor_finish_layout (child, use_max_scale, unobscured_region);
+
+  unobscured_including_children_changed =
+    priv->unobscured_including_children != *unobscured_region;
+
+  if (unobscured_including_children_changed)
+    {
+      cairo_region_destroy (priv->unobscured_including_children);
+      priv->unobscured_including_children = cairo_region_reference (*unobscured_region);
+    }
+
+  if (unobscured_including_children_changed || priv->needs_opaque_region_update)
+    update_unobscured_region (self, *unobscured_region);
+
+  if (priv->needs_visible_paint_volume_update)
+    {
+      ensure_paint_volume (self);
+
+      actor_moved = TRUE;
+      old_visible_paint_volume = priv->visible_paint_volume;
+      old_visible_paint_volume_valid = priv->visible_paint_volume_valid;
+
+      if (priv->has_paint_volume)
+        {
+          _clutter_paint_volume_copy_static (&priv->paint_volume,
+                                             &priv->visible_paint_volume);
+          _clutter_paint_volume_transform_relative (&priv->visible_paint_volume,
+                                                    NULL); /* eye coordinates */
+        }
+
+      priv->visible_paint_volume_valid = priv->has_paint_volume;
+      priv->needs_visible_paint_volume_update = FALSE;
+    }
 
   if (priv->needs_update_stage_views)
     {
@@ -15548,8 +16268,18 @@ clutter_actor_finish_layout (ClutterActor *self,
       priv->needs_update_stage_views = FALSE;
     }
 
-  for (child = priv->first_child; child; child = child->priv->next_sibling)
-    clutter_actor_finish_layout (child, use_max_scale);
+  if (priv->needs_redraw)
+    {
+      add_actor_to_redraw_clip (self,
+                                actor_moved,
+                                old_visible_paint_volume_valid ? &old_visible_paint_volume : NULL);
+      priv->needs_redraw = FALSE;
+    }
+
+  priv->needs_finish_layout = FALSE;
+
+  if (priv->unobscured_region)
+    *unobscured_region = priv->unobscured_region;
 }
 
 /**
@@ -16523,6 +17253,7 @@ clutter_actor_set_background_color_internal (ClutterActor *self,
   priv->bg_color = *color;
   priv->bg_color_set = TRUE;
 
+  clutter_actor_invalidate_opaque_region (self);
   clutter_actor_queue_redraw (self);
 
   g_object_notify_by_pspec (obj, obj_props[PROP_BACKGROUND_COLOR_SET]);
@@ -16561,6 +17292,7 @@ clutter_actor_set_background_color (ClutterActor       *self,
 
       priv->bg_color_set = FALSE;
 
+      clutter_actor_invalidate_opaque_region (self);
       clutter_actor_queue_redraw (self);
 
       g_object_notify_by_pspec (obj, obj_props[PROP_BACKGROUND_COLOR_SET]);
@@ -17771,6 +18503,7 @@ clutter_actor_set_content (ClutterActor   *self,
   if (priv->request_mode == CLUTTER_REQUEST_CONTENT_SIZE)
     _clutter_actor_queue_only_relayout (self);
 
+  clutter_actor_invalidate_opaque_region (self);
   clutter_actor_queue_redraw (self);
 
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_CONTENT]);
@@ -19164,27 +19897,6 @@ clutter_actor_invalidate_paint_volume (ClutterActor *self)
   queue_update_paint_volume (self);
 }
 
-gboolean
-clutter_actor_get_redraw_clip (ClutterActor       *self,
-                               ClutterPaintVolume *dst_old_pv,
-                               ClutterPaintVolume *dst_new_pv)
-{
-  ClutterActorPrivate *priv = self->priv;
-
-  ensure_paint_volume (self);
-
-  /* For a clipped redraw to work we need both the old paint volume and the new
-   * one, if any is missing we'll need to do an unclipped redraw.
-   */
-  if (!priv->visible_paint_volume_valid || !priv->has_paint_volume)
-    return FALSE;
-
-  _clutter_paint_volume_set_from_volume (dst_old_pv, &priv->visible_paint_volume);
-  _clutter_paint_volume_set_from_volume (dst_new_pv, &priv->paint_volume);
-
-  return TRUE;
-}
-
 void
 clutter_actor_attach_grab (ClutterActor *self,
                            ClutterGrab  *grab)
@@ -19201,4 +19913,228 @@ clutter_actor_detach_grab (ClutterActor *self,
   ClutterActorPrivate *priv = self->priv;
 
   priv->grabs = g_list_remove (priv->grabs, grab);
+}
+
+void
+clutter_actor_invalidate_opaque_region (ClutterActor *self)
+{
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+
+  self->priv->needs_opaque_region_update = TRUE;
+
+  ClutterActor *iter = self;
+  while (iter && !iter->priv->needs_finish_layout)
+    {
+      iter->priv->needs_finish_layout = TRUE;
+      iter = iter->priv->parent;
+    }
+}
+
+static cairo_region_t *
+stage_region_to_actor_region (ClutterActor         *actor,
+                              const cairo_region_t *region)
+{
+  int n_rects, i;
+  graphene_point_t *points;
+  g_autofree graphene_point_t *points_freeme = NULL;
+  cairo_rectangle_int_t *rects;
+  g_autofree cairo_rectangle_int_t *rects_freeme = NULL;
+
+  if (region == NULL)
+    return NULL;
+
+  n_rects = cairo_region_num_rectangles (region);
+
+  if (n_rects == 0)
+    return NULL;
+
+  if (n_rects < 64)
+    {
+      points = g_newa (graphene_point_t, n_rects * 2);
+      rects = g_newa (cairo_rectangle_int_t, n_rects);
+    }
+  else
+    {
+      points = points_freeme = g_new (graphene_point_t, n_rects * 2);
+      rects = rects_freeme = g_new (cairo_rectangle_int_t, n_rects);
+    }
+
+  for (i = 0; i < n_rects; i++)
+    {
+      graphene_point_t *point_top_left, *point_bottom_right;
+      cairo_rectangle_int_t rect;
+
+      point_top_left = &points[i * 2];
+      point_bottom_right = &points[i * 2 + 1];
+      cairo_region_get_rectangle (region, i, &rect);
+
+      point_top_left->x = rect.x;
+      point_top_left->y = rect.y;
+      point_bottom_right->x = rect.x + rect.width;
+      point_bottom_right->y = rect.y + rect.height;
+    }
+
+  if (!transform_stage_points_internal (actor, points, n_rects * 2))
+    return NULL;
+
+  for (i = 0; i < n_rects; i++)
+    {
+      cairo_rectangle_int_t *rect = &rects[i];
+      graphene_point_t *point_top_left, *point_bottom_right;
+
+      point_top_left = &points[i * 2];
+      point_bottom_right = &points[i * 2 + 1];
+
+      /* Get the extending int rectangle that contains the whole transformed one. */
+      rect->x = floorf (point_top_left->x);
+      rect->y = floorf (point_top_left->y);
+      rect->width = ceilf (point_bottom_right->x) - rect->x;
+      rect->height = ceilf (point_bottom_right->y) - rect->y;
+    }
+
+  return cairo_region_create_rectangles (rects, n_rects);
+}
+#if 0
+gboolean
+clutter_actor_is_obscured (ClutterActor *self)
+{
+  ClutterActorPrivate *priv;
+  cairo_region_t *stage_unobscured, *unobscured;
+  cairo_rectangle_int_t stage_paint_rect_int;
+
+  g_return_val_if_fail (CLUTTER_IS_ACTOR (self), NULL);
+
+  priv = self->priv;
+
+  if (priv->visible_paint_volume_valid)
+    {
+      ClutterStage *stage = _clutter_actor_get_stage_internal (self);
+      ClutterActorBox stage_paint_rect;
+      graphene_rect_t tmp_rect;
+
+      _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                                 stage,
+                                                 &stage_paint_rect);
+      tmp_rect = (graphene_rect_t) {
+        .origin.x = stage_paint_rect.x1,
+        .origin.y = stage_paint_rect.y1,
+        .size.width = stage_paint_rect.x2 - stage_paint_rect.x1,
+        .size.height = stage_paint_rect.y2 - stage_paint_rect.y1
+      };
+      _clutter_util_rectangle_int_extents (&tmp_rect, &stage_paint_rect_int);
+    }
+
+    return !cairo_region_check_intersects (priv->unobscured_without_children,
+                                           NULL,
+                                           &stage_paint_rect);
+}
+#endif
+/**
+ * clutter_actor_get_unobscured_region:
+ * @self: A #ClutterActor
+ * @stage_unobscured_region: (out) (optional): region in stage coordinates
+ * @local_unobscured_region: (out) (optional): region in actor coordinates
+ *
+ * Gets the unobscured region of the actor. The region is set to %NULL if
+ * the actor is fully obscured by opaque actors on top of it.
+ */
+void
+clutter_actor_get_unobscured_region (ClutterActor    *self,
+                                     cairo_region_t **stage_unobscured_region,
+                                     cairo_region_t **local_unobscured_region)
+{
+  ClutterActorPrivate *priv;
+  cairo_region_t *stage_unobscured;
+
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+
+  priv = self->priv;
+  stage_unobscured = cairo_region_copy (priv->unobscured_without_children);
+
+  /* First intersect the clip with our visible paint volume to avoid extra work */
+  if (priv->visible_paint_volume_valid)
+    {
+      ClutterStage *stage =
+        CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
+      ClutterActorBox stage_paint_rect;
+      graphene_rect_t tmp_rect;
+      cairo_rectangle_int_t stage_paint_rect_int;
+
+      _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                                 stage,
+                                                 &stage_paint_rect);
+      tmp_rect = (graphene_rect_t) {
+        .origin.x = stage_paint_rect.x1,
+        .origin.y = stage_paint_rect.y1,
+        .size.width = stage_paint_rect.x2 - stage_paint_rect.x1,
+        .size.height = stage_paint_rect.y2 - stage_paint_rect.y1
+      };
+      _clutter_util_rectangle_int_extents (&tmp_rect, &stage_paint_rect_int);
+      cairo_region_intersect_rectangle (stage_unobscured, &stage_paint_rect_int);
+    }
+
+  if (cairo_region_is_empty (stage_unobscured))
+    {
+      if (local_unobscured_region != NULL)
+        *local_unobscured_region = NULL;
+      if (stage_unobscured_region != NULL)
+        *stage_unobscured_region = NULL;
+
+      cairo_region_destroy (stage_unobscured);
+      return;
+    }
+
+  if (local_unobscured_region != NULL)
+    *local_unobscured_region = stage_region_to_actor_region (self, stage_unobscured);
+
+  if (stage_unobscured_region != NULL)
+    *stage_unobscured_region = stage_unobscured;
+  else
+    cairo_region_destroy (stage_unobscured);
+}
+
+cairo_region_t *
+clutter_actor_get_region_to_repaint (ClutterActor         *self,
+                                     const cairo_region_t *redraw_clip)
+{
+  ClutterActorPrivate *priv;
+  cairo_region_t *local_clip;
+
+  g_return_val_if_fail (CLUTTER_IS_ACTOR (self), NULL);
+
+  priv = self->priv;
+
+  /* No way I'm making this work with clones */
+  if (priv->in_cloned_branch > 0)
+    return NULL;
+
+  local_clip = cairo_region_copy (redraw_clip);
+
+  /* First intersect the clip with our visible paint volume to avoid extra work */
+  if (priv->visible_paint_volume_valid)
+    {
+      ClutterStage *stage =
+        CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
+      ClutterActorBox stage_paint_rect;
+      graphene_rect_t tmp_rect;
+      cairo_rectangle_int_t stage_paint_rect_int;
+
+      _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                                 stage,
+                                                 &stage_paint_rect);
+      tmp_rect = (graphene_rect_t) {
+        .origin.x = stage_paint_rect.x1,
+        .origin.y = stage_paint_rect.y1,
+        .size.width = stage_paint_rect.x2 - stage_paint_rect.x1,
+        .size.height = stage_paint_rect.y2 - stage_paint_rect.y1
+      };
+      _clutter_util_rectangle_int_extents (&tmp_rect, &stage_paint_rect_int);
+      cairo_region_intersect_rectangle (local_clip, &stage_paint_rect_int);
+    }
+
+  /* Now let's intersect with the unobscured region */
+  cairo_region_intersect (local_clip, priv->unobscured_without_children);
+
+  /* Finally transform it all to actor local coordinates */
+  return stage_region_to_actor_region (self, local_clip);
 }

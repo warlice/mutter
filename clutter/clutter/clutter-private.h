@@ -210,6 +210,9 @@ CLUTTER_EXPORT
 void _clutter_util_rectangle_int_extents (const graphene_rect_t *src,
                                           cairo_rectangle_int_t *dest);
 
+void clutter_util_rectangle_int_contained (const graphene_rect_t *src,
+                                           cairo_rectangle_int_t *dest);
+
 void _clutter_util_rectangle_offset (const cairo_rectangle_int_t *src,
                                      int                          x,
                                      int                          y,

@@ -5,8 +5,6 @@
 
 #include "meta/meta-background-content.h"
 
-cairo_region_t *meta_background_content_get_clip_region (MetaBackgroundContent *self);
-
 void meta_background_content_cull_out (MetaBackgroundContent *self,
                                        cairo_region_t        *unobscured_region,
                                        cairo_region_t        *clip_region);

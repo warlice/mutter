@@ -39,6 +39,8 @@ void            _clutter_content_paint_content          (ClutterContent      *co
                                                          ClutterPaintNode    *node,
                                                          ClutterPaintContext *paint_context);
 
+cairo_region_t * clutter_content_get_opaque_region (ClutterContent *content);
+
 G_END_DECLS
 
 #endif /* __CLUTTER_CONTENT_PRIVATE_H__ */

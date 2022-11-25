@@ -21,7 +21,6 @@
 
 #include "clutter/clutter.h"
 #include "compositor/clutter-utils.h"
-#include "compositor/meta-cullable.h"
 #include "compositor/meta-shaped-texture-private.h"
 #include "compositor/meta-window-actor-private.h"
 #include "compositor/region-utils.h"
@@ -33,19 +32,13 @@ typedef struct _MetaSurfaceActorPrivate
 
   cairo_region_t *input_region;
 
-  /* MetaCullable regions, see that documentation for more details */
-  cairo_region_t *unobscured_region;
-
   /* Freeze/thaw accounting */
   cairo_region_t *pending_damage;
   guint frozen : 1;
 } MetaSurfaceActorPrivate;
 
-static void cullable_iface_init (MetaCullableInterface *iface);
-
-G_DEFINE_ABSTRACT_TYPE_WITH_CODE (MetaSurfaceActor, meta_surface_actor, CLUTTER_TYPE_ACTOR,
-                                  G_ADD_PRIVATE (MetaSurfaceActor)
-                                  G_IMPLEMENT_INTERFACE (META_TYPE_CULLABLE, cullable_iface_init));
+G_DEFINE_TYPE_WITH_PRIVATE (MetaSurfaceActor, meta_surface_actor,
+                            CLUTTER_TYPE_ACTOR)
 
 enum
 {
@@ -56,124 +49,6 @@ enum
 };
 
 static guint signals[LAST_SIGNAL];
-
-typedef enum
-{
-  IN_STAGE_PERSPECTIVE,
-  IN_ACTOR_PERSPECTIVE
-} ScalePerspectiveType;
-
-static cairo_region_t *
-effective_unobscured_region (MetaSurfaceActor *surface_actor)
-{
-  MetaSurfaceActorPrivate *priv =
-    meta_surface_actor_get_instance_private (surface_actor);
-  ClutterActor *actor = CLUTTER_ACTOR (surface_actor);
-
-  /* Fail if we have any mapped clones. */
-  if (clutter_actor_has_mapped_clones (actor))
-    return NULL;
-
-  return priv->unobscured_region;
-}
-
-static cairo_region_t*
-get_scaled_region (MetaSurfaceActor     *surface_actor,
-                   cairo_region_t       *region,
-                   ScalePerspectiveType  scale_perspective)
-{
-  MetaWindowActor *window_actor;
-  cairo_region_t *scaled_region = NULL;
-  int geometry_scale;
-  float x, y;
-
-  window_actor = meta_window_actor_from_actor (CLUTTER_ACTOR (surface_actor));
-  geometry_scale = meta_window_actor_get_geometry_scale (window_actor);
-
-  clutter_actor_get_position (CLUTTER_ACTOR (surface_actor), &x, &y);
-  cairo_region_translate (region, x, y);
-
-  switch (scale_perspective)
-    {
-    case IN_STAGE_PERSPECTIVE:
-      scaled_region = meta_region_scale_double (region,
-                                                geometry_scale,
-                                                META_ROUNDING_STRATEGY_GROW);
-      break;
-    case IN_ACTOR_PERSPECTIVE:
-      scaled_region = meta_region_scale_double (region,
-                                                1.0 / geometry_scale,
-                                                META_ROUNDING_STRATEGY_GROW);
-      break;
-    }
-
-  g_assert (scaled_region != NULL);
-  cairo_region_translate (region, -x, -y);
-  cairo_region_translate (scaled_region, -x, -y);
-
-  return scaled_region;
-}
-
-static void
-set_unobscured_region (MetaSurfaceActor *surface_actor,
-                       cairo_region_t   *unobscured_region)
-{
-  MetaSurfaceActorPrivate *priv =
-    meta_surface_actor_get_instance_private (surface_actor);
-
-  g_clear_pointer (&priv->unobscured_region, cairo_region_destroy);
-  if (unobscured_region)
-    {
-      if (cairo_region_is_empty (unobscured_region))
-        {
-          priv->unobscured_region = cairo_region_reference (unobscured_region);
-        }
-      else
-        {
-          cairo_rectangle_int_t bounds = { 0, };
-          float width, height;
-
-          clutter_content_get_preferred_size (CLUTTER_CONTENT (priv->texture),
-                                              &width,
-                                              &height);
-          bounds = (cairo_rectangle_int_t) {
-            .width = width,
-            .height = height,
-          };
-
-          priv->unobscured_region = get_scaled_region (surface_actor,
-                                                       unobscured_region,
-                                                       IN_ACTOR_PERSPECTIVE);
-
-          cairo_region_intersect_rectangle (priv->unobscured_region, &bounds);
-        }
-    }
-}
-
-static void
-set_clip_region (MetaSurfaceActor *surface_actor,
-                 cairo_region_t   *clip_region)
-{
-  MetaSurfaceActorPrivate *priv =
-    meta_surface_actor_get_instance_private (surface_actor);
-  MetaShapedTexture *stex = priv->texture;
-
-  if (clip_region && !cairo_region_is_empty (clip_region))
-    {
-      cairo_region_t *region;
-
-      region = get_scaled_region (surface_actor,
-                                  clip_region,
-                                  IN_ACTOR_PERSPECTIVE);
-      meta_shaped_texture_set_clip_region (stex, region);
-
-      cairo_region_destroy (region);
-    }
-  else
-    {
-      meta_shaped_texture_set_clip_region (stex, clip_region);
-    }
-}
 
 static void
 meta_surface_actor_pick (ClutterActor       *actor,
@@ -241,8 +116,6 @@ meta_surface_actor_dispose (GObject *object)
   g_clear_pointer (&priv->input_region, cairo_region_destroy);
   g_clear_object (&priv->texture);
 
-  set_unobscured_region (self, NULL);
-
   G_OBJECT_CLASS (meta_surface_actor_parent_class)->dispose (object);
 }
 
@@ -275,79 +148,6 @@ gboolean
 meta_surface_actor_is_opaque (MetaSurfaceActor *self)
 {
   return META_SURFACE_ACTOR_GET_CLASS (self)->is_opaque (self);
-}
-
-static void
-meta_surface_actor_cull_out (MetaCullable   *cullable,
-                             cairo_region_t *unobscured_region,
-                             cairo_region_t *clip_region)
-{
-  MetaSurfaceActor *surface_actor = META_SURFACE_ACTOR (cullable);
-  MetaSurfaceActorPrivate *priv =
-    meta_surface_actor_get_instance_private (surface_actor);
-  uint8_t opacity = clutter_actor_get_opacity (CLUTTER_ACTOR (cullable));
-
-  set_unobscured_region (surface_actor, unobscured_region);
-  set_clip_region (surface_actor, clip_region);
-
-  if (opacity == 0xff)
-    {
-      cairo_region_t *opaque_region;
-      cairo_region_t *scaled_opaque_region;
-
-      opaque_region = meta_shaped_texture_get_opaque_region (priv->texture);
-
-      if (!opaque_region)
-        return;
-
-      scaled_opaque_region = get_scaled_region (surface_actor,
-                                                opaque_region,
-                                                IN_STAGE_PERSPECTIVE);
-
-      if (unobscured_region)
-        cairo_region_subtract (unobscured_region, scaled_opaque_region);
-      if (clip_region)
-        cairo_region_subtract (clip_region, scaled_opaque_region);
-
-      cairo_region_destroy (scaled_opaque_region);
-    }
-}
-
-static gboolean
-meta_surface_actor_is_untransformed (MetaCullable *cullable)
-{
-  ClutterActor *actor = CLUTTER_ACTOR (cullable);
-  MetaWindowActor *window_actor;
-  float width, height;
-  graphene_point3d_t verts[4];
-  int geometry_scale;
-
-  clutter_actor_get_size (actor, &width, &height);
-  clutter_actor_get_abs_allocation_vertices (actor, verts);
-
-  window_actor = meta_window_actor_from_actor (actor);
-  geometry_scale = meta_window_actor_get_geometry_scale (window_actor);
-
-  return meta_actor_vertices_are_untransformed (verts,
-                                                width * geometry_scale,
-                                                height * geometry_scale,
-                                                NULL);
-}
-
-static void
-meta_surface_actor_reset_culling (MetaCullable *cullable)
-{
-  MetaSurfaceActor *surface_actor = META_SURFACE_ACTOR (cullable);
-
-  set_clip_region (surface_actor, NULL);
-}
-
-static void
-cullable_iface_init (MetaCullableInterface *iface)
-{
-  iface->cull_out = meta_surface_actor_cull_out;
-  iface->is_untransformed = meta_surface_actor_is_untransformed;
-  iface->reset_culling = meta_surface_actor_reset_culling;
 }
 
 static void
@@ -391,45 +191,13 @@ meta_surface_actor_update_area (MetaSurfaceActor *self,
 {
   MetaSurfaceActorPrivate *priv =
     meta_surface_actor_get_instance_private (self);
-  gboolean repaint_scheduled = FALSE;
   cairo_rectangle_int_t clip;
 
   if (meta_shaped_texture_update_area (priv->texture, x, y, width, height, &clip))
     {
-      cairo_region_t *unobscured_region;
-
-      unobscured_region = effective_unobscured_region (self);
-
-      if (unobscured_region)
-        {
-          cairo_region_t *intersection;
-
-          if (cairo_region_is_empty (unobscured_region))
-            return;
-
-          intersection = cairo_region_copy (unobscured_region);
-          cairo_region_intersect_rectangle (intersection, &clip);
-
-          if (!cairo_region_is_empty (intersection))
-            {
-              cairo_rectangle_int_t damage_rect;
-
-              cairo_region_get_extents (intersection, &damage_rect);
-              clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (self), &damage_rect);
-              repaint_scheduled = TRUE;
-            }
-
-          cairo_region_destroy (intersection);
-        }
-      else
-        {
-          clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (self), &clip);
-          repaint_scheduled = TRUE;
-        }
+      clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (self), &clip);
+      g_signal_emit (self, signals[REPAINT_SCHEDULED], 0);
     }
-
-  if (repaint_scheduled)
-    g_signal_emit (self, signals[REPAINT_SCHEDULED], 0);
 }
 
 gboolean
@@ -437,10 +205,15 @@ meta_surface_actor_is_obscured (MetaSurfaceActor *self)
 {
   cairo_region_t *unobscured_region;
 
-  unobscured_region = effective_unobscured_region (self);
+  if (clutter_actor_has_mapped_clones (CLUTTER_ACTOR (self)))
+    return FALSE;
 
-  if (unobscured_region)
-    return cairo_region_is_empty (unobscured_region);
+  clutter_actor_get_unobscured_region (CLUTTER_ACTOR (self),
+                                       NULL,
+                                       &unobscured_region);
+
+  if (!unobscured_region)
+    return TRUE;
   else
     return FALSE;
 }
@@ -450,67 +223,62 @@ meta_surface_actor_is_obscured_on_stage_view (MetaSurfaceActor *self,
                                               ClutterStageView *stage_view,
                                               float            *unobscurred_fraction)
 {
-  cairo_region_t *unobscured_region;
+  MetaSurfaceActorPrivate *priv =
+    meta_surface_actor_get_instance_private (self);
+  cairo_region_t *stage_unobscured_region;
+  cairo_rectangle_int_t stage_rect;
+  float bounds_width, bounds_height;
+  float bounds_size;
+  int intersection_size = 0;
+  int n_rects, i;
 
-  unobscured_region = effective_unobscured_region (self);
-
-  if (unobscured_region)
+  if (clutter_actor_has_mapped_clones (CLUTTER_ACTOR (self)))
     {
-      MetaSurfaceActorPrivate *priv =
-        meta_surface_actor_get_instance_private (self);
-      cairo_region_t *intersection_region;
-      cairo_rectangle_int_t stage_rect;
-      float x, y;
-      float bounds_width, bounds_height;
-      float bounds_size;
-      int intersection_size = 0;
-      int n_rects, i;
+      return !clutter_actor_is_effectively_on_stage_view (CLUTTER_ACTOR (self),
+                                                          stage_view);
+    }
 
-      if (cairo_region_is_empty (unobscured_region))
-        return TRUE;
+  clutter_actor_get_unobscured_region (CLUTTER_ACTOR (self),
+                                       &stage_unobscured_region,
+                                       NULL);
 
-      intersection_region = cairo_region_copy (unobscured_region);
-      clutter_actor_get_transformed_position (CLUTTER_ACTOR (self), &x, &y);
-      cairo_region_translate (intersection_region, x, y);
+  if (!stage_unobscured_region)
+    return TRUE;
 
-      clutter_stage_view_get_layout (stage_view, &stage_rect);
-      cairo_region_intersect_rectangle (intersection_region,
-                                        &stage_rect);
+  clutter_stage_view_get_layout (stage_view, &stage_rect);
+  cairo_region_intersect_rectangle (stage_unobscured_region,
+                                    &stage_rect);
 
-      if (cairo_region_is_empty (intersection_region))
-        {
-          cairo_region_destroy (intersection_region);
-          return TRUE;
-        }
-      else if (!unobscurred_fraction)
-        {
-          cairo_region_destroy (intersection_region);
-          return FALSE;
-        }
-
-      clutter_content_get_preferred_size (CLUTTER_CONTENT (priv->texture),
-                                          &bounds_width,
-                                          &bounds_height);
-      bounds_size = bounds_width * bounds_height;
-
-      n_rects = cairo_region_num_rectangles (intersection_region);
-      for (i = 0; i < n_rects; i++)
-        {
-          cairo_rectangle_int_t rect;
-
-          cairo_region_get_rectangle (intersection_region, i, &rect);
-          intersection_size += rect.width * rect.height;
-        }
-      cairo_region_destroy (intersection_region);
-
-      g_return_val_if_fail (bounds_size > 0, FALSE);
-
-      *unobscurred_fraction = CLAMP (intersection_size / bounds_size, 0, 1);
+  if (cairo_region_is_empty (stage_unobscured_region))
+    {
+      cairo_region_destroy (stage_unobscured_region);
+      return TRUE;
+    }
+  else if (!unobscurred_fraction)
+    {
+      cairo_region_destroy (stage_unobscured_region);
       return FALSE;
     }
 
-  return !clutter_actor_is_effectively_on_stage_view (CLUTTER_ACTOR (self),
-                                                      stage_view);
+  clutter_content_get_preferred_size (CLUTTER_CONTENT (priv->texture),
+                                      &bounds_width,
+                                      &bounds_height);
+  bounds_size = bounds_width * bounds_height;
+
+  n_rects = cairo_region_num_rectangles (stage_unobscured_region);
+  for (i = 0; i < n_rects; i++)
+    {
+      cairo_rectangle_int_t rect;
+
+      cairo_region_get_rectangle (stage_unobscured_region, i, &rect);
+      intersection_size += rect.width * rect.height;
+    }
+  cairo_region_destroy (stage_unobscured_region);
+
+  g_return_val_if_fail (bounds_size > 0, FALSE);
+
+  *unobscurred_fraction = CLAMP (intersection_size / bounds_size, 0, 1);
+  return FALSE;
 }
 
 void

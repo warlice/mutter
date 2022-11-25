@@ -82,7 +82,6 @@
 #include "compositor/clutter-utils.h"
 #include "compositor/cogl-utils.h"
 #include "compositor/meta-background-private.h"
-#include "compositor/meta-cullable.h"
 #include "meta/display.h"
 
 typedef enum
@@ -231,9 +230,6 @@ struct _MetaBackgroundContent
   PipelineFlags pipeline_flags;
   cairo_rectangle_int_t texture_area;
   int texture_width, texture_height;
-
-  cairo_region_t *clip_region;
-  cairo_region_t *unobscured_region;
 };
 
 static void clutter_content_iface_init (ClutterContentInterface *iface);
@@ -261,34 +257,6 @@ enum
 };
 
 static GParamSpec *properties[N_PROPS] = { NULL, };
-
-static void
-set_clip_region (MetaBackgroundContent *self,
-                 cairo_region_t        *clip_region)
-{
-  g_clear_pointer (&self->clip_region, cairo_region_destroy);
-  if (clip_region)
-    {
-      if (cairo_region_is_empty (clip_region))
-        self->clip_region = cairo_region_reference (clip_region);
-      else
-        self->clip_region = cairo_region_copy (clip_region);
-    }
-}
-
-static void
-set_unobscured_region (MetaBackgroundContent *self,
-                       cairo_region_t        *unobscured_region)
-{
-  g_clear_pointer (&self->unobscured_region, cairo_region_destroy);
-  if (unobscured_region)
-    {
-      if (cairo_region_is_empty (unobscured_region))
-        self->unobscured_region = cairo_region_reference (unobscured_region);
-      else
-        self->unobscured_region = cairo_region_copy (unobscured_region);
-    }
-}
 
 static void
 invalidate_pipeline (MetaBackgroundContent *self,
@@ -438,6 +406,8 @@ setup_pipeline (MetaBackgroundContent *self,
 
       cogl_pipeline_set_layer_texture (self->pipeline, 0, texture);
       cogl_pipeline_set_layer_wrap_mode (self->pipeline, 0, wrap_mode);
+
+      clutter_content_invalidate_opaque_region (CLUTTER_CONTENT (self));
 
       self->changed &= ~CHANGED_BACKGROUND;
     }
@@ -656,14 +626,8 @@ meta_background_content_paint_content (ClutterContent      *content,
   MetaBackgroundContent *self = META_BACKGROUND_CONTENT (content);
   ClutterActorBox actor_box;
   cairo_rectangle_int_t rect_within_actor;
-  cairo_rectangle_int_t rect_within_stage;
-  cairo_region_t *region;
-  int i, n_rects;
-  float transformed_x, transformed_y, transformed_width, transformed_height;
-  gboolean untransformed;
-
-  if ((self->clip_region && cairo_region_is_empty (self->clip_region)))
-    return;
+  const cairo_region_t *redraw_clip;
+  cairo_region_t *repaint_region;
 
   clutter_actor_get_content_box (actor, &actor_box);
   rect_within_actor.x = actor_box.x1;
@@ -671,74 +635,14 @@ meta_background_content_paint_content (ClutterContent      *content,
   rect_within_actor.width = actor_box.x2 - actor_box.x1;
   rect_within_actor.height = actor_box.y2 - actor_box.y1;
 
-  if (clutter_actor_is_in_clone_paint (actor))
+  redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
+  repaint_region = redraw_clip
+    ? clutter_actor_get_region_to_repaint (actor, redraw_clip)
+    : NULL;
+
+  if (repaint_region && cairo_region_is_empty (repaint_region))
     {
-      untransformed = FALSE;
-    }
-  else
-    {
-      clutter_actor_get_transformed_position (actor,
-                                              &transformed_x,
-                                              &transformed_y);
-      rect_within_stage.x = floorf (transformed_x);
-      rect_within_stage.y = floorf (transformed_y);
-
-      clutter_actor_get_transformed_size (actor,
-                                          &transformed_width,
-                                          &transformed_height);
-      rect_within_stage.width = ceilf (transformed_width);
-      rect_within_stage.height = ceilf (transformed_height);
-
-      untransformed =
-        rect_within_actor.x == rect_within_stage.x &&
-        rect_within_actor.y == rect_within_stage.y &&
-        rect_within_actor.width == rect_within_stage.width &&
-        rect_within_actor.height == rect_within_stage.height;
-    }
-
-  if (untransformed) /* actor and stage space are the same */
-    {
-      if (self->clip_region)
-        {
-          region = cairo_region_copy (self->clip_region);
-          cairo_region_intersect_rectangle (region, &rect_within_stage);
-        }
-      else
-        {
-          const cairo_region_t *redraw_clip;
-
-          redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
-          if (redraw_clip)
-            {
-              region = cairo_region_copy (redraw_clip);
-              cairo_region_intersect_rectangle (region, &rect_within_stage);
-            }
-          else
-            {
-              region = cairo_region_create_rectangle (&rect_within_stage);
-            }
-        }
-    }
-  else /* actor and stage space are different but we need actor space */
-    {
-      if (self->clip_region)
-        {
-          region = cairo_region_copy (self->clip_region);
-          cairo_region_intersect_rectangle (region, &rect_within_actor);
-        }
-      else
-        {
-          region = cairo_region_create_rectangle (&rect_within_actor);
-        }
-    }
-
-  if (self->unobscured_region)
-    cairo_region_intersect (region, self->unobscured_region);
-
-  /* region is now in actor space */
-  if (cairo_region_is_empty (region))
-    {
-      cairo_region_destroy (region);
+      cairo_region_destroy (repaint_region);
       return;
     }
 
@@ -749,24 +653,32 @@ meta_background_content_paint_content (ClutterContent      *content,
    * fall back and draw the whole thing */
 #define MAX_RECTS 64
 
-  n_rects = cairo_region_num_rectangles (region);
-  if (n_rects <= MAX_RECTS)
+  if (repaint_region)
     {
-      for (i = 0; i < n_rects; i++)
-        {
-          cairo_rectangle_int_t rect;
-          cairo_region_get_rectangle (region, i, &rect);
-          paint_clipped_rectangle (self, node, &actor_box, &rect);
-        }
-    }
-  else
-    {
+      int n_rects, i;
       cairo_rectangle_int_t rect;
-      cairo_region_get_extents (region, &rect);
+
+      n_rects = cairo_region_num_rectangles (repaint_region);
+      if (n_rects <= MAX_RECTS)
+        {
+          for (i = 0; i < n_rects; i++)
+            {
+              cairo_region_get_rectangle (repaint_region, i, &rect);
+              paint_clipped_rectangle (self, node, &actor_box, &rect);
+            }
+
+          cairo_region_destroy (repaint_region);
+          return;
+        }
+
+      cairo_region_get_extents (repaint_region, &rect);
       paint_clipped_rectangle (self, node, &actor_box, &rect);
+
+      cairo_region_destroy (repaint_region);
+      return;
     }
 
-  cairo_region_destroy (region);
+  paint_clipped_rectangle (self, node, &actor_box, &rect_within_actor);
 }
 
 static gboolean
@@ -791,11 +703,20 @@ meta_background_content_get_preferred_size (ClutterContent *content,
   return TRUE;
 }
 
+static cairo_region_t *
+meta_background_content_get_opaque_region (ClutterContent *content)
+{
+  MetaBackgroundContent *self = META_BACKGROUND_CONTENT (content);
+
+  return cairo_region_create_rectangle (&self->texture_area);
+}
+
 static void
 clutter_content_iface_init (ClutterContentInterface *iface)
 {
   iface->paint_content = meta_background_content_paint_content;
   iface->get_preferred_size = meta_background_content_get_preferred_size;
+  iface->get_opaque_region = meta_background_content_get_opaque_region;
 }
 
 static void
@@ -822,8 +743,6 @@ meta_background_content_dispose (GObject *object)
 {
   MetaBackgroundContent *self = META_BACKGROUND_CONTENT (object);
 
-  set_clip_region (self, NULL);
-  set_unobscured_region (self, NULL);
   meta_background_content_set_background (self, NULL);
 
   g_clear_pointer (&self->pipeline, cogl_object_unref);
@@ -1224,24 +1143,14 @@ meta_background_content_set_rounded_clip_bounds (MetaBackgroundContent *self,
   clutter_content_invalidate (CLUTTER_CONTENT (self));
 }
 
-cairo_region_t *
-meta_background_content_get_clip_region (MetaBackgroundContent *self)
-{
-  return self->clip_region;
-}
-
 void
 meta_background_content_cull_out (MetaBackgroundContent *self,
                                   cairo_region_t        *unobscured_region,
                                   cairo_region_t        *clip_region)
 {
-  set_unobscured_region (self, unobscured_region);
-  set_clip_region (self, clip_region);
 }
 
 void
 meta_background_content_reset_culling (MetaBackgroundContent *self)
 {
-  set_unobscured_region (self, NULL);
-  set_clip_region (self, NULL);
 }

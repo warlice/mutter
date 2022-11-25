@@ -27,7 +27,6 @@
 #include "backends/meta-logical-monitor.h"
 #include "clutter/clutter-frame-clock.h"
 #include "compositor/compositor-private.h"
-#include "compositor/meta-cullable.h"
 #include "compositor/meta-shaped-texture-private.h"
 #include "compositor/meta-surface-actor.h"
 #include "compositor/meta-surface-actor-x11.h"
@@ -106,10 +105,8 @@ struct _MetaWindowActorX11
   gboolean is_frozen;
 };
 
-static void cullable_iface_init (MetaCullableInterface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (MetaWindowActorX11, meta_window_actor_x11, META_TYPE_WINDOW_ACTOR,
-                         G_IMPLEMENT_INTERFACE (META_TYPE_CULLABLE, cullable_iface_init))
+G_DEFINE_TYPE (MetaWindowActorX11, meta_window_actor_x11, META_TYPE_WINDOW_ACTOR)
 
 /* Each time the application updates the sync request counter to a new even value
  * value, we queue a frame into the windows list of frames. Once we're painting
@@ -754,6 +751,67 @@ clip_shadow_under_window (MetaWindowActorX11 *actor_x11)
   return meta_window_actor_is_opaque (META_WINDOW_ACTOR (actor_x11));
 }
 
+static gboolean
+transform_stage_rect_to_actor (ClutterActor *to_actor,
+                         cairo_rectangle_int_t *rect)
+{
+  float x1 = rect->x;
+  float y1 = rect->y;
+  float x2 = x1 + rect->width;
+  float y2 = y1 + rect->height;
+
+  if (!clutter_actor_transform_stage_point (to_actor, x1, y1, &x1, &y1))
+    return FALSE;
+
+  if (!clutter_actor_transform_stage_point (to_actor, x2, y2, &x2, &y2))
+    return FALSE;
+
+  rect->x = G_APPROX_VALUE (roundf (x1), x1, 0.001) ? roundf (x1) : ceilf (x1);
+  rect->y = G_APPROX_VALUE (roundf (y1), y1, 0.001)
+    ? roundf (y1) : ceilf (y1);
+  rect->width = G_APPROX_VALUE (roundf (x2 - x1), x2 - x1, 0.001)
+    ? roundf (x2 - x1) : floorf (x2 - x1);
+  rect->height = G_APPROX_VALUE (roundf (y2 - y1), y2 - y1, 0.001)
+    ? roundf (y2 - y1) : floorf (y2 - y1);
+
+  return TRUE;
+}
+
+static cairo_region_t *
+stage_region_to_actor_region (ClutterActor *actor,
+                              const cairo_region_t *region)
+{
+  int n_rects, i;
+  cairo_rectangle_int_t *rects;
+  g_autofree cairo_rectangle_int_t *freeme = NULL;
+
+  if (region == NULL)
+    return NULL;
+
+  n_rects = cairo_region_num_rectangles (region);
+
+  if (n_rects == 0)
+    return NULL;
+
+  if (n_rects < 64)
+    rects = g_newa (cairo_rectangle_int_t, n_rects);
+  else
+    rects = freeme = g_new (cairo_rectangle_int_t, n_rects);
+
+  for (i = 0; i < n_rects; i++)
+    {
+      cairo_rectangle_int_t *rect;
+
+      rect = &rects[i];
+      cairo_region_get_rectangle (region, i, rect);
+
+      if (!transform_stage_rect_to_actor (actor, rect))
+        return NULL;
+    }
+
+  return cairo_region_create_rectangles (rects, n_rects);
+}
+
 /**
  * set_clip_region_beneath:
  * @actor_x11: a #MetaWindowActorX11
@@ -1334,9 +1392,16 @@ meta_window_actor_x11_paint (ClutterActor        *actor,
                              ClutterPaintContext *paint_context)
 {
   MetaWindowActorX11 *actor_x11 = META_WINDOW_ACTOR_X11 (actor);
+  const cairo_region_t *redraw_clip =
+    clutter_paint_context_get_redraw_clip (paint_context);
   MetaWindow *window;
   gboolean appears_focused;
   MetaShadow *shadow;
+
+  redraw_clip = stage_region_to_actor_region (actor, redraw_clip);
+  set_clip_region_beneath (actor_x11, redraw_clip);
+  if (redraw_clip)
+    cairo_region_destroy (redraw_clip);
 
  /* This window got damage when obscured; we set up a timer
   * to send frame completion events, but since we're drawing
@@ -1395,6 +1460,8 @@ meta_window_actor_x11_paint (ClutterActor        *actor,
 
   CLUTTER_ACTOR_CLASS (meta_window_actor_x11_parent_class)->paint (actor,
                                                                    paint_context);
+
+  set_clip_region_beneath (actor_x11, NULL);
 }
 
 static void
@@ -1629,37 +1696,6 @@ meta_window_actor_x11_constructed (GObject *object)
   if (window->extended_sync_request_counter &&
       !meta_window_updates_are_frozen (window))
     meta_window_actor_queue_frame_drawn (actor, FALSE);
-}
-
-static void
-meta_window_actor_x11_cull_out (MetaCullable   *cullable,
-                                cairo_region_t *unobscured_region,
-                                cairo_region_t *clip_region)
-{
-  MetaWindowActorX11 *self = META_WINDOW_ACTOR_X11 (cullable);
-
-  meta_cullable_cull_out_children (cullable,
-                                   unobscured_region,
-                                   clip_region);
-
-  set_clip_region_beneath (self, clip_region);
-}
-
-static void
-meta_window_actor_x11_reset_culling (MetaCullable *cullable)
-{
-  MetaWindowActorX11 *actor_x11 = META_WINDOW_ACTOR_X11 (cullable);
-
-  g_clear_pointer (&actor_x11->shadow_clip, cairo_region_destroy);
-
-  meta_cullable_reset_culling_children (cullable);
-}
-
-static void
-cullable_iface_init (MetaCullableInterface *iface)
-{
-  iface->cull_out = meta_window_actor_x11_cull_out;
-  iface->reset_culling = meta_window_actor_x11_reset_culling;
 }
 
 static void

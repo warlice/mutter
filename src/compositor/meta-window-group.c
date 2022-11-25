@@ -7,7 +7,6 @@
 
 #include "compositor/clutter-utils.h"
 #include "compositor/compositor-private.h"
-#include "compositor/meta-cullable.h"
 #include "compositor/meta-window-actor-private.h"
 #include "compositor/meta-window-group-private.h"
 #include "core/display-private.h"
@@ -25,31 +24,8 @@ struct _MetaWindowGroup
   MetaDisplay *display;
 };
 
-static void cullable_iface_init (MetaCullableInterface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (MetaWindowGroup, meta_window_group, CLUTTER_TYPE_ACTOR,
-                         G_IMPLEMENT_INTERFACE (META_TYPE_CULLABLE, cullable_iface_init));
-
-static void
-meta_window_group_cull_out (MetaCullable   *cullable,
-                            cairo_region_t *unobscured_region,
-                            cairo_region_t *clip_region)
-{
-  meta_cullable_cull_out_children (cullable, unobscured_region, clip_region);
-}
-
-static void
-meta_window_group_reset_culling (MetaCullable *cullable)
-{
-  meta_cullable_reset_culling_children (cullable);
-}
-
-static void
-cullable_iface_init (MetaCullableInterface *iface)
-{
-  iface->cull_out = meta_window_group_cull_out;
-  iface->reset_culling = meta_window_group_reset_culling;
-}
+G_DEFINE_TYPE (MetaWindowGroup, meta_window_group, CLUTTER_TYPE_ACTOR);
 
 static void
 meta_window_group_paint (ClutterActor        *actor,
@@ -103,8 +79,7 @@ meta_window_group_paint (ClutterActor        *actor,
                                               screen_height,
                                               screen_width,
                                               screen_height,
-                                              &trans) ||
-          !meta_cullable_is_untransformed (META_CULLABLE (actor)))
+                                              &trans))
         {
           parent_actor_class->paint (actor, paint_context);
           return;
@@ -134,14 +109,10 @@ meta_window_group_paint (ClutterActor        *actor,
 
   cairo_region_translate (clip_region, -paint_x_origin, -paint_y_origin);
 
-  meta_cullable_cull_out (META_CULLABLE (window_group), unobscured_region, clip_region);
-
   cairo_region_destroy (unobscured_region);
   cairo_region_destroy (clip_region);
 
   parent_actor_class->paint (actor, paint_context);
-
-  meta_cullable_reset_culling (META_CULLABLE (window_group));
 }
 
 /* Adapted from clutter_actor_update_default_paint_volume() */

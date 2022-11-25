@@ -20,6 +20,7 @@ clutter_conform_tests_actor_tests = [
   'actor-layout',
   'actor-meta',
   'actor-offscreen-redirect',
+  'actor-opaque-region',
   'actor-paint-opacity',
   'actor-pick',
   'actor-pivot-point',

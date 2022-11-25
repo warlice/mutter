@@ -101,6 +101,12 @@ clutter_content_real_paint_content (ClutterContent      *content,
 {
 }
 
+static cairo_region_t *
+clutter_content_real_get_opaque_region (ClutterContent *content)
+{
+  return NULL;
+}
+
 static void
 clutter_content_default_init (ClutterContentInterface *iface)
 {
@@ -112,6 +118,7 @@ clutter_content_default_init (ClutterContentInterface *iface)
   iface->detached = clutter_content_real_detached;
   iface->invalidate = clutter_content_real_invalidate;
   iface->invalidate_size = clutter_content_real_invalidate_size;
+  iface->get_opaque_region = clutter_content_real_get_opaque_region;
 
   /**
    * ClutterContent::attached:
@@ -220,6 +227,37 @@ clutter_content_invalidate_size (ClutterContent *content)
 
       if (request_mode == CLUTTER_REQUEST_CONTENT_SIZE)
         _clutter_actor_queue_only_relayout (actor);
+    }
+}
+
+/**
+ * clutter_content_invalidate_opaque_region:
+ * @content: a #ClutterContent
+ *
+ * Signals that @content's opaque region changed. Attached actors will get
+ * their opaque regions invalidated when this function is called.
+ */
+void
+clutter_content_invalidate_opaque_region (ClutterContent *content)
+{
+  GHashTable *actors;
+  GHashTableIter iter;
+  gpointer key_p;
+
+  g_return_if_fail (CLUTTER_IS_CONTENT (content));
+
+  actors = g_object_get_qdata (G_OBJECT (content), quark_content_actors);
+  if (actors == NULL)
+    return;
+
+  g_hash_table_iter_init (&iter, actors);
+  while (g_hash_table_iter_next (&iter, &key_p, NULL))
+    {
+      ClutterActor *actor = key_p;
+
+      g_assert (actor != NULL);
+
+      clutter_actor_invalidate_opaque_region (actor);
     }
 }
 
@@ -336,4 +374,10 @@ clutter_content_get_preferred_size (ClutterContent *content,
   return CLUTTER_CONTENT_GET_IFACE (content)->get_preferred_size (content,
                                                                   width,
                                                                   height);
+}
+
+cairo_region_t *
+clutter_content_get_opaque_region (ClutterContent *content)
+{
+  return CLUTTER_CONTENT_GET_IFACE (content)->get_opaque_region (content);
 }
