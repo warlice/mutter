@@ -45,6 +45,13 @@ seat_get_pointer (struct wl_client *client,
   MetaWaylandSeat *seat = wl_resource_get_user_data (resource);
   MetaWaylandPointer *pointer = seat->pointer;
 
+  if (!meta_wayland_seat_has_pointer (seat))
+    {
+      wl_resource_post_error (resource, WL_SEAT_ERROR_MISSING_CAPABILITY,
+                              "Seat doesn't have pointer capability");
+      return;
+    }
+
   meta_wayland_pointer_create_new_resource (pointer, client, resource, id);
 }
 
@@ -56,6 +63,13 @@ seat_get_keyboard (struct wl_client *client,
   MetaWaylandSeat *seat = wl_resource_get_user_data (resource);
   MetaWaylandKeyboard *keyboard = seat->keyboard;
 
+  if (!meta_wayland_seat_has_keyboard (seat))
+    {
+      wl_resource_post_error (resource, WL_SEAT_ERROR_MISSING_CAPABILITY,
+                              "Seat doesn't have keyboard capability");
+      return;
+    }
+
   meta_wayland_keyboard_create_new_resource (keyboard, client, resource, id);
 }
 
@@ -66,6 +80,13 @@ seat_get_touch (struct wl_client *client,
 {
   MetaWaylandSeat *seat = wl_resource_get_user_data (resource);
   MetaWaylandTouch *touch = seat->touch;
+
+  if (!meta_wayland_seat_has_touch (seat))
+    {
+      wl_resource_post_error (resource, WL_SEAT_ERROR_MISSING_CAPABILITY,
+                              "Seat doesn't have touch capability");
+      return;
+    }
 
   meta_wayland_touch_create_new_resource (touch, client, resource, id);
 }
