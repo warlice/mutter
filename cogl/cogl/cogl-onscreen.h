@@ -81,6 +81,10 @@ struct _CoglOnscreenClass
                                GError        **error);
 
   int (* get_buffer_age) (CoglOnscreen *onscreen);
+
+  gboolean (* get_drm_format) (CoglOnscreen  *onscreen,
+                               uint32_t      *drm_format,
+                               GError       **error);
 };
 
 /**
@@ -155,6 +159,14 @@ cogl_onscreen_swap_buffers (CoglOnscreen  *onscreen,
  */
 COGL_EXPORT int
 cogl_onscreen_get_buffer_age (CoglOnscreen *onscreen);
+
+/**
+ * cogl_onscreen_get_drm_format: (skip)
+ */
+COGL_EXPORT gboolean
+cogl_onscreen_get_drm_format (CoglOnscreen  *onscreen,
+                              uint32_t      *drm_format,
+                              GError       **error);
 
 /**
  * cogl_onscreen_queue_damage_region:
