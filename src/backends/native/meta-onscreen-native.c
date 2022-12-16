@@ -930,12 +930,14 @@ copy_shared_framebuffer_primary_gpu (CoglOnscreen                        *onscre
   MetaRendererNativeGpuData *primary_gpu_data;
   MetaDrmBufferDumb *buffer_dumb;
   MetaDrmBuffer *buffer;
-  int width, height, stride;
-  uint32_t drm_format;
+  int width, height;
   CoglFramebuffer *dmabuf_fb;
   int dmabuf_fd;
   g_autoptr (GError) error = NULL;
   const MetaFormatInfo *format_info;
+  uint32_t stride;
+  uint32_t offset;
+  uint32_t drm_format;
   uint64_t modifier;
 
   COGL_TRACE_BEGIN_SCOPED (CopySharedFramebufferPrimaryGpu,
@@ -956,6 +958,8 @@ copy_shared_framebuffer_primary_gpu (CoglOnscreen                        *onscre
   width = meta_drm_buffer_get_width (buffer);
   height = meta_drm_buffer_get_height (buffer);
   stride = meta_drm_buffer_get_stride (buffer);
+  offset = 0;
+  modifier = DRM_FORMAT_MOD_LINEAR;
   drm_format = meta_drm_buffer_get_format (buffer);
 
   g_assert (cogl_framebuffer_get_width (framebuffer) == width);
@@ -975,12 +979,14 @@ copy_shared_framebuffer_primary_gpu (CoglOnscreen                        *onscre
   modifier = DRM_FORMAT_MOD_LINEAR;
   dmabuf_fb =
     meta_renderer_native_create_dma_buf_framebuffer (renderer_native,
-                                                     dmabuf_fd,
                                                      width,
                                                      height,
-                                                     stride,
-                                                     0, &modifier,
                                                      drm_format,
+                                                     1,
+                                                     &dmabuf_fd,
+                                                     &stride,
+                                                     &offset,
+                                                     &modifier,
                                                      &error);
 
   if (error)
