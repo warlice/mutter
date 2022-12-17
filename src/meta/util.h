@@ -220,4 +220,7 @@ void meta_remove_debug_paint_flag (MetaDebugPaintFlag flag);
 META_EXPORT
 MetaDebugPaintFlag meta_get_debug_paint_flags (void);
 
+META_EXPORT
+void meta_debug_set_max_render_time_constant (int max_render_time_constant_us);
+
 #endif /* META_UTIL_H */

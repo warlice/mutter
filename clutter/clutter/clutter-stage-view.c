@@ -35,6 +35,7 @@ enum
 {
   PROP_0,
 
+  PROP_FRAME_CLOCK,
   PROP_NAME,
   PROP_STAGE,
   PROP_LAYOUT,
@@ -42,8 +43,6 @@ enum
   PROP_OFFSCREEN,
   PROP_USE_SHADOWFB,
   PROP_SCALE,
-  PROP_REFRESH_RATE,
-  PROP_VBLANK_DURATION_US,
 
   PROP_LAST
 };
@@ -81,8 +80,6 @@ typedef struct _ClutterStageViewPrivate
   gboolean has_accumulated_redraw_clip;
   cairo_region_t *accumulated_redraw_clip;
 
-  float refresh_rate;
-  int64_t vblank_duration_us;
   ClutterFrameClock *frame_clock;
 
   struct {
@@ -1090,6 +1087,18 @@ clutter_stage_view_peek_scanout (ClutterStageView *view)
   return priv->next_scanout;
 }
 
+/**
+ * clutter_stage_view_get_priority: (skip)
+ */
+int
+clutter_stage_view_get_priority (ClutterStageView *view)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+
+  return clutter_frame_clock_get_priority (priv->frame_clock);
+}
+
 void
 clutter_stage_view_schedule_update (ClutterStageView *view)
 {
@@ -1097,15 +1106,6 @@ clutter_stage_view_schedule_update (ClutterStageView *view)
     clutter_stage_view_get_instance_private (view);
 
   clutter_frame_clock_schedule_update (priv->frame_clock);
-}
-
-float
-clutter_stage_view_get_refresh_rate (ClutterStageView *view)
-{
-  ClutterStageViewPrivate *priv =
-    clutter_stage_view_get_instance_private (view);
-
-  return priv->refresh_rate;
 }
 
 /**
@@ -1340,6 +1340,9 @@ clutter_stage_view_get_property (GObject    *object,
 
   switch (prop_id)
     {
+    case PROP_FRAME_CLOCK:
+      g_value_set_object (value, priv->frame_clock);
+      break;
     case PROP_NAME:
       g_value_set_string (value, priv->name);
       break;
@@ -1361,12 +1364,6 @@ clutter_stage_view_get_property (GObject    *object,
     case PROP_SCALE:
       g_value_set_float (value, priv->scale);
       break;
-    case PROP_REFRESH_RATE:
-      g_value_set_float (value, priv->refresh_rate);
-      break;
-    case PROP_VBLANK_DURATION_US:
-      g_value_set_int64 (value, priv->vblank_duration_us);
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -1385,6 +1382,9 @@ clutter_stage_view_set_property (GObject      *object,
 
   switch (prop_id)
     {
+    case PROP_FRAME_CLOCK:
+      priv->frame_clock = g_value_dup_object (value);
+      break;
     case PROP_NAME:
       priv->name = g_value_dup_string (value);
       break;
@@ -1407,12 +1407,6 @@ clutter_stage_view_set_property (GObject      *object,
     case PROP_SCALE:
       priv->scale = g_value_get_float (value);
       break;
-    case PROP_REFRESH_RATE:
-      priv->refresh_rate = g_value_get_float (value);
-      break;
-    case PROP_VBLANK_DURATION_US:
-      priv->vblank_duration_us = g_value_get_int64 (value);
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -1428,10 +1422,9 @@ clutter_stage_view_constructed (GObject *object)
   if (priv->use_shadowfb)
     init_shadowfb (view);
 
-  priv->frame_clock = clutter_frame_clock_new (priv->refresh_rate,
-                                               priv->vblank_duration_us,
-                                               &frame_clock_listener_iface,
-                                               view);
+  clutter_frame_clock_set_listener (priv->frame_clock,
+                                    &frame_clock_listener_iface,
+                                    view);
 
   clutter_stage_view_add_redraw_clip (view, NULL);
   clutter_stage_view_schedule_update (view);
@@ -1488,7 +1481,6 @@ clutter_stage_view_init (ClutterStageView *view)
   priv->dirty_viewport = TRUE;
   priv->dirty_projection = TRUE;
   priv->scale = 1.0;
-  priv->refresh_rate = 60.0;
 }
 
 static void
@@ -1504,6 +1496,15 @@ clutter_stage_view_class_init (ClutterStageViewClass *klass)
   object_class->constructed = clutter_stage_view_constructed;
   object_class->dispose = clutter_stage_view_dispose;
   object_class->finalize = clutter_stage_view_finalize;
+
+  obj_props[PROP_FRAME_CLOCK] =
+    g_param_spec_object ("frame-clock",
+                         "The frame clock",
+                         "The ClutterFrameClock",
+                         CLUTTER_TYPE_FRAME_CLOCK,
+                         G_PARAM_READWRITE |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
 
   obj_props[PROP_NAME] =
     g_param_spec_string ("name",
@@ -1566,24 +1567,6 @@ clutter_stage_view_class_init (ClutterStageViewClass *klass)
                         0.5, G_MAXFLOAT, 1.0,
                         G_PARAM_READWRITE |
                         G_PARAM_CONSTRUCT |
-                        G_PARAM_STATIC_STRINGS);
-
-  obj_props[PROP_REFRESH_RATE] =
-    g_param_spec_float ("refresh-rate",
-                        "Refresh rate",
-                        "Update refresh rate",
-                        1.0, G_MAXFLOAT, 60.0,
-                        G_PARAM_READWRITE |
-                        G_PARAM_CONSTRUCT |
-                        G_PARAM_STATIC_STRINGS);
-
-  obj_props[PROP_VBLANK_DURATION_US] =
-    g_param_spec_int64 ("vblank-duration-us",
-                        "Vblank duration (µs)",
-                        "The vblank duration",
-                        0, G_MAXINT64, 0,
-                        G_PARAM_READWRITE |
-                        G_PARAM_CONSTRUCT_ONLY |
                         G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, PROP_LAST, obj_props);

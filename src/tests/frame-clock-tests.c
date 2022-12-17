@@ -1,3 +1,4 @@
+#include "backends/meta-frame-clock.h"
 #include "clutter/clutter.h"
 #include "tests/clutter-test-utils.h"
 
@@ -24,6 +25,20 @@ typedef struct _FrameClockTest
 
   GMainLoop *main_loop;
 } FrameClockTest;
+
+static ClutterFrameClock *
+create_frame_clock (float                            refresh_rate,
+                    int64_t                          vblank_duration_us,
+                    const ClutterFrameListenerIface *iface,
+                    gpointer                         user_data)
+{
+  ClutterFrameClock *frame_clock;
+
+  frame_clock = CLUTTER_FRAME_CLOCK (meta_frame_clock_new (refresh_rate,
+                                                           vblank_duration_us));
+  clutter_frame_clock_set_listener (frame_clock, iface, user_data);
+  return frame_clock;
+}
 
 static void
 init_frame_info (ClutterFrameInfo *frame_info,
@@ -144,10 +159,10 @@ frame_clock_schedule_update (void)
   expected_frame_count = 0;
 
   test.main_loop = g_main_loop_new (NULL, FALSE);
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &frame_listener_iface,
-                                         &test);
+  frame_clock = create_frame_clock (refresh_rate,
+                                    0,
+                                    &frame_listener_iface,
+                                    &test);
 
   fake_hw_clock = fake_hw_clock_new (frame_clock,
                                      schedule_update_hw_callback,
@@ -226,10 +241,10 @@ frame_clock_immediate_present (void)
   expected_frame_count = 0;
 
   main_loop = g_main_loop_new (NULL, FALSE);
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &immediate_frame_listener_iface,
-                                         main_loop);
+  frame_clock = create_frame_clock (refresh_rate,
+                                    0,
+                                    &immediate_frame_listener_iface,
+                                    main_loop);
 
   before_us = g_get_monotonic_time ();
 
@@ -304,10 +319,10 @@ frame_clock_delayed_damage (void)
   expected_frame_count = 0;
 
   test.main_loop = g_main_loop_new (NULL, FALSE);
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &delayed_damage_frame_listener_iface,
-                                         &test);
+  frame_clock = create_frame_clock (refresh_rate,
+                                    0,
+                                    &delayed_damage_frame_listener_iface,
+                                    &test);
 
   fake_hw_clock = fake_hw_clock_new (frame_clock, NULL, NULL);
   source = &fake_hw_clock->source;
@@ -364,10 +379,10 @@ frame_clock_no_damage (void)
   expected_frame_count = 0;
 
   main_loop = g_main_loop_new (NULL, FALSE);
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &no_damage_frame_listener_iface,
-                                         NULL);
+  frame_clock = create_frame_clock (refresh_rate,
+                                    0,
+                                    &no_damage_frame_listener_iface,
+                                    NULL);
 
   g_timeout_add (100, quit_main_loop_idle, main_loop);
 
@@ -450,10 +465,10 @@ frame_clock_schedule_update_now (void)
   expected_frame_count = 0;
 
   test.base.main_loop = g_main_loop_new (NULL, FALSE);
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &update_now_frame_listener_iface,
-                                         &test);
+  frame_clock = create_frame_clock (refresh_rate,
+                                    0,
+                                    &update_now_frame_listener_iface,
+                                    &test);
 
   fake_hw_clock = fake_hw_clock_new (frame_clock,
                                      schedule_update_now_hw_callback,
@@ -532,10 +547,10 @@ frame_clock_before_frame (void)
   expected_frame_count = 0;
 
   main_loop = g_main_loop_new (NULL, FALSE);
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &before_frame_frame_listener_iface,
-                                         &expected_frame_count);
+  frame_clock = create_frame_clock (refresh_rate,
+                                    0,
+                                    &before_frame_frame_listener_iface,
+                                    &expected_frame_count);
 
   clutter_frame_clock_schedule_update (frame_clock);
   g_timeout_add (100, quit_main_loop_timeout, main_loop);
@@ -613,10 +628,10 @@ frame_clock_inhibit (void)
   expected_frame_count = 0;
 
   test.main_loop = g_main_loop_new (NULL, FALSE);
-  test.frame_clock = clutter_frame_clock_new (refresh_rate,
-                                              0,
-                                              &inhibit_frame_listener_iface,
-                                              &test);
+  test.frame_clock = create_frame_clock (refresh_rate,
+                                         0,
+                                         &inhibit_frame_listener_iface,
+                                         &test);
 
   test.pending_inhibit = TRUE;
 
@@ -676,10 +691,10 @@ frame_clock_reschedule_on_idle (void)
   expected_frame_count = 0;
 
   test.base.main_loop = g_main_loop_new (NULL, FALSE);
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &reschedule_on_idle_listener_iface,
-                                         &test);
+  frame_clock = create_frame_clock (refresh_rate,
+                                    0,
+                                    &reschedule_on_idle_listener_iface,
+                                    &test);
   fake_hw_clock = fake_hw_clock_new (frame_clock, NULL, NULL);
   source = &fake_hw_clock->source;
   g_source_attach (source, NULL);
@@ -713,10 +728,10 @@ frame_clock_destroy_signal (void)
 
   /* Test that the destroy signal is emitted when removing last reference. */
 
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &dummy_frame_listener_iface,
-                                         NULL);
+  frame_clock = create_frame_clock (refresh_rate,
+                                    0,
+                                    &dummy_frame_listener_iface,
+                                    NULL);
 
   destroy_signalled = FALSE;
   g_signal_connect (frame_clock, "destroy",
@@ -732,10 +747,10 @@ frame_clock_destroy_signal (void)
    * left.
    */
 
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &dummy_frame_listener_iface,
-                                         NULL);
+  frame_clock = create_frame_clock (refresh_rate,
+                                    0,
+                                    &dummy_frame_listener_iface,
+                                    NULL);
   frame_clock_backup = frame_clock;
 
   destroy_signalled = FALSE;
@@ -802,10 +817,10 @@ frame_clock_notify_ready (void)
   expected_frame_count = 0;
 
   main_loop = g_main_loop_new (NULL, FALSE);
-  frame_clock = clutter_frame_clock_new (refresh_rate,
-                                         0,
-                                         &frame_clock_ready_listener_iface,
-                                         main_loop);
+  frame_clock = create_frame_clock (refresh_rate,
+                                    0,
+                                    &frame_clock_ready_listener_iface,
+                                    main_loop);
 
   before_us = g_get_monotonic_time ();
 
@@ -823,15 +838,42 @@ frame_clock_notify_ready (void)
   clutter_frame_clock_destroy (frame_clock);
 }
 
-CLUTTER_TEST_SUITE (
-  CLUTTER_TEST_UNIT ("/frame-clock/schedule-update", frame_clock_schedule_update)
-  CLUTTER_TEST_UNIT ("/frame-clock/immediate-present", frame_clock_immediate_present)
-  CLUTTER_TEST_UNIT ("/frame-clock/delayed-damage", frame_clock_delayed_damage)
-  CLUTTER_TEST_UNIT ("/frame-clock/no-damage", frame_clock_no_damage)
-  CLUTTER_TEST_UNIT ("/frame-clock/schedule-update-now", frame_clock_schedule_update_now)
-  CLUTTER_TEST_UNIT ("/frame-clock/before-frame", frame_clock_before_frame)
-  CLUTTER_TEST_UNIT ("/frame-clock/inhibit", frame_clock_inhibit)
-  CLUTTER_TEST_UNIT ("/frame-clock/reschedule-on-idle", frame_clock_reschedule_on_idle)
-  CLUTTER_TEST_UNIT ("/frame-clock/destroy-signal", frame_clock_destroy_signal)
-  CLUTTER_TEST_UNIT ("/frame-clock/notify-ready", frame_clock_notify_ready)
-)
+static void
+init_tests (void)
+{
+  g_test_add_func ("/frame-clock/schedule-update",
+                   frame_clock_schedule_update);
+  g_test_add_func ("/frame-clock/immediate-present",
+                   frame_clock_immediate_present);
+  g_test_add_func ("/frame-clock/delayed-damage",
+                   frame_clock_delayed_damage);
+  g_test_add_func ("/frame-clock/no-damage",
+                   frame_clock_no_damage);
+  g_test_add_func ("/frame-clock/schedule-update-now",
+                   frame_clock_schedule_update_now);
+  g_test_add_func ("/frame-clock/before-frame",
+                   frame_clock_before_frame);
+  g_test_add_func ("/frame-clock/inhibit",
+                   frame_clock_inhibit);
+  g_test_add_func ("/frame-clock/reschedule-on-idle",
+                   frame_clock_reschedule_on_idle);
+  g_test_add_func ("/frame-clock/destroy-signal",
+                   frame_clock_destroy_signal);
+  g_test_add_func ("/frame-clock/notify-ready",
+                   frame_clock_notify_ready);
+}
+
+int
+main (int argc, char *argv[])
+{
+  g_autoptr (MetaContext) context = NULL;
+
+  context = meta_create_test_context (META_CONTEXT_TEST_TYPE_HEADLESS,
+                                      META_CONTEXT_TEST_FLAG_NO_X11);
+  g_assert (meta_context_configure (context, &argc, &argv, NULL));
+
+  init_tests ();
+
+  return meta_context_test_run_tests (META_CONTEXT_TEST (context),
+                                      META_TEST_RUN_FLAG_NONE);
+}

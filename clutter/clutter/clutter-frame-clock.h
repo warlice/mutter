@@ -36,9 +36,9 @@ typedef enum _ClutterFrameResult
 
 #define CLUTTER_TYPE_FRAME_CLOCK (clutter_frame_clock_get_type ())
 CLUTTER_EXPORT
-G_DECLARE_FINAL_TYPE (ClutterFrameClock, clutter_frame_clock,
-                      CLUTTER, FRAME_CLOCK,
-                      GObject)
+G_DECLARE_DERIVABLE_TYPE (ClutterFrameClock, clutter_frame_clock,
+                          CLUTTER, FRAME_CLOCK,
+                          GObject)
 
 /**
  * ClutterFrameListenerIface: (skip)
@@ -54,13 +54,16 @@ typedef struct _ClutterFrameListenerIface
 } ClutterFrameListenerIface;
 
 CLUTTER_EXPORT
-ClutterFrameClock * clutter_frame_clock_new (float                            refresh_rate,
-                                             int64_t                          vblank_duration_us,
-                                             const ClutterFrameListenerIface *iface,
-                                             gpointer                         user_data);
+void clutter_frame_clock_set_listener (ClutterFrameClock               *frame_clock,
+                                       const ClutterFrameListenerIface *iface,
+                                       gpointer                         user_data);
 
 CLUTTER_EXPORT
 void clutter_frame_clock_destroy (ClutterFrameClock *frame_clock);
+
+CLUTTER_EXPORT
+void clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
+                                   int64_t            time_us);
 
 CLUTTER_EXPORT
 void clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
@@ -76,6 +79,15 @@ CLUTTER_EXPORT
 void clutter_frame_clock_schedule_update_now (ClutterFrameClock *frame_clock);
 
 CLUTTER_EXPORT
+void clutter_frame_clock_maybe_reschedule_update (ClutterFrameClock *frame_clock);
+
+CLUTTER_EXPORT
+void clutter_frame_clock_reschedule (ClutterFrameClock *frame_clock);
+
+CLUTTER_EXPORT
+void clutter_frame_clock_reschedule_now (ClutterFrameClock *frame_clock);
+
+CLUTTER_EXPORT
 void clutter_frame_clock_inhibit (ClutterFrameClock *frame_clock);
 
 CLUTTER_EXPORT
@@ -87,12 +99,10 @@ void clutter_frame_clock_add_timeline (ClutterFrameClock *frame_clock,
 void clutter_frame_clock_remove_timeline (ClutterFrameClock *frame_clock,
                                           ClutterTimeline   *timeline);
 
-CLUTTER_EXPORT
-float clutter_frame_clock_get_refresh_rate (ClutterFrameClock *frame_clock);
-
 void clutter_frame_clock_record_flip_time (ClutterFrameClock *frame_clock,
                                            int64_t            flip_time_us);
 
-GString * clutter_frame_clock_get_max_render_time_debug_info (ClutterFrameClock *frame_clock);
+CLUTTER_EXPORT
+int clutter_frame_clock_get_priority (ClutterFrameClock *frame_clock);
 
 #endif /* CLUTTER_FRAME_CLOCK_H */

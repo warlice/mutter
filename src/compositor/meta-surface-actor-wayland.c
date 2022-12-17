@@ -72,7 +72,7 @@ meta_surface_actor_wayland_is_view_primary (MetaSurfaceActor *actor,
                                             ClutterStageView *stage_view)
 {
   ClutterStageView *current_primary_view = NULL;
-  float highest_refresh_rate = 0.f;
+  int highest_priority = 0;
   float biggest_unobscurred_fraction = 0.f;
   GList *l;
 
@@ -88,17 +88,17 @@ meta_surface_actor_wayland_is_view_primary (MetaSurfaceActor *actor,
       for (l = clutter_stage_peek_stage_views (stage); l; l = l->next)
         {
           ClutterStageView *view = l->data;
-          float refresh_rate;
+          int priority;
 
           if (!clutter_actor_is_effectively_on_stage_view (CLUTTER_ACTOR (actor),
                                                            view))
             continue;
 
-          refresh_rate = clutter_stage_view_get_refresh_rate (view);
-          if (refresh_rate > highest_refresh_rate)
+          priority = clutter_stage_view_get_priority (view);
+          if (priority > highest_priority)
             {
               current_primary_view = view;
-              highest_refresh_rate = refresh_rate;
+              highest_priority = priority;
             }
         }
 
@@ -117,7 +117,7 @@ meta_surface_actor_wayland_is_view_primary (MetaSurfaceActor *actor,
   for (; l; l = l->next)
     {
       ClutterStageView *view = l->data;
-      float refresh_rate;
+      int priority;
       float unobscurred_fraction;
 
       if (meta_surface_actor_is_obscured_on_stage_view (actor,
@@ -125,16 +125,16 @@ meta_surface_actor_wayland_is_view_primary (MetaSurfaceActor *actor,
                                                         &unobscurred_fraction))
         continue;
 
-      refresh_rate = clutter_stage_view_get_refresh_rate (view);
+      priority = clutter_stage_view_get_priority (view);
 
-      if ((refresh_rate > highest_refresh_rate &&
+      if ((priority > highest_priority &&
            (biggest_unobscurred_fraction < UNOBSCURED_TRESHOLD ||
             unobscurred_fraction > UNOBSCURED_TRESHOLD)) ||
           (biggest_unobscurred_fraction < UNOBSCURED_TRESHOLD &&
            unobscurred_fraction > UNOBSCURED_TRESHOLD))
         {
           current_primary_view = view;
-          highest_refresh_rate = refresh_rate;
+          highest_priority = priority;
           biggest_unobscurred_fraction = unobscurred_fraction;
         }
     }

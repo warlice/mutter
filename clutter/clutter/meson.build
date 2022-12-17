@@ -199,6 +199,7 @@ clutter_private_headers = [
   'clutter-effect-private.h',
   'clutter-event-private.h',
   'clutter-flatten-effect.h',
+  'clutter-frame-clock-private.h',
   'clutter-frame-private.h',
   'clutter-graphene.h',
   'clutter-gesture-action-private.h',

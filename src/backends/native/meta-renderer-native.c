@@ -47,6 +47,7 @@
 #include <unistd.h>
 
 #include "backends/meta-cursor-tracker-private.h"
+#include "backends/meta-frame-clock.h"
 #include "backends/meta-gles3.h"
 #include "backends/meta-logical-monitor.h"
 #include "backends/native/meta-backend-native-private.h"
@@ -1263,6 +1264,7 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
   MetaMonitorTransform view_transform;
   g_autoptr (CoglFramebuffer) framebuffer = NULL;
   g_autoptr (CoglOffscreen) offscreen = NULL;
+  g_autoptr (MetaFrameClock) frame_clock = NULL;
   gboolean use_shadowfb;
   float scale;
   int onscreen_width;
@@ -1377,6 +1379,9 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
   else
     scale = 1.0;
 
+  frame_clock = meta_frame_clock_new (crtc_mode_info->refresh_rate,
+                                      crtc_mode_info->vblank_duration_us);
+
   meta_rectangle_from_graphene_rect (&crtc_config->layout,
                                      META_ROUNDING_STRATEGY_ROUND,
                                      &view_layout);
@@ -1390,8 +1395,7 @@ meta_renderer_native_create_view (MetaRenderer       *renderer,
                        "offscreen", offscreen,
                        "use-shadowfb", use_shadowfb,
                        "transform", view_transform,
-                       "refresh-rate", crtc_mode_info->refresh_rate,
-                       "vblank-duration-us", crtc_mode_info->vblank_duration_us,
+                       "frame-clock", frame_clock,
                        NULL);
 
   if (META_IS_ONSCREEN_NATIVE (framebuffer))
