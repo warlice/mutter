@@ -373,7 +373,7 @@ clutter_input_device_class_init (ClutterInputDeviceClass *klass)
                        P_("Device Mode"),
                        P_("The mode of the device"),
                        CLUTTER_TYPE_INPUT_MODE,
-                       CLUTTER_INPUT_MODE_FLOATING,
+                       CLUTTER_INPUT_MODE_PHYSICAL_VIRTUAL,
                        CLUTTER_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY);
 
   /**

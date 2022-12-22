@@ -761,6 +761,7 @@ typedef enum /*< prefix=CLUTTER_DRAG >*/
  * @CLUTTER_EVENT_NONE: No flag set
  * @CLUTTER_EVENT_FLAG_SYNTHETIC: Synthetic event
  * @CLUTTER_EVENT_FLAG_REPEATED: Auto-repeated event
+ * @CLUTTER_EVENT_FLAG_OSK: Send On-screen flag to input method framework
  *
  * Flags for the #ClutterEvent
  */
@@ -772,6 +773,7 @@ typedef enum /*< flags prefix=CLUTTER_EVENT >*/
   CLUTTER_EVENT_FLAG_REPEATED     = 1 << 2,
   CLUTTER_EVENT_FLAG_RELATIVE_MOTION = 1 << 3,
   CLUTTER_EVENT_FLAG_GRAB_NOTIFY  = 1 << 4,
+  CLUTTER_EVENT_FLAG_OSK          = 1 << 5,
 } ClutterEventFlags;
 
 /**
@@ -951,6 +953,8 @@ typedef enum
  *   a logical device
  * @CLUTTER_INPUT_MODE_FLOATING: A physical device, not attached
  *   to a logical device
+ * @CLUTTER_INPUT_MODE_PHYSICAL_VIRTUAL: A virtual physical device,
+ *   attached to a logical device
  *
  * The mode for input devices available.
  */
@@ -958,7 +962,8 @@ typedef enum
 {
   CLUTTER_INPUT_MODE_LOGICAL,
   CLUTTER_INPUT_MODE_PHYSICAL,
-  CLUTTER_INPUT_MODE_FLOATING
+  CLUTTER_INPUT_MODE_FLOATING,
+  CLUTTER_INPUT_MODE_PHYSICAL_VIRTUAL
 } ClutterInputMode;
 
 /**
