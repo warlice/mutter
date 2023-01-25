@@ -2902,6 +2902,10 @@ update_edge_constraints (MetaWindow *window)
     }
 }
 
+/**
+ * meta_window_untile:
+ * @window: a #MetaWindow
+ */
 void
 meta_window_untile (MetaWindow *window)
 {
@@ -2920,6 +2924,11 @@ meta_window_untile (MetaWindow *window)
     meta_window_unmaximize (window, META_MAXIMIZE_BOTH);
 }
 
+/**
+ * meta_window_tile:
+ * @window: a #MetaWindow
+ * @tile_mode: the #MetaTileMode to apply to the window
+ */
 void
 meta_window_tile (MetaWindow   *window,
                   MetaTileMode  tile_mode)
@@ -2971,6 +2980,12 @@ meta_window_tile (MetaWindow   *window,
                                     window->unconstrained_rect);
 }
 
+/**
+ * meta_window_get_tile_mode:
+ * @window: a #MetaWindow
+ *
+ * Return value: the #MetaTileMode describing the tiling state of the window
+ */
 MetaTileMode
 meta_window_get_tile_mode (MetaWindow *window)
 {

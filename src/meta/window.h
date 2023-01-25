@@ -92,6 +92,21 @@ typedef enum
   META_WINDOW_CLIENT_TYPE_X11
 } MetaWindowClientType;
 
+/**
+ * MetaTileMode:
+ * @META_TILE_NONE: Not tiled
+ * @META_TILE_LEFT: Maximized vertically and attached to the left edge
+ * @META_TILE_RIGHT: Maximized vertically and attached to the right edge
+ * @META_TILE_MAXIMIZED: Maximized vertically and horizontally
+ */
+typedef enum /*< prefix=META_TILE >*/
+{
+  META_TILE_NONE,
+  META_TILE_LEFT,
+  META_TILE_RIGHT,
+  META_TILE_MAXIMIZED
+} MetaTileMode;
+
 #define META_TYPE_WINDOW            (meta_window_get_type ())
 #define META_WINDOW(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), META_TYPE_WINDOW, MetaWindow))
 #define META_WINDOW_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass),  META_TYPE_WINDOW, MetaWindowClass))
@@ -357,6 +372,15 @@ cairo_region_t *meta_window_get_frame_bounds (MetaWindow *window);
 
 META_EXPORT
 MetaWindow *meta_window_get_tile_match (MetaWindow *window);
+
+META_EXPORT
+MetaTileMode meta_window_get_tile_mode (MetaWindow *window);
+
+META_EXPORT
+void        meta_window_tile (MetaWindow *window, MetaTileMode tile_mode);
+
+META_EXPORT
+void        meta_window_untile (MetaWindow *window);
 
 META_EXPORT
 void        meta_window_make_fullscreen    (MetaWindow  *window);
