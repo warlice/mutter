@@ -2331,7 +2331,7 @@ clutter_actor_real_get_preferred_width (ClutterActor *self,
     {
       ClutterContainer *container = CLUTTER_CONTAINER (self);
 
-      CLUTTER_NOTE (LAYOUT, "Querying the layout manager '%s'[%p] "
+      CLUTTER_NOTE (SIZE_REQUESTS, "Querying the layout manager '%s'[%p] "
                     "for the preferred width",
                     G_OBJECT_TYPE_NAME (priv->layout_manager),
                     priv->layout_manager);
@@ -2349,7 +2349,7 @@ clutter_actor_real_get_preferred_width (ClutterActor *self,
    * using this default is relying on someone to set the
    * request manually
    */
-  CLUTTER_NOTE (LAYOUT, "Default preferred width: 0, 0");
+  CLUTTER_NOTE (SIZE_REQUESTS, "Default preferred width: 0, 0");
 
   if (min_width_p)
     *min_width_p = 0;
@@ -2370,7 +2370,7 @@ clutter_actor_real_get_preferred_height (ClutterActor *self,
     {
       ClutterContainer *container = CLUTTER_CONTAINER (self);
 
-      CLUTTER_NOTE (LAYOUT, "Querying the layout manager '%s'[%p] "
+      CLUTTER_NOTE (SIZE_REQUESTS, "Querying the layout manager '%s'[%p] "
                     "for the preferred height",
                     G_OBJECT_TYPE_NAME (priv->layout_manager),
                     priv->layout_manager);
@@ -2387,7 +2387,7 @@ clutter_actor_real_get_preferred_height (ClutterActor *self,
    * using this default is relying on someone to set the
    * request manually
    */
-  CLUTTER_NOTE (LAYOUT, "Default preferred height: 0, 0");
+  CLUTTER_NOTE (SIZE_REQUESTS, "Default preferred height: 0, 0");
 
   if (min_height_p)
     *min_height_p = 0;
@@ -7851,6 +7851,9 @@ _clutter_actor_queue_only_relayout (ClutterActor *self)
     }
 #endif /* CLUTTER_ENABLE_DEBUG */
 
+  CLUTTER_NOTE (LAYOUT, "Queueing relayout on '%s'",
+                _clutter_actor_get_debug_name (self));
+
   _clutter_actor_queue_relayout_on_clones (self);
 
   g_signal_emit (self, actor_signals[QUEUE_RELAYOUT], 0);
@@ -7960,7 +7963,7 @@ clutter_actor_get_preferred_size (ClutterActor *self,
 
   if (priv->request_mode == CLUTTER_REQUEST_HEIGHT_FOR_WIDTH)
     {
-      CLUTTER_NOTE (LAYOUT, "Preferred size (height-for-width)");
+      CLUTTER_NOTE (SIZE_REQUESTS, "Preferred size (height-for-width)");
       clutter_actor_get_preferred_width (self, -1,
                                          &min_width,
                                          &natural_width);
@@ -7970,7 +7973,7 @@ clutter_actor_get_preferred_size (ClutterActor *self,
     }
   else if (priv->request_mode == CLUTTER_REQUEST_WIDTH_FOR_HEIGHT)
     {
-      CLUTTER_NOTE (LAYOUT, "Preferred size (width-for-height)");
+      CLUTTER_NOTE (SIZE_REQUESTS, "Preferred size (width-for-height)");
       clutter_actor_get_preferred_height (self, -1,
                                           &min_height,
                                           &natural_height);
@@ -7980,14 +7983,14 @@ clutter_actor_get_preferred_size (ClutterActor *self,
     }
   else if (priv->request_mode == CLUTTER_REQUEST_CONTENT_SIZE)
     {
-      CLUTTER_NOTE (LAYOUT, "Preferred size (content-size)");
+      CLUTTER_NOTE (SIZE_REQUESTS, "Preferred size (content-size)");
 
       if (priv->content != NULL)
         clutter_content_get_preferred_size (priv->content, &natural_width, &natural_height);
     }
   else
     {
-      CLUTTER_NOTE (LAYOUT, "Unknown request mode");
+      CLUTTER_NOTE (SIZE_REQUESTS, "Unknown request mode");
     }
 
   if (min_width_p)
@@ -8229,7 +8232,7 @@ _clutter_actor_get_cached_size_request (gfloat         for_size,
       if (sr->age > 0 &&
           sr->for_size == for_size)
         {
-          CLUTTER_NOTE (LAYOUT, "Size cache hit for size: %.2f", for_size);
+          CLUTTER_NOTE (SIZE_REQUESTS, "Size cache hit for size: %.2f", for_size);
           *result = sr;
           return TRUE;
         }
@@ -8239,7 +8242,7 @@ _clutter_actor_get_cached_size_request (gfloat         for_size,
         }
     }
 
-  CLUTTER_NOTE (LAYOUT, "Size cache miss for size: %.2f", for_size);
+  CLUTTER_NOTE (SIZE_REQUESTS, "Size cache miss for size: %.2f", for_size);
 
   return FALSE;
 }
@@ -8392,7 +8395,7 @@ clutter_actor_get_preferred_width (ClutterActor *self,
             for_height = 0;
         }
 
-      CLUTTER_NOTE (LAYOUT, "Width request for %.2f px", for_height);
+      CLUTTER_NOTE (SIZE_REQUESTS, "Width request for %.2f px", for_height);
 
       klass = CLUTTER_ACTOR_GET_CLASS (self);
       klass->get_preferred_width (self, for_height,
@@ -8546,7 +8549,7 @@ clutter_actor_get_preferred_height (ClutterActor *self,
 
       minimum_height = natural_height = 0;
 
-      CLUTTER_NOTE (LAYOUT, "Height request for %.2f px", for_width);
+      CLUTTER_NOTE (SIZE_REQUESTS, "Height request for %.2f px", for_width);
 
       /* adjust for margin */
       if (for_width >= 0)
@@ -8832,6 +8835,31 @@ clutter_actor_allocate_internal (ClutterActor           *self,
   klass->allocate (self, allocation);
 
   CLUTTER_UNSET_PRIVATE_FLAGS (self, CLUTTER_IN_RELAYOUT);
+
+#ifdef CLUTTER_ENABLE_DEBUG
+  /* Make sure the allocate() vfunc implementation called
+   * clutter_actor_allocate() on all mapped children.
+   */
+  if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_LAYOUT))
+    {
+      ClutterActorPrivate *priv = self->priv;
+      ClutterActor *child;
+
+      for (child = priv->first_child; child; child = child->priv->next_sibling)
+        {
+          if (!CLUTTER_ACTOR_IS_MAPPED (child))
+            continue;
+
+          if (!clutter_actor_has_allocation (child))
+            {
+              g_warning ("Actor %s didn't allocate mapped child %s "
+                         "inside allocate() vfunc implementation",
+                         _clutter_actor_get_debug_name (self),
+                         _clutter_actor_get_debug_name (child));
+            }
+        }
+    }
+#endif
 
   /* Caller should call clutter_actor_queue_redraw() if needed
    * for that particular case.

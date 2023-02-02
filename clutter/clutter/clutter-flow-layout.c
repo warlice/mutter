@@ -355,7 +355,7 @@ clutter_flow_layout_get_preferred_width (ClutterLayoutManager *manager,
         }
     }
 
-  CLUTTER_NOTE (LAYOUT,
+  CLUTTER_NOTE (SIZE_REQUESTS,
                 "Flow[w]: %d lines (%d per line): w [ %.2f, %.2f ] for h %.2f",
                 n_rows, priv->line_count,
                 total_min_width,
@@ -546,7 +546,7 @@ clutter_flow_layout_get_preferred_height (ClutterLayoutManager *manager,
         }
     }
 
-  CLUTTER_NOTE (LAYOUT,
+  CLUTTER_NOTE (SIZE_REQUESTS,
                 "Flow[h]: %d lines (%d per line): w [ %.2f, %.2f ] for h %.2f",
                 n_columns, priv->line_count,
                 total_min_height,
