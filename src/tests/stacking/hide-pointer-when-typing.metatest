@@ -1,0 +1,27 @@
+resize_monitor default 800 600
+
+set_pref hide-pointer-when-typing false
+
+move_cursor_to 50 50
+move_cursor_to 60 60
+assert_pointer_visible true
+
+type x
+assert_pointer_visible true
+
+set_pref hide-pointer-when-typing true
+
+move_cursor_to 50 50
+assert_pointer_visible true
+
+type C-p
+assert_pointer_visible true
+
+type S-p
+assert_pointer_visible false
+
+move_cursor_to 60 60
+assert_pointer_visible true
+
+type x
+assert_pointer_visible false

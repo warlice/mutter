@@ -66,6 +66,7 @@
  * @META_PREF_CENTER_NEW_WINDOWS: center new windows
  * @META_PREF_DRAG_THRESHOLD: drag threshold
  * @META_PREF_LOCATE_POINTER: show pointer location
+ * @META_PREF_HIDE_POINTER_WHEN_TYPING: hide pointer when typing
  */
 
 /* Keep in sync with GSettings schemas! */
@@ -106,6 +107,7 @@ typedef enum
   META_PREF_DRAG_THRESHOLD,
   META_PREF_LOCATE_POINTER,
   META_PREF_CHECK_ALIVE_TIMEOUT,
+  META_PREF_HIDE_POINTER_WHEN_TYPING,
 } MetaPreference;
 
 typedef void (* MetaPrefsChangedFunc) (MetaPreference pref,
@@ -232,6 +234,9 @@ int      meta_prefs_get_draggable_border_width (void);
 
 META_EXPORT
 int      meta_prefs_get_drag_threshold (void);
+
+META_EXPORT
+gboolean meta_prefs_is_hide_pointer_when_typing_enabled (void);
 
 /**
  * MetaKeyBindingAction:

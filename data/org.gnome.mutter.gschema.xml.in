@@ -154,6 +154,15 @@
       </description>
     </key>
 
+    <key name="hide-pointer-when-typing" type="b">
+      <default>false</default>
+      <summary>Hide mouse pointer when typing</summary>
+      <description>
+        If enabled, non-modifier/navigations keys will cause mouse
+        pointer to be hidden until the next pointer event.
+      </description>
+    </key>
+
     <child name="keybindings" schema="org.gnome.mutter.keybindings"/>
 
   </schema>

@@ -51,6 +51,7 @@
 
 #include "backends/meta-backend-private.h"
 
+#include <linux/input.h>
 #include <stdlib.h>
 
 #include "backends/meta-barrier-private.h"
@@ -75,6 +76,7 @@
 #include "meta/meta-backend.h"
 #include "meta/meta-context.h"
 #include "meta/meta-enum-types.h"
+#include "meta/prefs.h"
 #include "meta/util.h"
 
 #ifdef HAVE_REMOTE_DESKTOP
@@ -1060,6 +1062,13 @@ update_pointer_visibility_from_event (MetaBackend  *backend,
         meta_cursor_tracker_set_pointer_visible (cursor_tracker, FALSE);
       break;
     case CLUTTER_KEYBOARD_DEVICE:
+      if (meta_prefs_is_hide_pointer_when_typing_enabled() &&
+          event->type == CLUTTER_KEY_PRESS &&
+          clutter_event_get_state(event) <= 1 &&  // Modifiers: none or just shift
+          (clutter_event_get_key_unicode(event) > 0 ||  // Key: has some text or is escape OR
+           (clutter_event_get_event_code(event) >= KEY_LINEFEED &&  // key is a nav key
+            clutter_event_get_event_code(event) <= KEY_DELETE)))
+        meta_cursor_tracker_set_pointer_visible (cursor_tracker, FALSE);
     case CLUTTER_PAD_DEVICE:
     case CLUTTER_EXTENSION_DEVICE:
     case CLUTTER_JOYSTICK_DEVICE:
