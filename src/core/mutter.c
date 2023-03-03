@@ -25,6 +25,7 @@
 #include <stdlib.h>
 
 #include "compositor/meta-plugin-manager.h"
+#include "meta/display.h"
 #include "meta/main.h"
 #include "meta/meta-context.h"
 #include "meta/util.h"
@@ -154,12 +155,22 @@ main (int argc, char **argv)
   meta_context_notify_ready (context);
   if (argv_ignored)
     {
+      g_autoptr (MetaLaunchContext) launch_context = NULL;
+      MetaStartupNotification *sn;
+      MetaDisplay *display;
       GPid command_pid;
       g_auto (GStrv) command_argv = NULL;
+      g_auto (GStrv) command_env = NULL;
+
+      display = meta_context_get_display (context);
+      sn = meta_display_get_startup_notification (display);
+      launch_context = meta_startup_notification_create_launcher (sn);
 
       command_argv = g_steal_pointer (&argv_ignored);
+      command_env =
+        g_app_launch_context_get_environment (G_APP_LAUNCH_CONTEXT (launch_context));
 
-      if (!g_spawn_async (NULL, command_argv, NULL,
+      if (!g_spawn_async (NULL, command_argv, command_env,
                           G_SPAWN_DO_NOT_REAP_CHILD | G_SPAWN_SEARCH_PATH,
                           NULL, NULL, &command_pid, &error))
         {
