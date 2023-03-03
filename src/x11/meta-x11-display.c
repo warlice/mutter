@@ -37,6 +37,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <X11/Xatom.h>
+#include <X11/Xlibint.h>
 #include <X11/XKBlib.h>
 #include <X11/extensions/shape.h>
 #include <X11/Xcursor/Xcursor.h>
@@ -1128,7 +1129,7 @@ meta_x11_display_init_frames_client (MetaX11Display *x11_display)
 {
   const char *display_name;
 
-  display_name = get_display_name (x11_display->display);
+  display_name = meta_x11_display_get_display_name (x11_display);
   x11_display->frames_client_cancellable = g_cancellable_new ();
   x11_display->frames_client = meta_frame_launch_client (x11_display,
                                                          display_name);
@@ -1454,6 +1455,12 @@ meta_x11_display_new (MetaDisplay  *display,
   meta_x11_display_init_frames_client (x11_display);
 
   return g_steal_pointer (&x11_display);
+}
+
+const char *
+meta_x11_display_get_display_name (MetaX11Display *x11_display)
+{
+  return x11_display->xdisplay->display_name;
 }
 
 void
