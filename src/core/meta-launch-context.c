@@ -25,6 +25,14 @@
 #include "meta/meta-launch-context.h"
 #include "x11/meta-startup-notification-x11.h"
 
+#ifdef HAVE_WAYLAND
+#include "wayland/meta-wayland.h"
+#endif
+
+#ifdef HAVE_X11
+#include "x11/meta-x11-display-private.h"
+#endif
+
 typedef struct _MetaLaunchContext MetaLaunchContext;
 
 struct _MetaLaunchContext
@@ -102,12 +110,30 @@ static void
 meta_launch_context_constructed (GObject *object)
 {
   MetaLaunchContext *context = META_LAUNCH_CONTEXT (object);
-  const char *x11_display, *wayland_display;
+  const char *x11_display = NULL, *wayland_display = NULL;
+  MetaDisplay *display = context->display;
+#ifdef HAVE_XWAYLAND
+  MetaContext *meta_context = meta_display_get_context (display);
+  MetaWaylandCompositor *compositor =
+    meta_context_get_wayland_compositor (meta_context);
+
+  if (compositor)
+    {
+      wayland_display =
+        meta_wayland_get_wayland_display_name (compositor);
+      x11_display =
+        meta_wayland_get_private_xwayland_display_name (compositor);
+    }
+#endif
+#ifdef HAVE_X11
+  if (display->x11_display && !x11_display)
+    {
+      x11_display =
+        meta_x11_display_get_display_name (display->x11_display);
+    }
+#endif
 
   G_OBJECT_CLASS (meta_launch_context_parent_class)->constructed (object);
-
-  x11_display = getenv ("DISPLAY");
-  wayland_display = getenv ("WAYLAND_DISPLAY");
 
   if (x11_display)
     {
