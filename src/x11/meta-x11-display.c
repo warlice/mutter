@@ -1044,29 +1044,16 @@ set_work_area_hint (MetaDisplay    *display,
   g_free (data);
 }
 
-static const char *
-get_display_name (MetaDisplay *display)
-{
-#ifdef HAVE_XWAYLAND
-  MetaContext *context = meta_display_get_context (display);
-  MetaWaylandCompositor *compositor =
-    meta_context_get_wayland_compositor (context);
-
-  if (compositor)
-    return meta_wayland_get_private_xwayland_display_name (compositor);
-  else
-#endif
-    return g_getenv ("DISPLAY");
-}
-
 static Display *
 open_x_display (MetaDisplay  *display,
+                const char   *xdisplay_name,
                 GError      **error)
 {
-  const char *xdisplay_name;
   Display *xdisplay;
 
-  xdisplay_name = get_display_name (display);
+  if (!xdisplay_name)
+    xdisplay_name = XDisplayName (NULL);
+
   if (!xdisplay_name)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -1150,6 +1137,7 @@ meta_x11_display_init_frames_client (MetaX11Display *x11_display)
  */
 MetaX11Display *
 meta_x11_display_new (MetaDisplay  *display,
+                      const char   *display_name,
                       GError      **error)
 {
   MetaContext *context = meta_display_get_context (display);
@@ -1179,7 +1167,7 @@ meta_x11_display_new (MetaDisplay  *display,
   };
   Atom atoms[G_N_ELEMENTS(atom_names)];
 
-  xdisplay = open_x_display (display, error);
+  xdisplay = open_x_display (display, display_name, error);
   if (!xdisplay)
     return NULL;
 
