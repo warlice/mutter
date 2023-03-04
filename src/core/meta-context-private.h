@@ -84,3 +84,9 @@ meta_context_get_profiler (MetaContext *context);
 void meta_context_set_trace_file (MetaContext *context,
                                   const char  *trace_file);
 #endif
+
+#ifdef HAVE_XWAYLAND
+gboolean meta_context_take_prepared_xauth_file (MetaContext  *context,
+                                                char        **xauth,
+                                                int          *fd);
+#endif

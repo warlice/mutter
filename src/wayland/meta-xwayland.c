@@ -672,19 +672,26 @@ static gboolean
 prepare_auth_file (MetaXWaylandManager  *manager,
                    GError              **error)
 {
+  MetaWaylandCompositor *compositor = manager->compositor;
+  MetaContext *context = meta_wayland_compositor_get_context (compositor);
   Xauth auth_entry = { 0 };
+  int fd;
   g_autoptr (FILE) fp = NULL;
   char auth_data[16];
-  int fd;
-
-  manager->auth_file = g_build_filename (g_get_user_runtime_dir (),
-                                         ".mutter-Xwaylandauth.XXXXXX",
-                                         NULL);
 
   if (getrandom (auth_data, sizeof (auth_data), 0) != sizeof (auth_data))
     {
       g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
                    "Failed to get random data: %s", g_strerror (errno));
+      return FALSE;
+    }
+
+  if (!meta_context_take_prepared_xauth_file (context,
+                                              &manager->auth_file,
+                                              &fd))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Xauthority file had failed to be prepared");
       return FALSE;
     }
 
@@ -696,20 +703,11 @@ prepare_auth_file (MetaXWaylandManager  *manager,
   auth_entry.data = auth_data;
   auth_entry.data_length = sizeof (auth_data);
 
-  fd = g_mkstemp (manager->auth_file);
-  if (fd < 0)
-    {
-      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
-                   "Failed to open Xauthority file: %s", g_strerror (errno));
-      return FALSE;
-    }
-
   fp = fdopen (fd, "w+");
   if (!fp)
     {
       g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
                    "Failed to open Xauthority stream: %s", g_strerror (errno));
-      close (fd);
       return FALSE;
     }
 
@@ -1058,6 +1056,9 @@ meta_xwayland_init (MetaXWaylandManager    *manager,
   MetaX11DisplayPolicy policy;
   int display = 0;
 
+  manager->compositor = compositor;
+  manager->wayland_display = wl_display;
+
   if (display_number_override != -1)
     display = display_number_override;
   else if (g_getenv ("RUNNING_UNDER_GDM"))
@@ -1095,9 +1096,6 @@ meta_xwayland_init (MetaXWaylandManager    *manager,
   g_message ("Using public X11 display %s, (using %s for managed services)",
              manager->public_connection.name,
              manager->private_connection.name);
-
-  manager->compositor = compositor;
-  manager->wayland_display = wl_display;
   policy = meta_context_get_x11_display_policy (context);
 
   if (policy == META_X11_DISPLAY_POLICY_ON_DEMAND)

@@ -20,6 +20,7 @@
 
 #include "core/meta-context-private.h"
 
+#include <glib/gstdio.h>
 #include <locale.h>
 #include <sys/resource.h>
 
@@ -102,6 +103,11 @@ typedef struct _MetaContextPrivate
 
 #ifdef HAVE_WAYLAND
   MetaServiceChannel *service_channel;
+#endif
+
+#ifdef HAVE_XWAYLAND
+  char *prepared_xauth_file;
+  int prepared_xauth_fd;
 #endif
 } MetaContextPrivate;
 
@@ -312,6 +318,32 @@ meta_context_set_trace_file (MetaContext *context,
 }
 #endif
 
+#ifdef HAVE_XWAYLAND
+static void
+prepare_xauth_environment (MetaContext *context)
+{
+  MetaContextPrivate *priv = meta_context_get_instance_private (context);
+  g_autoptr (GError) error = NULL;
+  g_autofree char *auth_file = NULL;
+  int fd;
+
+  auth_file = g_build_filename (g_get_user_runtime_dir (),
+                                ".mutter-Xwaylandauth.XXXXXX",
+                                NULL);
+  fd = g_mkstemp (auth_file);
+  if (fd < 0)
+    {
+      g_warning ("Failed to create Xauthority file: %s", g_strerror (errno));
+      return;
+    }
+
+  setenv ("XAUTHORITY", auth_file, TRUE);
+
+  priv->prepared_xauth_file = g_steal_pointer (&auth_file);
+  priv->prepared_xauth_fd = g_steal_fd (&fd);
+}
+#endif /* HAVE_XWAYLAND */
+
 static gboolean
 meta_context_real_configure (MetaContext   *context,
                              int           *argc,
@@ -360,6 +392,15 @@ meta_context_configure (MetaContext   *context,
       priv->state = META_CONTEXT_STATE_TERMINATED;
       return FALSE;
     }
+
+  compositor_type = meta_context_get_compositor_type (context);
+
+#ifdef HAVE_XWAYLAND
+  if (compositor_type == META_COMPOSITOR_TYPE_WAYLAND &&
+      meta_context_get_x11_display_policy (context) !=
+      META_X11_DISPLAY_POLICY_DISABLED)
+    prepare_xauth_environment (context);
+#endif
 
 #ifdef HAVE_PROFILER
   priv->profiler = meta_profiler_new (priv->trace_file);
@@ -764,6 +805,11 @@ meta_context_finalize (GObject *object)
   g_clear_pointer (&priv->trace_file, g_free);
 #endif
 
+#ifdef HAVE_XWAYLAND
+  g_clear_pointer (&priv->prepared_xauth_file, g_free);
+  g_clear_fd (&priv->prepared_xauth_fd, NULL);
+#endif
+
   g_clear_pointer (&priv->gnome_wm_keybindings, g_free);
   g_clear_pointer (&priv->plugin_name, g_free);
   g_clear_pointer (&priv->name, g_free);
@@ -838,4 +884,25 @@ meta_context_init (MetaContext *context)
       if (!g_error_matches (error, G_FILE_ERROR, G_FILE_ERROR_NOSYS))
         g_warning ("Failed to save the nofile limit: %s", error->message);
     }
+
+#ifdef HAVE_XWAYLAND
+  priv->prepared_xauth_fd = -1;
+#endif
 }
+
+#ifdef HAVE_XWAYLAND
+gboolean
+meta_context_take_prepared_xauth_file (MetaContext  *context,
+                                       char        **xauth,
+                                       int          *fd)
+{
+  MetaContextPrivate *priv = meta_context_get_instance_private (context);
+
+  if (!priv->prepared_xauth_file)
+    return FALSE;
+
+  *xauth = g_steal_pointer (&priv->prepared_xauth_file);
+  *fd = g_steal_fd (&priv->prepared_xauth_fd);
+  return TRUE;
+}
+#endif /* HAVE_XWAYLAND */

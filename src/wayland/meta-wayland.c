@@ -878,9 +878,6 @@ meta_wayland_compositor_new (MetaContext *context)
       status &=
         set_gnome_env ("XAUTHORITY", compositor->xwayland_manager.auth_file);
 
-      /* XAUTHORITY needs to be set, for our own display connection */
-      setenv ("XAUTHORITY", compositor->xwayland_manager.auth_file, TRUE);
-
       meta_xwayland_set_should_enable_ei_portal (&compositor->xwayland_manager, status);
     }
 #endif
