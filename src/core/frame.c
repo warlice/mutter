@@ -40,8 +40,8 @@
                     StructureNotifyMask | SubstructureNotifyMask | \
                     PropertyChangeMask | FocusChangeMask)
 
-void
-meta_window_ensure_frame (MetaWindow *window)
+static void
+request_frame (MetaWindow *window)
 {
   MetaX11Display *x11_display = window->display->x11_display;
   unsigned long data[1] = { 1 };
@@ -58,6 +58,69 @@ meta_window_ensure_frame (MetaWindow *window)
                    32, PropModeReplace, (uint8_t *) data, 1);
 
   meta_x11_error_trap_pop (x11_display);
+}
+
+void
+meta_window_sync_frame_state (MetaWindow *window)
+{
+  if (window->client_type != META_WINDOW_CLIENT_TYPE_X11)
+    return;
+
+  if (!window->decorated)
+    meta_window_destroy_frame (window);
+  else if (!window->frame)
+    request_frame (window);
+}
+
+static void
+init_wrapper_window (MetaFrame *frame)
+{
+  MetaWindow *window = frame->window;
+  MetaX11Display *x11_display = window->display->x11_display;
+  XSetWindowAttributes xattr = { 0, };
+  MetaFrameBorders borders;
+  long mask;
+
+  xattr.background_pixel = BlackPixel (x11_display->xdisplay,
+                                       DefaultScreen (x11_display->xdisplay));
+  xattr.border_pixel = xattr.background_pixel;
+  xattr.event_mask = StructureNotifyMask | PropertyChangeMask;
+  xattr.bit_gravity = NorthWestGravity;
+  xattr.colormap =
+    XCreateColormap (x11_display->xdisplay,
+                     x11_display->xroot,
+                     window->xvisual,
+                     AllocNone);
+
+  meta_frame_calc_borders (frame, &borders);
+
+  mask = (CWBorderPixel | CWColormap | CWEventMask | CWBitGravity |
+          SubstructureNotifyMask);
+
+  frame->wrapper_xwindow = XCreateWindow (x11_display->xdisplay,
+                                          frame->xwindow,
+                                          borders.total.left,
+                                          borders.total.top,
+                                          window->rect.width,
+                                          window->rect.height,
+                                          0,
+                                          window->depth,
+                                          InputOutput,
+                                          window->xvisual,
+                                          mask, &xattr);
+  XSelectInput (x11_display->xdisplay,
+                frame->wrapper_xwindow,
+                StructureNotifyMask | SubstructureNotifyMask);
+
+  XReparentWindow (x11_display->xdisplay,
+                   window->xwindow,
+                   frame->wrapper_xwindow,
+                   0, 0);
+  XMapWindow (x11_display->xdisplay, frame->wrapper_xwindow);
+  window->reparents_pending += 1;
+
+  meta_x11_display_register_x_window (x11_display,
+                                      &frame->wrapper_xwindow, window);
 }
 
 void
@@ -124,15 +187,17 @@ meta_window_set_frame_xwindow (MetaWindow *window,
       window->unmaps_pending += 1;
     }
 
+  init_wrapper_window (frame);
+
   meta_stack_tracker_record_remove (window->display->stack_tracker,
                                     window->xwindow,
                                     XNextRequest (x11_display->xdisplay));
   XReparentWindow (x11_display->xdisplay,
-                   window->xwindow,
+                   frame->wrapper_xwindow,
                    frame->xwindow,
                    frame->child_x,
                    frame->child_y);
-  window->reparents_pending += 1;
+
   /* FIXME handle this error */
   meta_x11_error_trap_pop (x11_display);
 
@@ -226,6 +291,16 @@ meta_window_destroy_frame (MetaWindow *window)
   XDeleteProperty (x11_display->xdisplay,
                    window->xwindow,
                    x11_display->atom__MUTTER_NEEDS_FRAME);
+
+  if (frame->wrapper_xwindow != None)
+    {
+      XDestroyWindow (window->display->x11_display->xdisplay,
+                      frame->wrapper_xwindow);
+
+      meta_x11_display_unregister_x_window (x11_display,
+                                            frame->wrapper_xwindow);
+      frame->wrapper_xwindow = None;
+    }
 
   meta_x11_error_trap_pop (x11_display);
 
@@ -367,20 +442,35 @@ meta_frame_clear_cached_borders (MetaFrame *frame)
 
 gboolean
 meta_frame_sync_to_window (MetaFrame *frame,
+                           int        client_width,
+                           int        client_height,
                            gboolean   need_resize)
 {
   MetaWindow *window = frame->window;
   MetaX11Display *x11_display = window->display->x11_display;
+  MetaFrameBorders borders;
+
+  meta_frame_calc_borders (window->frame, &borders);
 
   meta_topic (META_DEBUG_GEOMETRY,
-              "Syncing %s frame geometry %d,%d %dx%d (SE: %d,%d)",
+              "Syncing %s frame geometry %d,%d %dx%d (SE: %d,%d), "
+              "wrapper: %d,%d %dx%d",
               frame->window->desc,
               frame->rect.x, frame->rect.y,
               frame->rect.width, frame->rect.height,
               frame->rect.x + frame->rect.width,
-              frame->rect.y + frame->rect.height);
+              frame->rect.y + frame->rect.height,
+              borders.total.left, borders.total.top,
+              client_width, client_height);
 
   meta_x11_error_trap_push (x11_display);
+
+  XMoveWindow (x11_display->xdisplay, window->xwindow, 0, 0);
+
+  XMoveResizeWindow (x11_display->xdisplay,
+                     frame->wrapper_xwindow,
+                     borders.total.left, borders.total.top,
+                     client_width, client_height);
 
   XMoveResizeWindow (x11_display->xdisplay,
                      frame->xwindow,

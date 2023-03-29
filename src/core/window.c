@@ -5451,11 +5451,7 @@ meta_window_type_changed (MetaWindow *window)
   if (!window->override_redirect)
     set_net_wm_state (window);
 
-  /* Update frame */
-  if (window->decorated)
-    meta_window_ensure_frame (window);
-  else
-    meta_window_destroy_frame (window);
+  meta_window_sync_frame_state (window);
 
   /* update stacking constraints */
   meta_window_update_layer (window);
@@ -5729,6 +5725,7 @@ meta_window_recalc_features (MetaWindow *window)
   if (window->has_resize_func != old_has_resize_func)
     g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_RESIZEABLE]);
 
+  meta_window_sync_frame_state (window);
   meta_window_frame_size_changed (window);
 }
 

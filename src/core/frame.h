@@ -30,8 +30,10 @@ struct _MetaFrame
   /* window we frame */
   MetaWindow *window;
 
-  /* reparent window */
+  /* Frame window */
   Window xwindow;
+  /* Wrapper window. */
+  Window wrapper_xwindow;
 
   /* This rect is trusted info from where we put the
    * frame, not the result of ConfigureNotify
@@ -53,7 +55,7 @@ struct _MetaFrame
   guint borders_cached : 1;
 };
 
-void     meta_window_ensure_frame           (MetaWindow *window);
+void     meta_window_sync_frame_state       (MetaWindow *window);
 void     meta_window_destroy_frame          (MetaWindow *window);
 
 Window         meta_frame_get_xwindow (MetaFrame *frame);
@@ -63,6 +65,8 @@ void meta_frame_calc_borders      (MetaFrame        *frame,
                                    MetaFrameBorders *borders);
 
 gboolean meta_frame_sync_to_window (MetaFrame         *frame,
+                                    int                client_width,
+                                    int                client_height,
                                     gboolean           need_resize);
 
 void meta_frame_clear_cached_borders (MetaFrame *frame);

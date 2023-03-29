@@ -950,10 +950,7 @@ reload_mwm_hints (MetaWindow    *window,
   /* We do all this anyhow at the end of meta_window_x11_new() */
   if (!window->constructing)
     {
-      if (window->decorated)
-        meta_window_ensure_frame (window);
-      else
-        meta_window_destroy_frame (window);
+      meta_window_sync_frame_state (window);
 
       meta_window_queue (window,
                          META_QUEUE_MOVE_RESIZE |

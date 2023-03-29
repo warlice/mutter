@@ -1275,12 +1275,16 @@ handle_other_xevent (MetaX11Display *x11_display,
   MetaWorkspaceManager *workspace_manager = display->workspace_manager;
   Window modified;
   MetaWindow *window;
+  MetaFrame *frame;
   MetaWindow *property_for_window;
   gboolean frame_was_receiver;
+  gboolean wrapper_was_receiver;
 
   modified = event_get_modified_window (x11_display, event);
   window = modified != None ? meta_x11_display_lookup_x_window (x11_display, modified) : NULL;
-  frame_was_receiver = (window && window->frame && modified == window->frame->xwindow);
+  frame = window ? window->frame : NULL;
+  frame_was_receiver = frame && modified == frame->xwindow;
+  wrapper_was_receiver = frame && modified == frame->wrapper_xwindow;
 
   /* We only want to respond to _NET_WM_USER_TIME property notify
    * events on _NET_WM_USER_TIME_WINDOW windows; in particular,
@@ -1377,11 +1381,15 @@ handle_other_xevent (MetaX11Display *x11_display,
       }
       if (window)
         {
-          if (frame_was_receiver)
+          if (wrapper_was_receiver)
             {
-              meta_x11_error_trap_push (x11_display);
-              meta_window_destroy_frame (window->frame->window);
-              meta_x11_error_trap_pop (x11_display);
+              meta_x11_display_unregister_x_window (x11_display,
+                                                    frame->wrapper_xwindow);
+              frame->wrapper_xwindow = None;
+            }
+          else if (frame_was_receiver)
+            {
+              meta_window_destroy_frame (frame->window);
             }
           else
             {
@@ -1403,7 +1411,7 @@ handle_other_xevent (MetaX11Display *x11_display,
           guint32 timestamp;
           timestamp = meta_display_get_current_time_roundtrip (display);
 
-          if (!frame_was_receiver)
+          if (!frame_was_receiver && !wrapper_was_receiver)
             {
               if (window->unmaps_pending == 0)
                 {
@@ -1497,7 +1505,7 @@ handle_other_xevent (MetaX11Display *x11_display,
           meta_verbose ("MapRequest on %s mapped = %d minimized = %d",
                         window->desc, window->mapped, window->minimized);
 
-          if (window->minimized && !frame_was_receiver)
+          if (window->minimized && !frame_was_receiver && !wrapper_was_receiver)
             {
               meta_window_unminimize (window);
               if (window->workspace != workspace_manager->active_workspace)
@@ -1561,7 +1569,7 @@ handle_other_xevent (MetaX11Display *x11_display,
                             xwcm, &xwc);
           meta_x11_error_trap_pop (x11_display);
         }
-      else if (!frame_was_receiver)
+      else if (!frame_was_receiver && !wrapper_was_receiver)
         {
           meta_window_x11_configure_request (window, event);
         }
@@ -1582,9 +1590,9 @@ handle_other_xevent (MetaX11Display *x11_display,
       {
         MetaGroup *group;
 
-        if (window && !frame_was_receiver)
+        if (window && !frame_was_receiver && !wrapper_was_receiver)
           meta_window_x11_property_notify (window, event);
-        else if (property_for_window && !frame_was_receiver)
+        else if (property_for_window && !frame_was_receiver && !wrapper_was_receiver)
           meta_window_x11_property_notify (property_for_window, event);
         else if (frame_was_receiver)
           meta_frame_handle_xevent (window->frame, event);
