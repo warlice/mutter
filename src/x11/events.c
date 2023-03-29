@@ -1377,13 +1377,6 @@ handle_other_xevent (MetaX11Display *x11_display,
       }
       if (window)
         {
-          /* FIXME: It sucks that DestroyNotify events don't come with
-           * a timestamp; could we do something better here?  Maybe X
-           * will change one day?
-           */
-          guint32 timestamp;
-          timestamp = meta_display_get_current_time_roundtrip (display);
-
           if (frame_was_receiver)
             {
               meta_x11_error_trap_push (x11_display);
@@ -1392,7 +1385,9 @@ handle_other_xevent (MetaX11Display *x11_display,
             }
           else
             {
-              /* Unmanage destroyed window */
+              uint32_t timestamp;
+
+              timestamp = meta_display_get_current_time_roundtrip (display);
               meta_window_unmanage (window, timestamp);
               window = NULL;
             }
