@@ -1381,13 +1381,7 @@ handle_other_xevent (MetaX11Display *x11_display,
       }
       if (window)
         {
-          if (wrapper_was_receiver)
-            {
-              meta_x11_display_unregister_x_window (x11_display,
-                                                    frame->wrapper_xwindow);
-              frame->wrapper_xwindow = None;
-            }
-          else if (frame_was_receiver)
+          if (frame_was_receiver)
             {
               meta_window_destroy_frame (frame->window);
             }
@@ -1788,7 +1782,9 @@ window_has_xwindow (MetaWindow *window,
   if (window->xwindow == xwindow)
     return TRUE;
 
-  if (window->frame && window->frame->xwindow == xwindow)
+  if (window->frame &&
+      (window->frame->xwindow == xwindow ||
+       window->frame->wrapper_xwindow == xwindow))
     return TRUE;
 
   return FALSE;

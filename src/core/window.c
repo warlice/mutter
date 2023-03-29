@@ -4399,7 +4399,7 @@ meta_window_frame_rect_to_client_rect (MetaWindow   *window,
 
   *client_rect = *frame_rect;
 
-  if (window->frame)
+  if (window->frame && !window->frame->is_fullscreen)
     {
       MetaFrameBorders borders;
       meta_frame_calc_borders (window->frame, &borders);
@@ -4409,7 +4409,7 @@ meta_window_frame_rect_to_client_rect (MetaWindow   *window,
       client_rect->width  -= borders.visible.left + borders.visible.right;
       client_rect->height -= borders.visible.top  + borders.visible.bottom;
     }
-  else
+  else if (!window->frame)
     {
       const MetaFrameBorder *extents = &window->custom_frame_extents;
       client_rect->x -= extents->left;

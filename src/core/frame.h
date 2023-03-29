@@ -53,12 +53,15 @@ struct _MetaFrame
   int bottom_height;
 
   guint borders_cached : 1;
+  guint is_fullscreen : 1;
 };
 
 void     meta_window_sync_frame_state       (MetaWindow *window);
 void     meta_window_destroy_frame          (MetaWindow *window);
 
-Window         meta_frame_get_xwindow (MetaFrame *frame);
+Window meta_frame_get_frame_xwindow (MetaFrame *frame);
+
+Window meta_frame_get_current_xwindow (MetaFrame *frame);
 
 /* These should ONLY be called from meta_window_move_resize_internal */
 void meta_frame_calc_borders      (MetaFrame        *frame,

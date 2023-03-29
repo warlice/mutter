@@ -406,6 +406,8 @@ meta_surface_actor_x11_new (MetaWindow *window)
   create_damage (self);
   g_signal_connect_object (self->window, "notify::decorated",
                            G_CALLBACK (window_decorated_notify), self, 0);
+  g_signal_connect_object (self->window, "notify::fullscreen",
+                           G_CALLBACK (window_decorated_notify), self, 0);
 
   g_signal_connect_object (meta_window_actor_from_window (window), "destroy",
                            G_CALLBACK (release_x11_resources), self,

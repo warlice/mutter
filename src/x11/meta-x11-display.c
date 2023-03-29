@@ -2020,9 +2020,22 @@ meta_x11_display_set_input_focus (MetaX11Display *x11_display,
   gulong serial;
 
   if (window)
-    xwindow = focus_frame ? window->frame->xwindow : window->xwindow;
+    {
+      /* For output-only windows, focus the frame.
+       * This seems to result in the client window getting key events
+       * though, so I don't know if it's icccm-compliant.
+       *
+       * Still, we have to do this or keynav breaks for these windows.
+       */
+      if (window->frame && !meta_window_is_focusable (window))
+        xwindow = meta_frame_get_current_xwindow (window->frame);
+      else
+        xwindow = window->xwindow;
+    }
   else
-    xwindow = x11_display->no_focus_window;
+    {
+      xwindow = x11_display->no_focus_window;
+    }
 
   meta_topic (META_DEBUG_FOCUS, "Setting X11 input focus for window %s to 0x%lx",
               window ? window->desc : "none", xwindow);

@@ -200,7 +200,7 @@ apply_allow_commits_x11_property (MetaWindowXwayland *xwayland_window,
   if (!frame)
     xwin = window->xwindow;
   else
-    xwin = meta_frame_get_xwindow (frame);
+    xwin = meta_frame_get_frame_xwindow (frame);
 
   if (!xwin)
     return;

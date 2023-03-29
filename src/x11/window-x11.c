@@ -4248,7 +4248,10 @@ meta_window_x11_destroy_sync_request_alarm (MetaWindow *window)
 Window
 meta_window_x11_get_toplevel_xwindow (MetaWindow *window)
 {
-  return window->frame ? window->frame->xwindow : window->xwindow;
+  if (window->frame)
+    return meta_frame_get_current_xwindow (window->frame);
+  else
+    return window->xwindow;
 }
 
 void

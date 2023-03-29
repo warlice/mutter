@@ -591,7 +591,7 @@ on_stack_changed (MetaStack        *stack,
 		  w->layer, w->stack_position, w->desc);
 
       if (w->frame)
-	top_level_window = w->frame->xwindow;
+	top_level_window = meta_frame_get_current_xwindow (w->frame);
       else
 	top_level_window = w->xwindow;
 
@@ -1048,11 +1048,20 @@ meta_stack_tracker_sync_stack (MetaStackTracker *tracker)
            */
           if (window)
             {
-              if (window->frame &&
-                  window->frame->xwindow == xwindow)
-                windows = g_list_prepend (windows, window);
-              else if (xwindow == window->xwindow)
-                windows = g_list_prepend (windows, window);
+              if (window->frame)
+                {
+                  if (window->frame->is_fullscreen &&
+                      window->frame->wrapper_xwindow == xwindow)
+                    windows = g_list_prepend (windows, window);
+                  else if (!window->frame->is_fullscreen &&
+                           window->frame->xwindow == xwindow)
+                    windows = g_list_prepend (windows, window);
+                }
+              else
+                {
+                  if (xwindow == window->xwindow)
+                    windows = g_list_prepend (windows, window);
+                }
             }
         }
       else
