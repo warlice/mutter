@@ -52,7 +52,7 @@ meta_window_ensure_frame (MetaWindow *window)
                    window->xwindow,
                    x11_display->atom__MUTTER_NEEDS_FRAME,
                    XA_CARDINAL,
-                   32, PropModeReplace, (guchar*) data, 1);
+                   32, PropModeReplace, (uint8_t *) data, 1);
 
   meta_x11_error_trap_pop (x11_display);
 }
