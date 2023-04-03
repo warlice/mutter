@@ -129,7 +129,7 @@ stack_window_removed_cb (MetaStack    *stack,
   x11_stack->added = g_list_remove (x11_stack->added, window);
 
   x11_stack->removed = g_list_prepend (x11_stack->removed,
-                                   GUINT_TO_POINTER (window->xwindow));
+                                       GUINT_TO_POINTER (window->xwindow));
 }
 
 /**
