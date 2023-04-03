@@ -1420,7 +1420,8 @@ handle_other_xevent (MetaX11Display *x11_display,
                 {
                   window->unmaps_pending -= 1;
                   meta_topic (META_DEBUG_WINDOW_STATE,
-                              "Received pending unmap, %d now pending",
+                              "Received pending unmap on %s, %d now pending",
+                              window->desc,
                               window->unmaps_pending);
                 }
             }

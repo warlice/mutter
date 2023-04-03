@@ -2055,6 +2055,9 @@ meta_window_x11_unmap (MetaWindow *window)
   meta_x11_error_trap_push (x11_display);
   XUnmapWindow (x11_display->xdisplay, window->xwindow);
   meta_x11_error_trap_pop (x11_display);
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Increasing unmaps_pending due to unmapping window %s",
+              window->desc);
   window->unmaps_pending ++;
 }
 

@@ -48,6 +48,9 @@ meta_window_ensure_frame (MetaWindow *window)
 
   meta_x11_error_trap_push (x11_display);
 
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Requesting frame for window %s", window->desc);
+
   XChangeProperty (x11_display->xdisplay,
                    window->xwindow,
                    x11_display->atom__MUTTER_NEEDS_FRAME,
@@ -86,21 +89,19 @@ meta_window_set_frame_xwindow (MetaWindow *window,
 
   window->frame = frame;
 
-  meta_verbose ("Frame geometry %d,%d  %dx%d",
-                frame->rect.x, frame->rect.y,
-                frame->rect.width, frame->rect.height);
-
-  meta_verbose ("Setting frame 0x%lx for window %s, "
-                "frame geometry %d,%d  %dx%d",
-                xframe, window->desc,
-                frame->rect.x, frame->rect.y,
-                frame->rect.width, frame->rect.height);
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Setting frame 0x%lx for window %s, "
+              "frame geometry %d,%d  %dx%d",
+              xframe, window->desc,
+              frame->rect.x, frame->rect.y,
+              frame->rect.width, frame->rect.height);
 
   meta_stack_tracker_record_add (window->display->stack_tracker,
                                  frame->xwindow,
                                  create_serial);
 
-  meta_verbose ("Frame for %s is 0x%lx", frame->window->desc, frame->xwindow);
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Frame for %s is 0x%lx", frame->window->desc, frame->xwindow);
 
   meta_x11_error_trap_push (x11_display);
 
@@ -177,7 +178,7 @@ meta_window_destroy_frame (MetaWindow *window)
 
   x11_display = window->display->x11_display;
 
-  meta_verbose ("Unframing window %s", window->desc);
+  meta_topic (META_DEBUG_WINDOW_STATE, "Unframing window %s", window->desc);
 
   frame = window->frame;
 
@@ -372,7 +373,8 @@ meta_frame_sync_to_window (MetaFrame *frame,
   MetaX11Display *x11_display = window->display->x11_display;
 
   meta_topic (META_DEBUG_GEOMETRY,
-              "Syncing frame geometry %d,%d %dx%d (SE: %d,%d)",
+              "Syncing %s frame geometry %d,%d %dx%d (SE: %d,%d)",
+              frame->window->desc,
               frame->rect.x, frame->rect.y,
               frame->rect.width, frame->rect.height,
               frame->rect.x + frame->rect.width,
