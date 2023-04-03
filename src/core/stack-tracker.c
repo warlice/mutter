@@ -1009,8 +1009,8 @@ meta_stack_tracker_get_stack (MetaStackTracker *tracker,
 void
 meta_stack_tracker_sync_stack (MetaStackTracker *tracker)
 {
-  guint64 *windows;
-  GList *meta_windows;
+  uint64_t *stack_ids;
+  g_autoptr (GList) windows = NULL;
   int n_windows;
   int i;
 
@@ -1025,20 +1025,20 @@ meta_stack_tracker_sync_stack (MetaStackTracker *tracker)
 
   meta_stack_tracker_keep_override_redirect_on_top (tracker);
 
-  meta_stack_tracker_get_stack (tracker, &windows, &n_windows);
+  meta_stack_tracker_get_stack (tracker, &stack_ids, &n_windows);
 
-  meta_windows = NULL;
   for (i = 0; i < n_windows; i++)
     {
-      guint64 window = windows[i];
+      uint64_t stack_id = stack_ids[i];
 
-      if (META_STACK_ID_IS_X11 (window))
+      if (META_STACK_ID_IS_X11 (stack_id))
         {
           MetaX11Display *x11_display = tracker->display->x11_display;
-          MetaWindow *meta_window = NULL;
+          Window xwindow = (Window) stack_id;
+          MetaWindow *window = NULL;
 
           if (x11_display)
-            meta_window = meta_x11_display_lookup_x_window (x11_display, (Window) window);
+            window = meta_x11_display_lookup_x_window (x11_display, xwindow);
 
           /* When mapping back from xwindow to MetaWindow we have to be a bit careful;
            * children of the root could include unmapped windows created by toolkits
@@ -1046,19 +1046,25 @@ meta_stack_tracker_sync_stack (MetaStackTracker *tracker)
            * XID => window table. (Wine uses a toplevel for _NET_WM_USER_TIME_WINDOW;
            * see window-prop.c:reload_net_wm_user_time_window() for registration.)
            */
-          if (meta_window &&
-              ((Window)window == meta_window->xwindow ||
-               (meta_window->frame && (Window)window == meta_window->frame->xwindow)))
-            meta_windows = g_list_prepend (meta_windows, meta_window);
+          if (window)
+            {
+              if (window->frame &&
+                  window->frame->xwindow == xwindow)
+                windows = g_list_prepend (windows, window);
+              else if (xwindow == window->xwindow)
+                windows = g_list_prepend (windows, window);
+            }
         }
       else
-        meta_windows = g_list_prepend (meta_windows,
-                                       meta_display_lookup_stamp (tracker->display, window));
+        {
+          MetaWindow *window;
+
+          window = meta_display_lookup_stamp (tracker->display, stack_id);
+          windows = g_list_prepend (windows, window);
+        }
     }
 
-  meta_compositor_sync_stack (tracker->display->compositor,
-                              meta_windows);
-  g_list_free (meta_windows);
+  meta_compositor_sync_stack (tracker->display->compositor, windows);
 
   meta_display_restacked (tracker->display);
 }
