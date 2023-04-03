@@ -180,6 +180,7 @@ struct _MetaWindow
   Window xwindow;
   /* may be NULL! not all windows get decorated */
   MetaFrame *frame;
+  gboolean frame_pending;
   int depth;
   Visual *xvisual;
   char *desc; /* used in debug spew */

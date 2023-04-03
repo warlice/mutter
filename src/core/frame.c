@@ -46,6 +46,9 @@ request_frame (MetaWindow *window)
   MetaX11Display *x11_display = window->display->x11_display;
   unsigned long data[1] = { 1 };
 
+  if (window->frame_pending)
+    return;
+
   meta_x11_error_trap_push (x11_display);
 
   meta_topic (META_DEBUG_WINDOW_STATE,
@@ -56,6 +59,7 @@ request_frame (MetaWindow *window)
                    x11_display->atom__MUTTER_NEEDS_FRAME,
                    XA_CARDINAL,
                    32, PropModeReplace, (uint8_t *) data, 1);
+  window->frame_pending = TRUE;
 
   meta_x11_error_trap_pop (x11_display);
 }
@@ -130,6 +134,8 @@ meta_window_set_frame_xwindow (MetaWindow *window,
 
   if (window->frame)
     return;
+
+  window->frame_pending = FALSE;
 
   frame = g_new0 (MetaFrame, 1);
 
@@ -230,25 +236,35 @@ meta_window_set_frame_xwindow (MetaWindow *window,
 void
 meta_window_destroy_frame (MetaWindow *window)
 {
+  MetaX11Display *x11_display = window->display->x11_display;
   MetaFrame *frame;
   MetaFrameBorders borders;
-  MetaX11Display *x11_display;
 
   if (window->frame == NULL)
-    return;
+    {
+      if (window->frame_pending)
+        {
+          window->frame_pending = FALSE;
+          meta_x11_error_trap_push (x11_display);
+          XDeleteProperty (x11_display->xdisplay,
+                           window->xwindow,
+                           x11_display->atom__MUTTER_NEEDS_FRAME);
+          meta_x11_error_trap_pop (x11_display);
+        }
 
-  x11_display = window->display->x11_display;
+      meta_topic (META_DEBUG_WINDOW_STATE,
+                  "Unframing unframed window %s", window->desc);
+      return;
+    }
 
   meta_topic (META_DEBUG_WINDOW_STATE, "Unframing window %s", window->desc);
 
   frame = window->frame;
 
+  meta_x11_error_trap_push (x11_display);
+
   meta_frame_calc_borders (frame, &borders);
 
-  /* Unparent the client window; it may be destroyed,
-   * thus the error trap.
-   */
-  meta_x11_error_trap_push (x11_display);
   if (window->mapped)
     {
       window->mapped = FALSE; /* Keep track of unmapping it, so we
@@ -284,10 +300,6 @@ meta_window_destroy_frame (MetaWindow *window)
   if (META_X11_DISPLAY_HAS_SHAPE (x11_display))
     XShapeSelectInput (x11_display->xdisplay, frame->xwindow, NoEventMask);
 
-  XDeleteProperty (x11_display->xdisplay,
-                   window->xwindow,
-                   x11_display->atom__MUTTER_NEEDS_FRAME);
-
   if (frame->wrapper_xwindow != None)
     {
       XDestroyWindow (window->display->x11_display->xdisplay,
@@ -297,6 +309,11 @@ meta_window_destroy_frame (MetaWindow *window)
                                             frame->wrapper_xwindow);
       frame->wrapper_xwindow = None;
     }
+
+  window->frame_pending = FALSE;
+  XDeleteProperty (x11_display->xdisplay,
+                   window->xwindow,
+                   x11_display->atom__MUTTER_NEEDS_FRAME);
 
   meta_x11_error_trap_pop (x11_display);
 
