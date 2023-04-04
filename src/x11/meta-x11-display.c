@@ -155,11 +155,8 @@ meta_x11_display_dispose (GObject *object)
   g_clear_list (&x11_display->event_funcs,
                 (GDestroyNotify) meta_x11_event_filter_free);
 
-  if (x11_display->frames_client_cancellable)
-    {
-      g_cancellable_cancel (x11_display->frames_client_cancellable);
-      g_clear_object (&x11_display->frames_client_cancellable);
-    }
+  g_cancellable_cancel (x11_display->frames_client_cancellable);
+  g_clear_object (&x11_display->frames_client_cancellable);
 
   if (x11_display->frames_client)
     {
