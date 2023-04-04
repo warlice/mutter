@@ -1123,17 +1123,42 @@ on_frames_client_died (GObject      *source,
 }
 
 static void
+on_meta_frame_launch_client_callback (GObject      *source,
+                                      GAsyncResult *result,
+                                      gpointer      user_data)
+{
+  MetaX11Display *x11_display = META_X11_DISPLAY (source);
+  g_autoptr (GError) error = NULL;
+
+  if (meta_frame_launch_client_finish (x11_display, result, &error))
+    return;
+
+  if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    return;
+
+  meta_warning ("Failed launching frame client via systemd: %s - "
+                "Using fallback mode", error->message);
+
+  x11_display->frames_client =
+    meta_frame_launch_client (x11_display,
+                              get_display_name (x11_display->display));
+
+  g_subprocess_wait_async (x11_display->frames_client,
+                           x11_display->frames_client_cancellable,
+                           on_frames_client_died, x11_display);
+}
+
+static void
 meta_x11_display_init_frames_client (MetaX11Display *x11_display)
 {
   const char *display_name;
 
   display_name = get_display_name (x11_display->display);
   x11_display->frames_client_cancellable = g_cancellable_new ();
-  x11_display->frames_client = meta_frame_launch_client (x11_display,
-                                                         display_name);
-  g_subprocess_wait_async (x11_display->frames_client,
-                           x11_display->frames_client_cancellable,
-                           on_frames_client_died, x11_display);
+
+  meta_frame_launch_client_async (x11_display, display_name,
+                                  x11_display->frames_client_cancellable,
+                                  on_meta_frame_launch_client_callback, NULL);
 }
 
 /**

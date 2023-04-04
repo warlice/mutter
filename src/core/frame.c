@@ -35,6 +35,12 @@
 
 #include <X11/Xatom.h>
 
+#ifdef HAVE_LIBSYSTEMD
+#include <systemd/sd-login.h>
+#endif
+
+#define META_X11_FRAMES_CLIENT MUTTER_LIBEXECDIR "/mutter-x11-frames"
+
 #define EVENT_MASK (SubstructureRedirectMask |                     \
                     StructureNotifyMask | SubstructureNotifyMask | \
                     PropertyChangeMask | FocusChangeMask)
@@ -533,7 +539,7 @@ meta_frame_launch_client (MetaX11Display *x11_display,
   GSubprocess *proc;
   const char *args[2];
 
-  args[0] = MUTTER_LIBEXECDIR "/mutter-x11-frames";
+  args[0] = META_X11_FRAMES_CLIENT;
   args[1] = NULL;
 
   launcher = g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_NONE);
@@ -560,6 +566,239 @@ meta_frame_launch_client (MetaX11Display *x11_display,
     }
 
   return proc;
+}
+
+#ifdef HAVE_LIBSYSTEMD
+
+static void
+on_start_transient_unit_called (GObject      *source,
+                                GAsyncResult *res,
+                                gpointer      user_data)
+{
+  g_autoptr (GTask) task = G_TASK (user_data);
+  g_autoptr (GVariant) reply = NULL;
+  g_autoptr (GError) error = NULL;
+
+  reply = g_dbus_connection_call_finish (G_DBUS_CONNECTION (source),
+                                         res, &error);
+
+  if (error)
+    {
+      g_task_return_error (task, g_steal_pointer (&error));
+      return;
+    }
+
+  g_task_return_boolean (task, TRUE);
+}
+
+static void
+meta_frame_launch_client_systemd_transient_unit (GDBusConnection *connection,
+                                                 GTask           *task)
+{
+  GVariantBuilder builder;
+  GVariantBuilder exec_builder;
+  g_autofree char *parent_unit = NULL;
+  g_autofree char *unit_name = NULL;
+  g_auto(GStrv) env = NULL;
+  const char *display_name;
+
+  display_name = g_task_get_task_data (task);
+  unit_name = g_strdup_printf ("mutter-x11-frames@%s.service", display_name);
+
+  for (size_t i = 0, len = strlen (display_name); i < len; ++i)
+    {
+      if (g_ascii_isalnum (display_name[i]) ||
+          display_name[i] == '-' ||
+          display_name[i] == ':' ||
+          display_name[i] == '_' ||
+          display_name[i] == '\\' ||
+          display_name[i] == '.')
+          continue;
+
+      unit_name[i] = '_';
+    }
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("(ssa(sv)a(sa(sv)))"));
+  g_variant_builder_add (&builder, "s", unit_name);
+  g_variant_builder_add (&builder, "s", "replace");
+
+  g_variant_builder_open (&builder, G_VARIANT_TYPE ("a(sv)"));
+  g_variant_builder_add (&builder,
+                         "(sv)",
+                         "Type",
+                         g_variant_new_string ("simple"));
+
+  g_variant_builder_add (&builder,
+                          "(sv)",
+                          "Description",
+                          g_variant_new_string ("Mutter X11 Frames Client"));
+
+  g_variant_builder_add (&builder,
+                          "(sv)",
+                          "Slice",
+                          g_variant_new_string ("session.slice"));
+
+  if (sd_pid_get_user_unit (getpid (), &parent_unit) != 0)
+    parent_unit = g_strdup ("graphical-session.target");
+
+  g_variant_builder_add (&builder,
+                         "(sv)",
+                         "PartOf",
+                         g_variant_new_strv (
+                          (const char *const[]) { parent_unit }, 1));
+
+  env = g_get_environ ();
+  env = g_environ_setenv (env, "DISPLAY", display_name, TRUE);
+  g_variant_builder_add (&builder,
+                          "(sv)",
+                          "Environment",
+                          g_variant_new_strv ((const char *const *) env, -1));
+
+  g_variant_builder_add (&builder,
+                         "(sv)",
+                         "Restart",
+                          g_variant_new_string ("always"));
+
+  g_variant_builder_add (&builder,
+                         "(sv)",
+                         "CollectMode",
+                          g_variant_new_string ("inactive-or-failed"));
+
+  /* The binary path to run */
+  g_variant_builder_init (&exec_builder, G_VARIANT_TYPE ("a(sasb)"));
+  g_variant_builder_open (&exec_builder, G_VARIANT_TYPE ("(sasb)"));
+  g_variant_builder_add (&exec_builder, "s", META_X11_FRAMES_CLIENT);
+
+  /* The argv */
+  g_variant_builder_open (&exec_builder, G_VARIANT_TYPE ("as"));
+  g_variant_builder_add (&exec_builder, "s", META_X11_FRAMES_CLIENT);
+  g_variant_builder_close (&exec_builder);
+
+  /* It's a failure if the process exits uncleanly */
+  g_variant_builder_add (&exec_builder, "b", TRUE);
+
+  g_variant_builder_close (&exec_builder);
+
+  g_variant_builder_add (&builder,
+                         "(sv)",
+                         "ExecStart",
+                          g_variant_builder_end (&exec_builder));
+
+  g_variant_builder_close (&builder);
+
+  g_variant_builder_open (&builder, G_VARIANT_TYPE ("a(sa(sv))"));
+  g_variant_builder_close (&builder);
+
+  g_dbus_connection_call (connection,
+                          "org.freedesktop.systemd1",
+                          "/org/freedesktop/systemd1",
+                          "org.freedesktop.systemd1.Manager",
+                          "StartTransientUnit",
+                          g_variant_builder_end (&builder),
+                          G_VARIANT_TYPE ("(o)"),
+                          G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                          1000,
+                          g_task_get_cancellable (task),
+                          on_start_transient_unit_called,
+                          g_object_ref (task));
+}
+
+static void
+on_session_bus_got (GObject      *source,
+                    GAsyncResult *result,
+                    gpointer      user_data)
+{
+  g_autoptr (GTask) task = G_TASK (user_data);
+  g_autoptr (GDBusConnection) connection = NULL;
+  g_autoptr (GError) error = NULL;
+
+  connection = g_bus_get_finish (result, &error);
+  if (error)
+    {
+      g_task_return_error (task, g_steal_pointer (&error));
+      return;
+    }
+
+  meta_frame_launch_client_systemd_transient_unit (connection, task);
+}
+
+static void
+on_meta_launch_client_file_info (GObject      *source,
+                                 GAsyncResult *result,
+                                 gpointer      user_data)
+{
+  GFile *file = G_FILE (source);
+  g_autoptr (GFileInfo) info = NULL;
+  g_autoptr (GTask) task = G_TASK (user_data);
+  g_autoptr (GError) error = NULL;
+
+  info = g_file_query_info_finish (file, result, &error);
+  if (error)
+    {
+      g_task_return_error (task, g_steal_pointer (&error));
+      return;
+    }
+
+  if (g_file_info_get_file_type (info) != G_FILE_TYPE_REGULAR)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_REGULAR_FILE,
+                               "'%s' is not a regular file",
+                               g_file_peek_path (file));
+      return;
+    }
+
+  if (!g_file_info_get_attribute_boolean (info,
+                                          G_FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE))
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_REGULAR_FILE,
+                               "'%s' is not an executable file",
+                               g_file_peek_path (file));
+      return;
+    }
+
+  g_bus_get (G_BUS_TYPE_SESSION, g_task_get_cancellable (task),
+             on_session_bus_got, g_object_ref (task));
+}
+
+#endif
+
+void
+meta_frame_launch_client_async (MetaX11Display      *x11_display,
+                                const char          *display_name,
+                                GCancellable        *cancellable,
+                                GAsyncReadyCallback  callback,
+                                gpointer             user_data)
+{
+  g_autoptr (GTask) task = NULL;
+  g_autoptr (GFile) client_binary = NULL;
+
+  task = g_task_new (x11_display, cancellable, callback, user_data);
+
+#ifdef HAVE_LIBSYSTEMD
+  g_task_set_task_data (task, g_strdup (display_name), g_free);
+
+  client_binary = g_file_new_for_path (META_X11_FRAMES_CLIENT);
+  g_file_query_info_async (client_binary,
+                           G_FILE_ATTRIBUTE_STANDARD_TYPE ","
+                           G_FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE,
+                           G_FILE_QUERY_INFO_NONE,
+                           G_PRIORITY_DEFAULT, cancellable,
+                           on_meta_launch_client_file_info,
+                           g_object_ref (task));
+#else
+  g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+                           "Systemd support is not enabled");
+#endif
+}
+
+gboolean
+meta_frame_launch_client_finish (MetaX11Display  *x11_display,
+                                 GAsyncResult    *result,
+                                 GError         **error)
+{
+  g_return_val_if_fail (g_task_is_valid (result, x11_display), FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 /**
