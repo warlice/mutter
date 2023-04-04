@@ -221,6 +221,39 @@ remove_frame (MetaWindowTracker *window_tracker,
                        GUINT_TO_POINTER (xframe));
 }
 
+static void
+sync_frame_serials (GdkDisplay *display)
+{
+  Display *xdisplay = gdk_x11_display_get_xdisplay (display);
+  Window xroot = gdk_x11_display_get_xrootwindow (display);
+  Atom frame_sync_serials_atom;
+  int format;
+  Atom type;
+  unsigned long nitems, bytes_after;
+  unsigned long *data = NULL;
+
+  frame_sync_serials_atom =
+    gdk_x11_get_xatom_by_name_for_display (display,
+                                           "_MUTTER_FRAME_SYNC_SERIALS");
+
+  XGetWindowProperty (xdisplay, xroot, frame_sync_serials_atom,
+                      0, 2,
+                      False, XA_CARDINAL,
+                      &type, &format,
+                      &nitems, &bytes_after,
+                      (uint8_t **) &data);
+
+  if (data && data[0] != data[1])
+    {
+      data[1] = data[0];
+
+      XChangeProperty (xdisplay, xroot, frame_sync_serials_atom,
+                       XA_CARDINAL,
+                       32, PropModeReplace, (uint8_t *) data, 2);
+    }
+  XFree (data);
+}
+
 static gboolean
 on_xevent (GdkDisplay *display,
            XEvent     *xevent,
@@ -257,6 +290,12 @@ on_xevent (GdkDisplay *display,
                g_hash_table_contains (window_tracker->client_windows,
                                       GUINT_TO_POINTER (xwindow)))
         remove_frame (window_tracker, xwindow);
+    }
+  else if (xevent->type == PropertyNotify &&
+           xevent->xproperty.atom ==
+           gdk_x11_get_xatom_by_name_for_display (display, "_MUTTER_FRAME_SYNC_SERIALS"))
+    {
+      sync_frame_serials (display);
     }
   else if (xevent->type == PropertyNotify)
     {
@@ -346,6 +385,7 @@ meta_window_tracker_constructed (GObject *object)
 
   g_signal_connect (display, "xevent",
                     G_CALLBACK (on_xevent), object);
+  sync_frame_serials (display);
 
   gdk_x11_display_error_trap_push (display);
 
