@@ -16,7 +16,7 @@ echo \# Launching mutter > /dev/stderr
 $MUTTER --x11 --mutter-plugin="$MUTTER_TEST_PLUGIN_PATH" &
 MUTTER1_PID=$!
 gdbus wait --session org.gnome.Mutter.IdleMonitor
-echo \# Launched with pid $MUTTER1_PID
+echo \# Launched with pid $MUTTER1_PID > /dev/stderr
 
 sleep 2
 
@@ -30,9 +30,10 @@ sleep 4
 
 echo \# Replacing existing mutter with a new instance > /dev/stderr
 $MUTTER --x11 --replace --mutter-plugin="$MUTTER_TEST_PLUGIN_PATH" &
-echo \# Launched with pid $MUTTER2_PID
 MUTTER2_PID=$!
+echo \# Launched with pid $MUTTER2_PID > /dev/stderr
 wait $MUTTER1_PID
+echo \# Mutter \($MUTTER1_PID\) exited with $? > /dev/stderr
 
 sleep 2
 
@@ -45,3 +46,4 @@ sleep 1
 echo \# Terminating mutter > /dev/stderr
 kill $MUTTER2_PID
 wait $MUTTER2_PID
+echo \# Mutter \($MUTTER2_PID\) exited with $? > /dev/stderr
