@@ -748,7 +748,7 @@ meta_screen_cast_stream_src_is_enabled (MetaScreenCastStreamSrc *src)
   return priv->is_enabled;
 }
 
-static void
+void
 meta_screen_cast_stream_src_enable (MetaScreenCastStreamSrc *src)
 {
   MetaScreenCastStreamSrcPrivate *priv =
@@ -759,7 +759,7 @@ meta_screen_cast_stream_src_enable (MetaScreenCastStreamSrc *src)
   priv->is_enabled = TRUE;
 }
 
-static void
+void
 meta_screen_cast_stream_src_disable (MetaScreenCastStreamSrc *src)
 {
   MetaScreenCastStreamSrcPrivate *priv =
@@ -1117,17 +1117,32 @@ create_pipewire_stream (MetaScreenCastStreamSrc  *src,
       else
 #endif /* HAVE_NATIVE_BACKEND */
         {
+#ifdef HAVE_NATIVE_BACKEND
           params[n_params++] = push_format_object (
             &pod_builder,
             SPA_VIDEO_FORMAT_BGRx, NULL, 0,
-            SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle (&SPA_RECTANGLE (width,
-                                                                      height)),
+            SPA_FORMAT_VIDEO_size, SPA_POD_CHOICE_RANGE_Rectangle (&DEFAULT_SIZE,
+                                                                   &MIN_SIZE,
+                                                                   &MAX_SIZE),
             SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction (&SPA_FRACTION (0, 1)),
             SPA_FORMAT_VIDEO_maxFramerate,
-            SPA_POD_CHOICE_RANGE_Fraction (&max_framerate,
-                                           &min_framerate,
-                                           &max_framerate),
+            SPA_POD_CHOICE_RANGE_Fraction (&DEFAULT_FRAME_RATE,
+                                           &MIN_FRAME_RATE,
+                                           &MAX_FRAME_RATE),
             0);
+#else
+           params[n_params++] = push_format_object (
+             &pod_builder,
+             SPA_VIDEO_FORMAT_BGRx, NULL, 0,
+             SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle (&SPA_RECTANGLE (width,
+                                                                       height)),
+             SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction (&SPA_FRACTION (0, 1)),
+             SPA_FORMAT_VIDEO_maxFramerate,
+             SPA_POD_CHOICE_RANGE_Fraction (&max_framerate,
+                                            &min_framerate,
+                                            &max_framerate),
+             0);
+#endif /* HAVE_NATIVE_BACKEND */
         }
     }
   else

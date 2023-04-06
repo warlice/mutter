@@ -33,6 +33,7 @@
 #include "backends/meta-screen-cast-monitor-stream.h"
 #include "backends/meta-screen-cast-session.h"
 #include "backends/meta-stage-private.h"
+#include "backends/meta-virtual-monitor.h"
 #include "clutter/clutter.h"
 #include "clutter/clutter-mutter.h"
 #include "core/boxes-private.h"
@@ -753,6 +754,75 @@ meta_screen_cast_monitor_stream_src_init (MetaScreenCastMonitorStreamSrc *monito
 }
 
 static void
+update_virtual_monitor_mode (MetaScreenCastMonitorStreamSrc *monitor_src,
+                             struct spa_video_info_raw      *video_format)
+{
+  MetaBackend *backend = get_backend (monitor_src);
+  if (!meta_backend_is_headless (backend)) return;
+
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  MetaMonitor * meta_monitor = get_monitor (monitor_src);
+  int current_width, current_height;
+  meta_monitor_get_current_resolution (meta_monitor,
+                                       &current_width,
+                                       &current_height);
+
+  bool virtual_monitor_to_update = false;
+  if (current_width !=  video_format->size.width ||
+      current_height != video_format->size.height)
+    {
+      g_message ("Detected an update to a monitor's width/height");
+      GList *v_mon;
+      for (v_mon = meta_monitor_manager_get_virtual_monitors (monitor_manager);
+           v_mon;
+           v_mon = v_mon->next)
+        {
+          MetaVirtualMonitor *virtual_monitor = v_mon->data;
+          g_autoptr (MetaMonitorNormal) monitor_normal = NULL;
+          MetaOutput *output =
+            meta_virtual_monitor_get_output (virtual_monitor);
+          monitor_normal = meta_monitor_normal_new (monitor_manager, output);
+          if (!meta_monitor_is_same_as (META_MONITOR (monitor_normal),
+                                        meta_monitor))
+            continue;
+
+          virtual_monitor_to_update = true;
+          g_info ("update_virtual_monitor_mode: [%s] Updating monitor mode to "
+                  " width: %d, height: %d",
+                  meta_monitor_get_connector (meta_monitor),
+                  video_format->size.width, video_format->size.height);
+          float refresh_rate = ((float) video_format->max_framerate.num /
+            video_format->max_framerate.denom);
+          meta_virtual_monitor_set_mode (
+            virtual_monitor, video_format->size.width, video_format->size.height,
+            refresh_rate);
+          break;
+        }
+      if (!virtual_monitor_to_update)
+        {
+          g_info ("update_virtual_monitor_mode: Monitor %s not a virtual "
+                  "monitors", meta_monitor_get_connector(meta_monitor));
+        }
+    }
+  if (virtual_monitor_to_update)
+    {
+      g_info ("update_virtual_monitor_mode: Reload monitor manager");
+      meta_monitor_manager_reload (monitor_manager);
+    }
+}
+
+static void
+meta_screen_cast_monitor_stream_src_notify_params_updated (MetaScreenCastStreamSrc   *src,
+                                                           struct spa_video_info_raw *video_format)
+{
+  MetaScreenCastMonitorStreamSrc *monitor_src =
+    META_SCREEN_CAST_MONITOR_STREAM_SRC (src);
+
+  update_virtual_monitor_mode (monitor_src, video_format);
+}
+
+static void
 meta_screen_cast_monitor_stream_src_class_init (MetaScreenCastMonitorStreamSrcClass *klass)
 {
   MetaScreenCastStreamSrcClass *src_class =
@@ -769,4 +839,6 @@ meta_screen_cast_monitor_stream_src_class_init (MetaScreenCastMonitorStreamSrcCl
     meta_screen_cast_monitor_stream_record_follow_up;
   src_class->set_cursor_metadata =
     meta_screen_cast_monitor_stream_src_set_cursor_metadata;
+  src_class->notify_params_updated =
+    meta_screen_cast_monitor_stream_src_notify_params_updated;
 }

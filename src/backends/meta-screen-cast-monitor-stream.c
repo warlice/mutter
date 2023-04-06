@@ -26,6 +26,7 @@
 
 #include "backends/meta-logical-monitor.h"
 #include "backends/meta-screen-cast-monitor-stream-src.h"
+#include "backends/meta-virtual-monitor.h"
 
 enum
 {
@@ -42,6 +43,7 @@ struct _MetaScreenCastMonitorStream
 
   MetaMonitor *monitor;
   MetaLogicalMonitor *logical_monitor;
+  MetaScreenCastMonitorStreamSrc *src;
 };
 
 G_DEFINE_TYPE (MetaScreenCastMonitorStream,
@@ -50,7 +52,8 @@ G_DEFINE_TYPE (MetaScreenCastMonitorStream,
 
 static gboolean
 update_monitor (MetaScreenCastMonitorStream *monitor_stream,
-                MetaMonitor                 *new_monitor)
+                MetaMonitor                 *new_monitor,
+                bool                        is_virtual_backend)
 {
   MetaLogicalMonitor *new_logical_monitor;
 
@@ -59,8 +62,38 @@ update_monitor (MetaScreenCastMonitorStream *monitor_stream,
     return FALSE;
 
   if (!meta_rectangle_equal (&new_logical_monitor->rect,
-                             &monitor_stream->logical_monitor->rect))
-    return FALSE;
+                             &monitor_stream->logical_monitor->rect) &&
+      is_virtual_backend)
+    {
+      bool is_enabled = meta_screen_cast_stream_src_is_enabled (
+        META_SCREEN_CAST_STREAM_SRC (monitor_stream->src));
+      if (is_enabled)
+        {
+          g_info ("[%s] Disabling the stream source (id: %p)",
+                  meta_monitor_get_connector (new_monitor),
+                  monitor_stream->src);
+          meta_screen_cast_stream_src_disable (
+            META_SCREEN_CAST_STREAM_SRC (monitor_stream->src));
+        }
+      monitor_stream->logical_monitor->rect.width =
+        (int) roundf (new_logical_monitor->rect.width *
+                      new_logical_monitor->scale);
+      monitor_stream->logical_monitor->rect.height =
+        (int) roundf (new_logical_monitor->rect.height *
+                      new_logical_monitor->scale);
+
+      monitor_stream->logical_monitor->rect.x = new_logical_monitor->rect.x;
+      monitor_stream->logical_monitor->rect.y = new_logical_monitor->rect.y;
+
+      if (is_enabled)
+        {
+          g_info ("[%s] Renabling the stream source (id: %p)",
+                  meta_monitor_get_connector (new_monitor),
+                  monitor_stream->src);
+          meta_screen_cast_stream_src_enable (
+            META_SCREEN_CAST_STREAM_SRC (monitor_stream->src));
+        }
+    }
 
   g_set_object (&monitor_stream->monitor, new_monitor);
   g_set_object (&monitor_stream->logical_monitor, new_logical_monitor);
@@ -73,6 +106,7 @@ on_monitors_changed (MetaMonitorManager          *monitor_manager,
                      MetaScreenCastMonitorStream *monitor_stream)
 {
   MetaMonitor *new_monitor = NULL;
+  bool is_virtual_backend = false;
   GList *monitors;
   GList *l;
 
@@ -84,11 +118,16 @@ on_monitors_changed (MetaMonitorManager          *monitor_manager,
       if (meta_monitor_is_same_as (monitor_stream->monitor, other_monitor))
         {
           new_monitor = other_monitor;
+          GList *virtual_monitors =
+            meta_monitor_manager_get_virtual_monitors (monitor_manager);
+          is_virtual_backend =
+            virtual_monitors && g_list_length (virtual_monitors) > 0;
           break;
         }
     }
 
-  if (!new_monitor || !update_monitor (monitor_stream, new_monitor))
+  if (!new_monitor ||
+      !update_monitor (monitor_stream, new_monitor, is_virtual_backend))
     meta_screen_cast_stream_close (META_SCREEN_CAST_STREAM (monitor_stream));
 }
 
@@ -158,6 +197,7 @@ meta_screen_cast_monitor_stream_create_src (MetaScreenCastStream  *stream,
   if (!monitor_stream_src)
     return NULL;
 
+  monitor_stream->src = monitor_stream_src;
   return META_SCREEN_CAST_STREAM_SRC (monitor_stream_src);
 }
 
