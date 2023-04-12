@@ -84,7 +84,7 @@ init_wrapper_window (MetaFrame *frame)
   xattr.background_pixel = BlackPixel (x11_display->xdisplay,
                                        DefaultScreen (x11_display->xdisplay));
   xattr.border_pixel = xattr.background_pixel;
-  xattr.event_mask = StructureNotifyMask | PropertyChangeMask;
+  xattr.event_mask = StructureNotifyMask | SubstructureNotifyMask;
   xattr.bit_gravity = NorthWestGravity;
   xattr.colormap =
     XCreateColormap (x11_display->xdisplay,
@@ -94,8 +94,7 @@ init_wrapper_window (MetaFrame *frame)
 
   meta_frame_calc_borders (frame, &borders);
 
-  mask = (CWBorderPixel | CWColormap | CWEventMask | CWBitGravity |
-          SubstructureNotifyMask);
+  mask = (CWBorderPixel | CWColormap | CWEventMask | CWBitGravity);
 
   frame->wrapper_xwindow = XCreateWindow (x11_display->xdisplay,
                                           frame->xwindow,
@@ -108,9 +107,6 @@ init_wrapper_window (MetaFrame *frame)
                                           InputOutput,
                                           window->xvisual,
                                           mask, &xattr);
-  XSelectInput (x11_display->xdisplay,
-                frame->wrapper_xwindow,
-                StructureNotifyMask | SubstructureNotifyMask);
 
   XReparentWindow (x11_display->xdisplay,
                    window->xwindow,
