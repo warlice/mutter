@@ -93,6 +93,7 @@ sync_frame_fullscreen_state (MetaWindow *window,
                        window->frame->rect.y + borders.invisible.top);
       XUnmapWindow (x11_display->xdisplay,
                     frame->xwindow);
+      window->reparents_pending += 1;
 
       meta_stack_tracker_record_add (window->display->stack_tracker,
                                      frame->wrapper_xwindow,
@@ -116,7 +117,6 @@ sync_frame_fullscreen_state (MetaWindow *window,
                        frame->xwindow,
                        borders.total.left,
                        borders.total.top);
-      window->reparents_pending += 1;
       window->reparents_pending += 1;
 
       meta_stack_tracker_record_add (window->display->stack_tracker,
