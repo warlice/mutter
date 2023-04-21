@@ -36,9 +36,9 @@
 #include <X11/Xatom.h>
 #include <X11/extensions/shape.h>
 
-#define EVENT_MASK (SubstructureRedirectMask |                     \
-                    StructureNotifyMask | SubstructureNotifyMask | \
-                    PropertyChangeMask | FocusChangeMask)
+#define EVENT_MASK (SubstructureRedirectMask | \
+                    PropertyChangeMask | \
+                    FocusChangeMask)
 
 static void
 request_frame (MetaWindow *window)
@@ -84,7 +84,7 @@ init_wrapper_window (MetaFrame *frame)
   xattr.background_pixel = BlackPixel (x11_display->xdisplay,
                                        DefaultScreen (x11_display->xdisplay));
   xattr.border_pixel = xattr.background_pixel;
-  xattr.event_mask = StructureNotifyMask | SubstructureNotifyMask;
+  xattr.event_mask = EVENT_MASK | StructureNotifyMask | SubstructureNotifyMask;
   xattr.bit_gravity = NorthWestGravity;
   xattr.colormap =
     XCreateColormap (x11_display->xdisplay,
