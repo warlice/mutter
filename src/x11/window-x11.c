@@ -2837,6 +2837,28 @@ restack_window (MetaWindow *window,
    }
 }
 
+static gboolean
+configure_request_allowed_for_window (MetaWindow *window,
+                                      XEvent     *event)
+{
+  MetaRectangle monitor_rect;
+
+  if (!window->monitor)
+    return TRUE;
+  if ((event->xconfigurerequest.value_mask & (CWX | CWY)) == 0)
+    return TRUE;
+  if (window->fullscreen)
+    return TRUE;
+
+  monitor_rect = meta_logical_monitor_get_layout (window->monitor);
+
+  /* Check only x/y and allow windows to grow out of monitor */
+  return (event->xconfigurerequest.x >= monitor_rect.x &&
+          event->xconfigurerequest.y >= monitor_rect.y &&
+          event->xconfigurerequest.x < monitor_rect.x + monitor_rect.width &&
+          event->xconfigurerequest.y < monitor_rect.y + monitor_rect.height);
+}
+
 gboolean
 meta_window_x11_configure_request (MetaWindow *window,
                                    XEvent     *event)
@@ -2853,13 +2875,16 @@ meta_window_x11_configure_request (MetaWindow *window,
   if (event->xconfigurerequest.value_mask & CWBorderWidth)
     priv->border_width = event->xconfigurerequest.border_width;
 
-  meta_window_move_resize_request(window,
-                                  event->xconfigurerequest.value_mask,
-                                  window->size_hints.win_gravity,
-                                  event->xconfigurerequest.x,
-                                  event->xconfigurerequest.y,
-                                  event->xconfigurerequest.width,
-                                  event->xconfigurerequest.height);
+  if (configure_request_allowed_for_window (window, event))
+    {
+      meta_window_move_resize_request (window,
+                                       event->xconfigurerequest.value_mask,
+                                       window->size_hints.win_gravity,
+                                       event->xconfigurerequest.x,
+                                       event->xconfigurerequest.y,
+                                       event->xconfigurerequest.width,
+                                       event->xconfigurerequest.height);
+    }
 
   /* Handle stacking. We only handle raises/lowers, mostly because
    * stack.c really can't deal with anything else.  I guess we'll fix
