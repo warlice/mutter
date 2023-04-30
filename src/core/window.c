@@ -3825,8 +3825,13 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   did_placement = !window->placed && window->calc_placement;
 
-  /* We don't need it in the idle queue anymore. */
-  meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
+  /* We don't need it in the idle queue anymore, but we keep it in
+   * idle queue on ACKed configurations from Wayland clients, as the
+   * ACKed configuration may be more stale than the idle queued
+   * request.
+   */
+  if (!(flags & META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE))
+    meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
 
   if ((flags & META_MOVE_RESIZE_RESIZE_ACTION) && (flags & META_MOVE_RESIZE_MOVE_ACTION))
     {
