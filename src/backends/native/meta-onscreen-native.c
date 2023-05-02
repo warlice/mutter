@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Intel Corporation.
+ * Copyright (C) 2011,2023 Intel Corporation.
  * Copyright (C) 2016-2020 Red Hat
  * Copyright (c) 2018,2019 DisplayLink (UK) Ltd.
  *
@@ -32,6 +32,7 @@
 #include <drm_fourcc.h>
 
 #include "backends/meta-egl-ext.h"
+#include "backends/meta-hdr.h"
 #include "backends/native/meta-crtc-kms.h"
 #include "backends/native/meta-device-pool.h"
 #include "backends/native/meta-drm-buffer-dumb.h"
@@ -989,6 +990,60 @@ update_secondary_gpu_state_post_swap_buffers (CoglOnscreen   *onscreen,
     }
 }
 
+/* Check if the content has HDR metadata, hence enable HDR */
+static void
+meta_onscreen_native_maybe_supports_hdr_metadata (CoglOnscreen *onscreen)
+{
+  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+  MetaGpu *gpu = meta_crtc_get_gpu (onscreen_native->crtc);
+  MetaBackend *backend = meta_gpu_get_backend (gpu);
+  gboolean has_metadata = FALSE;
+
+  meta_verbose ("\nTRACE: File: %s, Function: %s\n", __FILE__, __FUNCTION__);
+
+  has_metadata = meta_hdr_maybe_supports_metadata (backend);
+
+  if (has_metadata)
+  {
+    MetaOutputColorspace color_space;
+    MetaOutputHdrMetadata hdr_metadata;
+
+    color_space = META_OUTPUT_COLORSPACE_BT2020;
+    hdr_metadata = (MetaOutputHdrMetadata) {
+          .active = TRUE,
+          .eotf = META_OUTPUT_HDR_METADATA_EOTF_PQ,
+    };
+
+    hdr_metadata.mastering_display_primaries[0].x = 0.6796;
+    hdr_metadata.mastering_display_primaries[0].y = 0.3203;
+    hdr_metadata.mastering_display_primaries[1].x = 0.2656;
+    hdr_metadata.mastering_display_primaries[1].y = 0.6914;
+    hdr_metadata.mastering_display_primaries[2].x = 0.1484;
+    hdr_metadata.mastering_display_primaries[2].y = 0.0585;
+
+    hdr_metadata.mastering_display_white_point.x = 0.3125;
+    hdr_metadata.mastering_display_white_point.y = 0.3281;
+
+    hdr_metadata.mastering_display_max_luminance = 1000.0;
+    hdr_metadata.mastering_display_min_luminance = 0.0507;
+
+    hdr_metadata.max_cll = 0.0;
+    hdr_metadata.max_fall = 0.0;
+
+    meta_verbose ("\nTRACE: File: %s, Function: %s, set colorspace & hdr metadata 1\n", __FILE__, __FUNCTION__);
+
+    /* get the content colorspace from client */
+    // color_space = meta_hdr_get_colorspace (backend);
+    meta_output_set_color_space (onscreen_native->output, color_space);
+
+    /* get the content hdr metadata from client */
+    // hdr_metadata = meta_hdr_get_metadata (backend);
+    meta_output_set_hdr_metadata (onscreen_native->output, &hdr_metadata);
+
+    meta_verbose ("\nTRACE: File: %s, Function: %s, set colorspace & hdr metadata 2\n", __FILE__, __FUNCTION__);
+  }
+}
+
 static void
 ensure_crtc_modes (CoglOnscreen  *onscreen,
                    MetaKmsUpdate *kms_update)
@@ -1480,6 +1535,13 @@ meta_onscreen_native_prepare_frame (CoglOnscreen *onscreen,
       meta_kms_update_set_privacy_screen (kms_update, kms_connector, enabled);
     }
 
+  /* check if the content has HDR10 metadata, should it be per frame? */
+  if (meta_output_is_hdr_enabled (onscreen_native->output))
+    {
+      meta_verbose ("\nTRACE: File: %s, Function: %s, hdr is enabled\n", __FILE__, __FUNCTION__);
+      meta_onscreen_native_maybe_supports_hdr_metadata (onscreen);
+    }
+
   if (onscreen_native->is_color_space_invalid)
     {
       MetaKmsConnector *kms_connector =
@@ -1490,6 +1552,7 @@ meta_onscreen_native_prepare_frame (CoglOnscreen *onscreen,
       kms_update = meta_frame_native_ensure_kms_update (frame_native,
                                                         kms_device);
 
+      meta_verbose ("\nTRACE: File: %s, Function: %s, update set colorspace\n", __FILE__, __FUNCTION__);
       color_space = meta_output_peek_color_space (onscreen_native->output);
       meta_kms_update_set_color_space (kms_update, kms_connector, color_space);
     }
@@ -1504,6 +1567,7 @@ meta_onscreen_native_prepare_frame (CoglOnscreen *onscreen,
       kms_update = meta_frame_native_ensure_kms_update (frame_native,
                                                         kms_device);
 
+      meta_verbose ("\nTRACE: File: %s, Function: %s, update set hdr metadata\n", __FILE__, __FUNCTION__);
       metadata = meta_output_peek_hdr_metadata (onscreen_native->output);
       meta_kms_update_set_hdr_metadata (kms_update, kms_connector, metadata);
     }

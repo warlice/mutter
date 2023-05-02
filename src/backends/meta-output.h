@@ -272,6 +272,8 @@ void meta_output_set_hdr_metadata (MetaOutput            *output,
 
 MetaOutputHdrMetadata * meta_output_peek_hdr_metadata (MetaOutput *output);
 
+gboolean meta_output_is_hdr_enabled (MetaOutput *output);
+
 void meta_output_add_possible_clone (MetaOutput *output,
                                      MetaOutput *possible_clone);
 
