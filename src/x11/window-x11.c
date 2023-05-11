@@ -1906,8 +1906,7 @@ meta_window_x11_are_updates_frozen (MetaWindow *window)
   MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
   MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
 
-  if (window->frame &&
-      meta_sync_counter_is_waiting (meta_frame_get_sync_counter (window->frame)))
+  if (window->frame && meta_frame_is_frozen (window->frame))
     return TRUE;
 
   return meta_sync_counter_is_waiting (&priv->sync_counter);

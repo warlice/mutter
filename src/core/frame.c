@@ -698,3 +698,9 @@ meta_frame_set_opaque_region (MetaFrame *frame,
 
   meta_compositor_window_shape_changed (window->display->compositor, window);
 }
+
+gboolean
+meta_frame_is_frozen (MetaFrame *frame)
+{
+  return meta_sync_counter_is_waiting (&frame->sync_counter);
+}

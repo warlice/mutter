@@ -87,3 +87,5 @@ MetaSyncCounter * meta_frame_get_sync_counter (MetaFrame *frame);
 
 void meta_frame_set_opaque_region (MetaFrame *frame,
                                    MtkRegion *region);
+
+gboolean meta_frame_is_frozen (MetaFrame *frame);
