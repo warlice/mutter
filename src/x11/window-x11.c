@@ -4408,15 +4408,9 @@ meta_window_x11_is_awaiting_sync_response (MetaWindow *window)
 void
 meta_window_x11_check_update_resize (MetaWindow *window)
 {
-  MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
-  MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
   MetaWindowDrag *window_drag;
 
-  if (window->frame &&
-      meta_sync_counter_is_waiting (meta_frame_get_sync_counter (window->frame)))
-    return;
-
-  if (meta_sync_counter_is_waiting (&priv->sync_counter))
+  if (meta_window_updates_are_frozen (window))
     return;
 
   window_drag =
