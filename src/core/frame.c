@@ -137,6 +137,7 @@ sync_frame_fullscreen_state (MetaWindow *window,
   /* Move keybindings to frame or wrapper instead of window */
   meta_window_grab_keys (window);
 
+  meta_compositor_sync_updates_frozen (window->display->compositor, window);
   meta_window_queue (window, META_QUEUE_CALC_SHOWING);
   meta_window_queue (window, META_QUEUE_MOVE_RESIZE);
 }
@@ -812,5 +813,8 @@ meta_frame_set_opaque_region (MetaFrame *frame,
 gboolean
 meta_frame_is_frozen (MetaFrame *frame)
 {
+  if (frame->is_fullscreen)
+    return FALSE;
+
   return meta_sync_counter_is_waiting (&frame->sync_counter);
 }
