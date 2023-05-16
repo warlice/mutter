@@ -107,4 +107,7 @@ const char* meta_workspace_get_name (MetaWorkspace *workspace);
 
 void meta_workspace_index_changed (MetaWorkspace *workspace);
 
+META_EXPORT_TEST
+GSList * meta_workspace_get_builtin_struts (MetaWorkspace *workspace);
+
 #endif
