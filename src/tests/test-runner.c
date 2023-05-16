@@ -1195,8 +1195,8 @@ test_case_do (TestCase    *test,
 
       MetaRectangle frame_rect;
       meta_window_get_frame_rect (window, &frame_rect);
-      int x = atoi (argv[2]);
-      int y = atoi (argv[3]);
+      int x = parse_window_size (window, argv[2]);
+      int y = parse_window_size (window, argv[3]);
       if (frame_rect.x != x || frame_rect.y != y)
         {
           g_set_error (error,
