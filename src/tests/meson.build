@@ -565,6 +565,7 @@ stacking_tests = [
   'fullscreen-maximize',
   'unfullscreen-strut-change',
   'strut-changes',
+  'fixme-strut-monitor-changes',
   'restore-position',
   'default-size',
   'modals',
@@ -589,6 +590,7 @@ foreach stacking_test: stacking_tests
     ],
     is_parallel: false,
     timeout: 60,
+    should_fail: stacking_test.startswith('fixme-'),
   )
 
   if have_installed_tests
