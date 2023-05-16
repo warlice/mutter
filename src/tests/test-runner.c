@@ -425,46 +425,77 @@ test_case_check_xserver_stacking (TestCase *test,
 }
 
 static int
-maybe_divide (const char *str,
-              int         value)
+maybe_multiply (const char  *str,
+                int          value,
+                const char **out_str)
 {
-  if (strstr (str, "/") == str)
+  *out_str = str;
+
+  if (str[0] == '*')
     {
-      int divisor;
+      double multiplier;
 
       str += 1;
-      divisor = atoi (str);
+      multiplier = g_strtod (str, (char **) out_str);
 
-      value /= divisor;
+      value = round (multiplier * value);
     }
 
   return value;
 }
 
 static int
-parse_window_size (MetaWindow *window,
-                   const char *size_str)
+maybe_divide (const char  *str,
+              int          value,
+              const char **out_str)
 {
-  MetaLogicalMonitor *logical_monitor;
-  MetaRectangle logical_monitor_layout;
-  int value;
+  *out_str = str;
 
-  logical_monitor = meta_window_find_monitor_from_frame_rect (window);
-  g_assert_nonnull (logical_monitor);
+  if (str[0] == '/')
+    {
+      double divider;
 
-  logical_monitor_layout = meta_logical_monitor_get_layout (logical_monitor);
+      str += 1;
+      divider = g_strtod (str, (char **) out_str);
+
+      value = round (value / divider);
+    }
+
+  return value;
+}
+
+static int
+maybe_do_math (const char  *str,
+               int          value,
+               const char **out_str)
+{
+  switch (str[0])
+    {
+    case '*':
+      value = maybe_multiply (str, value, &str);
+      break;
+    case '/':
+      value = maybe_divide (str, value, &str);
+      break;
+    default:
+      *out_str = str;
+      return value;
+    }
+
+  return maybe_do_math (str, value, out_str);
+}
 
   if (strstr (size_str, "MONITOR_WIDTH") == size_str)
     {
       value = logical_monitor_layout.width;
       size_str += strlen ("MONITOR_WIDTH");
-      value = maybe_divide (size_str, value);
+      value = maybe_do_math (size_str, value, &size_str);
     }
   else if (strstr (size_str, "MONITOR_HEIGHT") == size_str)
     {
       value = logical_monitor_layout.height;
       size_str += strlen ("MONITOR_HEIGHT");
-      value = maybe_divide (size_str, value);
+      value = maybe_do_math (size_str, value, &size_str);
     }
   else
     {
