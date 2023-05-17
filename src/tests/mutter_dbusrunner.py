@@ -7,6 +7,7 @@ import fcntl
 import subprocess
 import getpass
 import argparse
+import tempfile
 from collections import OrderedDict
 from dbusmock import DBusTestCase
 from dbus.mainloop.glib import DBusGMainLoop
@@ -203,12 +204,32 @@ def meta_run(klass):
     parser = argparse.ArgumentParser()
     parser.add_argument('--kvm', action='store_true', default=False)
     parser.add_argument('--launch', action='append', default=[])
+    parser.add_argument('--isolate-dirs', action='store_true', default=False)
     (args, rest) = parser.parse_known_args(sys.argv)
 
-    rest.pop(0)
-    if rest[0] == '--':
-      rest.pop(0)
+    while True:
+        rest.pop(0)
+        if not rest:
+            parser.error('Command separator `--` not found')
+        if rest[0] == '--':
+            rest.pop(0)
+            break
 
+    if args.isolate_dirs:
+        with tempfile.TemporaryDirectory(prefix='mutter-testroot-') as test_root:
+            env_dirs = ['HOME', 'TMPDIR', 'XDG_RUNTIME_DIR', 'XDG_CONFIG_DIR']
+            os.environ['MUTTER_TEST_ROOT'] = test_root
+            print('Setup MUTTER_TEST_ROOT as', test_root, file=sys.stderr)
+            for env_dir in env_dirs:
+                directory = os.path.join(test_root, env_dir.lower())
+                os.mkdir(directory, mode=0o700)
+                os.environ[env_dir] = directory
+                print('Setup', env_dir, 'as', directory, file=sys.stderr)
+            return meta_run_klass(klass, args, rest)
+    else:
+        return meta_run_klass(klass, args, rest)
+
+def meta_run_klass(klass, args, rest):
     klass.setUpClass(args.kvm, args.launch)
     runner = klass()
     runner.assertGreater(len(rest), 0)

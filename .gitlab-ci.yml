@@ -479,6 +479,7 @@ build-wayland-only@x86_64:
     - xvfb-run -a -s "$XVFB_SERVER_ARGS"
         ./src/tests/meta-dbus-runner.py
           --launch=wireplumber
+          --
           meson test
             -C build
             --setup plain
@@ -616,6 +617,7 @@ dist-mutter:
     - xvfb-run -a -s "$XVFB_SERVER_ARGS"
         ./src/tests/meta-dbus-runner.py
           --launch=wireplumber
+          --
           meson dist -C build
   rules:
     - if: '$CI_PIPELINE_SOURCE != "merge_request_event"'
