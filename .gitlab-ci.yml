@@ -472,19 +472,24 @@ build-wayland-only@x86_64:
   script:
     - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
     - xvfb-run -a -s "$XVFB_SERVER_ARGS"
-        ./src/tests/meta-dbus-runner.py
-          --launch=wireplumber
-          --
-          meson test
-            -C build
-            --setup plain
-            --no-suite 'mutter/kvm'
-            --no-rebuild
-            --timeout-multiplier 10
-            --print-errorlogs
+        meson test
+          -C build
+          --no-suite 'mutter/kvm'
+          --no-rebuild
+          --timeout-multiplier 10
+          --print-errorlogs
+    - xvfb-run -a -s "$XVFB_SERVER_ARGS"
+        meson test
+          -C build
+          --setup no_catch
+          --suite mutter/ignore-catch
+          --suite ignore-catch
+          --no-rebuild
+          --timeout-multiplier 10
+          --print-errorlogs
   artifacts:
     reports:
-      junit: "build/meson-logs/testlog-plain.junit.xml"
+      junit: "build/meson-logs/testlog*.junit.xml"
 
 test-mutter@x86_64:
   extends:
@@ -610,10 +615,7 @@ dist-mutter:
         -Dbuildtype=debugoptimized
     - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
     - xvfb-run -a -s "$XVFB_SERVER_ARGS"
-        ./src/tests/meta-dbus-runner.py
-          --launch=wireplumber
-          --
-          meson dist -C build
+        meson dist -C build
   rules:
     - if: '$CI_PIPELINE_SOURCE != "merge_request_event"'
       when: manual
