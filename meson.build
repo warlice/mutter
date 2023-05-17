@@ -375,6 +375,7 @@ if have_tests
   meta_dbus_runner = find_program('src/tests/meta-dbus-runner.py')
   default_test_wrappers = [
     meta_dbus_runner,
+    '--isolate-dirs',
     '--',
   ]
 

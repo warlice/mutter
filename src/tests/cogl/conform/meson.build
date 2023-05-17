@@ -98,7 +98,6 @@ foreach cogl_test: cogl_tests
     test(test_name + '-' + variant, test_executable,
       suite: ['cogl', 'cogl/conform'],
       env: variant_test_env,
-      is_parallel: false,
       should_fail: variant in known_failures,
       depends: default_plugin,
     )

@@ -78,6 +78,5 @@ foreach test : clutter_conform_tests
     suite: ['clutter', 'clutter/conform'],
     env: test_env,
     depends: default_plugin,
-    is_parallel: false,
   )
 endforeach

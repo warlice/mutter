@@ -250,6 +250,10 @@ test_cases += [
       test_client,
       x11_frames,
     ],
+    # FIXME: Enable this when gtk4 and gtk3 fixes are in CI:
+    # - https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/6046
+    # - https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/6047
+    'is_parallel': false,
   },
   {
     'name': 'monitor-utils',
@@ -531,6 +535,7 @@ if have_native_tests
       {
         'name': 'xwayland',
         'suite': 'wayland',
+        'is_parallel': false,
         'depends': [
           test_client,
           x11_compositor_checker,
@@ -578,7 +583,7 @@ if have_native_tests
       suite: ['core', 'mutter/' + test_case['suite']],
       env: test_env,
       depends: test_depends,
-      is_parallel: false,
+      is_parallel: test_case.get('is_parallel', true),
       timeout: 60,
     )
   endforeach
@@ -630,7 +635,6 @@ foreach stacking_test: stacking_tests
       files('stacking' / stacking_test + '.metatest'),
     ],
     depends: default_plugin,
-    is_parallel: false,
     timeout: 60,
   )
 
@@ -702,7 +706,6 @@ if have_kvm_tests or have_tty_tests
       test('tty-' + test_case['name'], test_case['executable'],
         suite: ['core', 'mutter/tty', 'mutter/tty/' + test_case['suite']],
         env: test_case['env'],
-        is_parallel: false,
         timeout: 60,
       )
     endforeach
@@ -750,7 +753,6 @@ test('get-state-tool-gio', mutter,
   ],
   suite: ['tools'],
   env: tools_test_env,
-  is_parallel: false,
   timeout: 60,
 )
 
@@ -769,6 +771,5 @@ test('get-state-tool-gdbus', mutter,
   ],
   suite: ['tools'],
   env: tools_test_env,
-  is_parallel: false,
   timeout: 60,
 )
