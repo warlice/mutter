@@ -187,6 +187,8 @@ ret = (unix_fd, False)
         wrapper = env.get('META_DBUS_RUNNER_WRAPPER')
         if wrapper == 'gdb':
             args = ['gdb', '-ex', 'r', '-ex', 'bt full', '--args'] + args
+        elif wrapper == 'rr':
+            args = ['rr', 'record'] + args
         elif wrapper:
             args = wrapper.split(' ') + args
 
