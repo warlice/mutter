@@ -570,7 +570,17 @@ if have_native_tests
     },
   ]
 
+  sh = find_program('sh', required: true)
+
   foreach test_case: test_cases
+    if test_case.get('skip', false)
+      test(test_case['name'], sh,
+        args: ['-c', 'exit 77'],
+        suite: ['core', 'mutter/' + test_case['suite']],
+      )
+      continue
+    endif
+
     test_executable = executable('mutter-' + test_case['name'],
       sources: test_case['sources'],
       include_directories: tests_includes,
