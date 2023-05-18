@@ -182,6 +182,7 @@ test_runner = executable('mutter-test-runner',
 )
 
 meta_dbus_runner = find_program('meta-dbus-runner.py')
+wrappers_launcher = find_program('wrappers-launcher.sh')
 
 tests_datadir = pkgdatadir / 'tests'
 
@@ -578,8 +579,18 @@ if have_native_tests
     )
 
     test_depends = [ default_plugin ] + test_case.get('depends', [])
+    test_args = test_case.get('args', [])
+    wrappers = test_case.get('wrappers', [])
+
+    if wrappers.length() > 0
+      test_args = []
+      test_args = wrappers + [ '--', test_executable.full_path() ] + test_args
+      test_depends += test_executable
+      test_executable = wrappers_launcher
+    endif
 
     test(test_case['name'], test_executable,
+      args: test_args,
       suite: ['core', 'mutter/' + test_case['suite']],
       env: test_env,
       depends: test_depends,
