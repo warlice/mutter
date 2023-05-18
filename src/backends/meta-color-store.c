@@ -345,10 +345,12 @@ init_profile_directory (MetaColorStore  *color_store,
                                          "icc", NULL);
   icc_directory = g_file_new_for_path (icc_directory_path);
 
-  if (!g_file_query_exists (icc_directory, NULL))
+  if (!g_file_make_directory_with_parents (icc_directory, NULL, &local_error))
     {
-      if (!g_file_make_directory_with_parents (icc_directory, NULL, error))
+      if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_EXISTS))
         return FALSE;
+
+      g_clear_error (&local_error);
     }
 
   color_store->icc_directory_monitor =
