@@ -293,6 +293,8 @@ test_cases += [
 ]
 
 if have_native_tests
+  pipewire = find_program('pipewire', required: true)
+  wireplumber = find_program('wireplumber', required: true)
   screen_cast_client = executable('mutter-screen-cast-client',
     sources: [
       'screen-cast-client.c',
@@ -336,6 +338,10 @@ if have_native_tests
         'native-screen-cast.c',
       ],
       'depends': [ screen_cast_client ],
+      'wrappers': [
+        pipewire.full_path(),
+        wireplumber.full_path(),
+      ],
     },
     {
       'name': 'pointer-constraints',
