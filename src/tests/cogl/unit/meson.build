@@ -54,6 +54,7 @@ foreach unit_test: cogl_unit_tests
       env: variant_test_env,
       is_parallel: false,
       should_fail: not should_pass,
+      depends: default_plugin,
     )
   endforeach
 endforeach

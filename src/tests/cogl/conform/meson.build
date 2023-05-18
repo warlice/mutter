@@ -100,6 +100,7 @@ foreach cogl_test: cogl_tests
       env: variant_test_env,
       is_parallel: false,
       should_fail: variant in known_failures,
+      depends: default_plugin,
     )
   endforeach
 endforeach

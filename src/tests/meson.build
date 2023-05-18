@@ -626,6 +626,7 @@ foreach stacking_test: stacking_tests
     args: [
       files('stacking' / stacking_test + '.metatest'),
     ],
+    depends: default_plugin,
     is_parallel: false,
     timeout: 60,
   )
