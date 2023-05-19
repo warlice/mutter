@@ -40,8 +40,13 @@ foreach test_case: privileged_tests
   endforeach
   vm_env = ' '.join(vm_env_entries)
 
+  suites = []
+  foreach suite: test_case.get('suite', [])
+    suites += 'mutter/kvm/' + suite
+  endforeach
+
   test('kvm-' + test_case['name'], virtme_run,
-    suite: ['core', 'mutter/kvm', 'mutter/kvm/' + test_case['suite']],
+    suite: ['core', 'mutter/kvm'] + suites,
     depends: [
       kernel_image_target,
     ],

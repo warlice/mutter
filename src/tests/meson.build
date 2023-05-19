@@ -225,7 +225,7 @@ privileged_test_cases = []
 test_cases += [
   {
     'name': 'unit',
-    'suite': 'unit',
+    'suite': [ 'unit' ],
     'sources': [
       'unit-tests.c',
       'boxes-tests.c',
@@ -245,7 +245,7 @@ test_cases += [
   },
   {
     'name': 'monitor-unit',
-    'suite': 'backend',
+    'suite': [ 'backend' ],
     'sources': [ 'monitor-unit-tests.c', ],
     'depends': [
       test_client,
@@ -258,12 +258,12 @@ test_cases += [
   },
   {
     'name': 'monitor-utils',
-    'suite': 'unit',
+    'suite': [ 'unit' ],
     'sources': [ 'monitor-util-tests.c', ],
   },
   {
     'name': 'stage-views',
-    'suite': 'compositor',
+    'suite': [ 'compositor' ],
     'sources': [ 'stage-view-tests.c', ],
     'depends': [
       test_client,
@@ -272,22 +272,22 @@ test_cases += [
   },
   {
     'name': 'anonymous-file',
-    'suite': 'unit',
+    'suite': [ 'unit' ],
     'sources': [ 'anonymous-file.c', ],
   },
   {
     'name': 'edid',
-    'suite': 'unit',
+    'suite': [ 'unit' ],
     'sources': [ 'edid-tests.c', ],
   },
   {
     'name': 'color-management',
-    'suite': 'unit',
+    'suite': [ 'unit' ],
     'sources': [ 'color-management-tests.c', ],
   },
   {
     'name': 'color-management-profile-conflict',
-    'suite': 'unit',
+    'suite': [ 'unit' ],
     'sources': [ 'color-management-profile-conflict-test.c', ],
   },
 ]
@@ -319,12 +319,12 @@ if have_native_tests
   test_cases += [
     {
       'name': 'kms-utils',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native' ],
       'sources': [ 'kms-utils-unit-tests.c', ],
     },
     {
       'name': 'native-unit',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native' ],
       'sources': [
         'native-headless.c',
         'native-virtual-monitor.c',
@@ -333,7 +333,7 @@ if have_native_tests
     },
     {
       'name': 'native-screen-cast',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native' ],
       'sources': [
         'native-screen-cast.c',
       ],
@@ -345,18 +345,18 @@ if have_native_tests
     },
     {
       'name': 'pointer-constraints',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native' ],
       'sources': [ 'native-pointer-constraints.c' ],
       'depends': [ test_client ],
     },
     {
       'name': 'ref-test-sanity',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native' ],
       'sources': [ 'ref-test-sanity.c' ],
     },
     {
       'name': 'persistent-virtual-monitor',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native' ],
       'sources': [ 'native-persistent-virtual-monitor.c' ],
     },
   ]
@@ -381,7 +381,7 @@ if have_native_tests
   kms_test_cases = [
     {
       'name': 'kms-force-atomic-sanity',
-      'suite': 'backends/native/kms',
+      'suite': [ 'backends/native/kms' ],
       'sources': [
         'native-kms-force-atomic-sanity.c',
       ],
@@ -389,7 +389,7 @@ if have_native_tests
     },
     {
       'name': 'kms-force-simple-sanity',
-      'suite': 'backends/native/kms',
+      'suite': [ 'backends/native/kms' ],
       'sources': [
         'native-kms-force-simple-sanity.c',
       ],
@@ -397,7 +397,7 @@ if have_native_tests
     },
     {
       'name': 'kms-render',
-      'suite': 'backends/native/kms',
+      'suite': [ 'backends/native/kms' ],
       'sources': [
         'native-kms-render.c',
         wayland_test_utils,
@@ -406,7 +406,7 @@ if have_native_tests
     },
     {
       'name': 'kms-device',
-      'suite': 'backends/native/kms',
+      'suite': [ 'backends/native/kms' ],
       'sources': [
         'meta-kms-test-utils.c',
         'meta-kms-test-utils.h',
@@ -416,7 +416,7 @@ if have_native_tests
     },
     {
       'name': 'kms-update',
-      'suite': 'backends/native/kms',
+      'suite': [ 'backends/native/kms' ],
       'sources': [
         'meta-kms-test-utils.c',
         'meta-kms-test-utils.h',
@@ -426,12 +426,12 @@ if have_native_tests
     },
     {
       'name': 'kms-headless-start',
-      'suite': 'backend/native/kms',
+      'suite': [ 'backend/native/kms' ],
       'sources': [ 'native-kms-headless-start.c', ],
     },
     {
       'name': 'kms-hotplug',
-      'suite': 'backends/native/kms',
+      'suite': [ 'backends/native/kms' ],
       'sources': [
         'meta-kms-test-utils.c',
         'meta-kms-test-utils.h',
@@ -441,7 +441,7 @@ if have_native_tests
     },
     {
       'name': 'kms-cursor-hotplug',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native' ],
       'sources': [
         'native-kms-cursor-hotplug.c',
         wayland_test_utils,
@@ -455,14 +455,14 @@ if have_native_tests
   test_cases += [
     {
       'name': 'wayland-client-tests',
-      'suite': 'wayland',
+      'suite': [ 'wayland' ],
       'sources': [
         'wayland-client-tests.c',
       ],
     },
     {
       'name': 'wayland-fullscreen',
-      'suite': 'wayland',
+      'suite': [ 'wayland' ],
       'sources': [
         'wayland-fullscreen-test.c',
         wayland_test_utils,
@@ -473,7 +473,7 @@ if have_native_tests
     },
     {
       'name': 'wayland-fractional-scale',
-      'suite': 'wayland',
+      'suite': [ 'wayland' ],
       'sources': [
         'wayland-fractional-scale-test.c',
         wayland_test_utils,
@@ -484,7 +484,7 @@ if have_native_tests
     },
     {
       'name': 'wayland-unit',
-      'suite': 'wayland',
+      'suite': [ 'wayland' ],
       'sources': [
         'wayland-unit-tests.c',
         dummy_client_header,
@@ -526,7 +526,7 @@ if have_native_tests
     test_cases += [
       {
         'name': 'wayland-x11-interop',
-        'suite': 'wayland',
+        'suite': [ 'wayland' ],
         'sources': [
           'wayland-x11-interop-tests.c',
           wayland_test_client_utils,
@@ -541,7 +541,7 @@ if have_native_tests
       },
       {
         'name': 'xwayland',
-        'suite': 'wayland',
+        'suite': [ 'wayland' ],
         'is_parallel': false,
         'depends': [
           test_client,
@@ -559,7 +559,7 @@ if have_native_tests
   test_cases += [
     {
       'name': 'service-channel',
-      'suite': 'wayland',
+      'suite': [ 'wayland' ],
       'sources': [
         'service-channel-tests.c',
         wayland_test_utils,
@@ -573,10 +573,15 @@ if have_native_tests
   sh = find_program('sh', required: true)
 
   foreach test_case: test_cases
+    suites = []
+    foreach suite: test_case.get('suite', [])
+      suites += 'mutter/' + suite
+    endforeach
+
     if test_case.get('skip', false)
       test(test_case['name'], sh,
         args: ['-c', 'exit 77'],
-        suite: ['core', 'mutter/' + test_case['suite']],
+        suite: ['core'] + suites,
       )
       continue
     endif
@@ -607,7 +612,7 @@ if have_native_tests
 
     test(test_case['name'], test_executable,
       args: test_args,
-      suite: ['core', 'mutter/' + test_case['suite']],
+      suite: ['core'] + suites,
       env: test_env,
       depends: test_depends,
       is_parallel: test_case.get('is_parallel', true),
@@ -731,7 +736,7 @@ if have_kvm_tests or have_tty_tests
   if have_tty_tests
     foreach test_case: privileged_tests
       test('tty-' + test_case['name'], test_case['executable'],
-        suite: ['core', 'mutter/tty', 'mutter/tty/' + test_case['suite']],
+        suite: ['core', 'mutter/tty', 'mutter/tty/'] + test_case['suite'],
         env: test_case['env'],
         timeout: 60,
       )
