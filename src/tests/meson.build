@@ -282,12 +282,12 @@ test_cases += [
   },
   {
     'name': 'color-management',
-    'suite': [ 'unit' ],
+    'suite': [ 'unit', 'color-management' ],
     'sources': [ 'color-management-tests.c', ],
   },
   {
     'name': 'color-management-profile-conflict',
-    'suite': [ 'unit' ],
+    'suite': [ 'unit', 'color-management' ],
     'sources': [ 'color-management-profile-conflict-test.c', ],
   },
 ]
@@ -324,7 +324,7 @@ if have_native_tests
     },
     {
       'name': 'native-unit',
-      'suite': [ 'backends/native' ],
+      'suite': [ 'backends/native', 'virtual-monitor' ],
       'sources': [
         'native-headless.c',
         'native-virtual-monitor.c',
@@ -333,7 +333,7 @@ if have_native_tests
     },
     {
       'name': 'native-screen-cast',
-      'suite': [ 'backends/native' ],
+      'suite': [ 'backends/native', 'screen-cast' ],
       'sources': [
         'native-screen-cast.c',
       ],
@@ -356,7 +356,7 @@ if have_native_tests
     },
     {
       'name': 'persistent-virtual-monitor',
-      'suite': [ 'backends/native' ],
+      'suite': [ 'backends/native', 'virtual-monitor' ],
       'sources': [ 'native-persistent-virtual-monitor.c' ],
     },
   ]
@@ -526,7 +526,7 @@ if have_native_tests
     test_cases += [
       {
         'name': 'wayland-x11-interop',
-        'suite': [ 'wayland' ],
+        'suite': [ 'wayland', 'xwayland' ],
         'sources': [
           'wayland-x11-interop-tests.c',
           wayland_test_client_utils,
@@ -541,7 +541,7 @@ if have_native_tests
       },
       {
         'name': 'xwayland',
-        'suite': [ 'wayland' ],
+        'suite': [ 'wayland', 'xwayland' ],
         'is_parallel': false,
         'depends': [
           test_client,
