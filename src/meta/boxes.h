@@ -164,4 +164,6 @@ META_EXPORT
 gboolean meta_rectangle_contains_rect   (const MetaRectangle *outer_rect,
                                          const MetaRectangle *inner_rect);
 
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (MetaStrut, g_free);
+
 #endif /* META_BOXES_H */
