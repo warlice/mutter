@@ -193,6 +193,7 @@ ret = (unix_fd, False)
             args = wrapper.split(' ') + args
 
         p = subprocess.Popen(args, env=env)
+        print('Process', args[0], 'started with pid', p.pid, file=sys.stderr)
         return p.wait()
 
 
