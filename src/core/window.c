@@ -467,6 +467,12 @@ meta_window_set_property(GObject         *object,
     }
 }
 
+static MetaRectangle
+meta_window_real_get_pending_rect (MetaWindow *window)
+{
+  return window->rect;
+}
+
 static void
 meta_window_class_init (MetaWindowClass *klass)
 {
@@ -483,6 +489,7 @@ meta_window_class_init (MetaWindowClass *klass)
   klass->current_workspace_changed = meta_window_real_current_workspace_changed;
   klass->update_struts = meta_window_real_update_struts;
   klass->get_default_skip_hints = meta_window_real_get_default_skip_hints;
+  klass->get_pending_rect = meta_window_real_get_pending_rect;
   klass->get_client_pid = meta_window_real_get_client_pid;
 
   obj_props[PROP_TITLE] =
@@ -3759,6 +3766,12 @@ meta_window_update_monitor (MetaWindow                   *window,
     meta_window_find_highest_scale_monitor_from_frame_rect (window);
   if (old_highest_scale != window->highest_scale_monitor)
     g_signal_emit (window, window_signals[HIGHEST_SCALE_MONITOR_CHANGED], 0);
+}
+
+MetaRectangle
+meta_window_get_pending_rect (MetaWindow *window)
+{
+  return META_WINDOW_GET_CLASS (window)->get_pending_rect (window);
 }
 
 void

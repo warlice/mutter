@@ -572,6 +572,7 @@ struct _MetaWindowClass
                                   int                        rel_y,
                                   MetaMoveResizeFlags        flags,
                                   MetaMoveResizeResultFlags *result);
+  MetaRectangle (*get_pending_rect) (MetaWindow *window);
   gboolean (*update_struts)      (MetaWindow *window);
   void (*get_default_skip_hints) (MetaWindow *window,
                                   gboolean   *skip_taskbar_out,
@@ -845,6 +846,8 @@ void meta_window_move_resize_internal (MetaWindow          *window,
                                        MetaMoveResizeFlags  flags,
                                        MetaGravity          gravity,
                                        MetaRectangle        frame_rect);
+
+MetaRectangle meta_window_get_pending_rect (MetaWindow *window);
 
 void meta_window_grab_op_began (MetaWindow *window, MetaGrabOp op);
 void meta_window_grab_op_ended (MetaWindow *window, MetaGrabOp op);

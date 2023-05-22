@@ -879,6 +879,28 @@ meta_window_wayland_set_property (GObject      *object,
     }
 }
 
+static MetaRectangle
+meta_window_wayland_get_pending_rect (MetaWindow *window)
+{
+  MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
+
+  if (wl_window->pending_configurations)
+    {
+       MetaWaylandWindowConfiguration *last_config =
+        wl_window->pending_configurations->data;
+
+      return (MetaRectangle) {
+        .x = last_config->x,
+        .y = last_config->y,
+        .width = last_config->width,
+        .height = last_config->height,
+      };
+    }
+
+  return META_WINDOW_CLASS (meta_window_wayland_parent_class)->
+    get_pending_rect (window);
+}
+
 static void
 meta_window_wayland_class_init (MetaWindowWaylandClass *klass)
 {
@@ -913,6 +935,7 @@ meta_window_wayland_class_init (MetaWindowWaylandClass *klass)
   window_class->unmap = meta_window_wayland_unmap;
   window_class->is_focus_async = meta_window_wayland_is_focus_async;
   window_class->get_wayland_surface = meta_window_wayland_get_wayland_surface;
+  window_class->get_pending_rect = meta_window_wayland_get_pending_rect;
 
   obj_props[PROP_SURFACE] =
     g_param_spec_object ("surface",
