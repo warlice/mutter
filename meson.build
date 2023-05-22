@@ -396,11 +396,17 @@ if have_tests
   add_test_setup('default',
     is_default: true,
     exe_wrapper: default_test_wrappers,
-    env: default_test_env,
+    env: [
+      default_test_env,
+      'MUTTER_TEST_SETUP=default',
+    ]
   )
 
   add_test_setup('plain',
-    env: default_test_env,
+    env: [
+      default_test_env,
+      'MUTTER_TEST_SETUP=plain',
+    ]
   )
 
   xvfb = find_program('xvfb-run')
@@ -413,7 +419,10 @@ if have_tests
   xvfb_command = [safer_xvfb] + [xvfb] + xvfb_args + ['--']
 
   add_test_setup('CI',
-    env: default_test_env,
+    env: [
+      default_test_env,
+      'MUTTER_TEST_SETUP=CI',
+    ],
     exe_wrapper: [
       default_test_wrappers,
       xvfb_command,
