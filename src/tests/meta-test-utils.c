@@ -853,16 +853,20 @@ meta_create_test_monitor (MetaContext *context,
 static gboolean
 callback_idle (gpointer user_data)
 {
-  GMainLoop *loop = user_data;
+  GTask *task = user_data;
+  GMainLoop *loop;
 
+  loop = g_task_get_task_data (task);
   g_main_loop_quit (loop);
+  g_task_return_boolean (task, TRUE);
+
   return G_SOURCE_REMOVE;
 }
 
 static gboolean
 queue_callback (GTask *task)
 {
-  g_idle_add (callback_idle, g_task_get_task_data (task));
+  g_idle_add (callback_idle, task);
   return G_SOURCE_REMOVE;
 }
 #endif
