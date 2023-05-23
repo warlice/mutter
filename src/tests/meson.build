@@ -524,7 +524,7 @@ if have_native_tests
       },
       {
         'name': 'xwayland',
-        'suite': [ 'wayland', 'xwayland' ],
+        'suite': [ 'wayland', 'xwayland', 'ignore-catch' ],
         'is_parallel': false,
         'depends': [
           test_client,
@@ -747,7 +747,7 @@ if have_x11
         x11_frames,
       ],
       env: x11_env,
-      suite: ['core', 'mutter/x11'],
+      suite: ['core', 'mutter/x11', 'mutter/ignore-catch'],
       is_parallel: false,
       timeout: 60,
     )
