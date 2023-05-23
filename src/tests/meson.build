@@ -320,14 +320,17 @@ if have_native_tests
       'suite': 'backends/native',
       'sources': [
         'native-headless.c',
-        'native-screen-cast.c',
-        'native-screen-cast.h',
         'native-virtual-monitor.c',
         'native-virtual-monitor.h',
       ],
-      'depends': [
-        screen_cast_client,
+    },
+    {
+      'name': 'native-screen-cast',
+      'suite': 'backends/native',
+      'sources': [
+        'native-screen-cast.c',
       ],
+      'depends': [ screen_cast_client ],
     },
     {
       'name': 'pointer-constraints',

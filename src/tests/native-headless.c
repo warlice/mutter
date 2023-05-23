@@ -21,14 +21,12 @@
 #include "config.h"
 
 #include "meta-test/meta-context-test.h"
-#include "tests/native-screen-cast.h"
 #include "tests/native-virtual-monitor.h"
 
 static void
 init_tests (MetaContext *context)
 {
   init_virtual_monitor_tests (context);
-  init_screen_cast_tests ();
 }
 
 int

@@ -20,12 +20,11 @@
 
 #include "config.h"
 
-#include "tests/native-screen-cast.h"
-
 #include <errno.h>
 #include <gio/gio.h>
 #include <unistd.h>
 
+#include "meta-test/meta-context-test.h"
 #include "meta/util.h"
 
 static void
@@ -86,9 +85,19 @@ meta_test_screen_cast_record_virtual (void)
   meta_remove_verbose_topic (META_DEBUG_SCREEN_CAST);
 }
 
-void
-init_screen_cast_tests (void)
+int
+main (int    argc,
+      char **argv)
 {
+  g_autoptr (MetaContext) context = NULL;
+
+  context = meta_create_test_context (META_CONTEXT_TEST_TYPE_HEADLESS,
+                                      META_CONTEXT_TEST_FLAG_NO_X11);
+  g_assert (meta_context_configure (context, &argc, &argv, NULL));
+
   g_test_add_func ("/backends/native/screen-cast/record-virtual",
                    meta_test_screen_cast_record_virtual);
+
+  return meta_context_test_run_tests (META_CONTEXT_TEST (context),
+                                      META_TEST_RUN_FLAG_NONE);
 }
