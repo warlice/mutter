@@ -246,7 +246,6 @@ test_cases += [
   {
     'name': 'monitor-unit',
     'suite': [ 'backend' ],
-    'sources': [ 'monitor-unit-tests.c', ],
     'depends': [
       test_client,
       x11_frames,
@@ -273,17 +272,14 @@ test_cases += [
   {
     'name': 'anonymous-file',
     'suite': [ 'unit' ],
-    'sources': [ 'anonymous-file.c', ],
   },
   {
     'name': 'edid',
     'suite': [ 'unit' ],
-    'sources': [ 'edid-tests.c', ],
   },
   {
     'name': 'color-management',
     'suite': [ 'unit', 'color-management' ],
-    'sources': [ 'color-management-tests.c', ],
   },
   {
     'name': 'color-management-profile-conflict',
@@ -334,9 +330,6 @@ if have_native_tests
     {
       'name': 'native-screen-cast',
       'suite': [ 'backends/native', 'screen-cast' ],
-      'sources': [
-        'native-screen-cast.c',
-      ],
       'depends': [ screen_cast_client ],
       'wrappers': [
         pipewire.full_path(),
@@ -352,7 +345,6 @@ if have_native_tests
     {
       'name': 'ref-test-sanity',
       'suite': [ 'backends/native' ],
-      'sources': [ 'ref-test-sanity.c' ],
     },
     {
       'name': 'persistent-virtual-monitor',
@@ -382,17 +374,11 @@ if have_native_tests
     {
       'name': 'kms-force-atomic-sanity',
       'suite': [ 'backends/native/kms' ],
-      'sources': [
-        'native-kms-force-atomic-sanity.c',
-      ],
       'variants': [['', test_env_variables + kms_atomic_variables]],
     },
     {
       'name': 'kms-force-simple-sanity',
       'suite': [ 'backends/native/kms' ],
-      'sources': [
-        'native-kms-force-simple-sanity.c',
-      ],
       'variants': [['', test_env_variables + kms_simple_variables]],
     },
     {
@@ -456,9 +442,6 @@ if have_native_tests
     {
       'name': 'wayland-client-tests',
       'suite': [ 'wayland' ],
-      'sources': [
-        'wayland-client-tests.c',
-      ],
     },
     {
       'name': 'wayland-fullscreen',
@@ -548,9 +531,6 @@ if have_native_tests
           x11_compositor_checker,
           x11_frames,
         ],
-        'sources': [
-          'xwayland-tests.c',
-        ],
       },
     ]
   endif
@@ -587,7 +567,8 @@ if have_native_tests
     endif
 
     test_executable = executable('mutter-' + test_case['name'],
-      sources: test_case['sources'],
+      sources: test_case.get('sources', fs.exists(test_case['name'] + '.c') ?
+        test_case['name'] + '.c' : test_case['name'] + '-tests.c'),
       include_directories: tests_includes,
       c_args: [
         tests_c_args,
@@ -697,7 +678,8 @@ if have_kvm_tests or have_tty_tests
     endif
 
     test_executable = executable('mutter-' + test_case['name'],
-      sources: test_case['sources'],
+      sources: test_case.get('sources', fs.exists(test_case['name'] + '.c') ?
+        test_case['name'] + '.c' : 'native-' + test_case['name'] + '.c'),
       include_directories: tests_includes,
       c_args: [
         tests_c_args,
