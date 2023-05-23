@@ -386,21 +386,33 @@ if have_tests
     'MALLOC_CHECK_=3',
   ]
 
-  if get_option('catch')
-    catch = find_program('catch')
-    default_test_wrappers += [
-      catch,
-    ]
+  have_catch = get_option('catch')
+  if have_catch
+    catch = find_program('catch', required: true)
   endif
 
   add_test_setup('default',
     is_default: true,
-    exe_wrapper: default_test_wrappers,
+    exe_wrapper: [
+      default_test_wrappers,
+      [have_catch ? catch : []],
+    ],
+    exclude_suites: have_catch ? ['ignore-catch', 'mutter/ignore-catch'] : [],
     env: [
       default_test_env,
       'MUTTER_TEST_SETUP=default',
     ]
   )
+
+  if have_catch
+    add_test_setup('no_catch',
+      exe_wrapper: default_test_wrappers,
+      env: [
+        default_test_env,
+        'MUTTER_TEST_SETUP=no_catch',
+      ]
+    )
+  endif
 
   add_test_setup('plain',
     env: [
