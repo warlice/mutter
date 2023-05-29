@@ -392,8 +392,9 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
               break;
             }
         }
-      else if (constrained_rect.width != window->rect.width ||
-               constrained_rect.height != window->rect.height ||
+      else if (meta_window_wayland_is_resize(wl_window,
+                                             constrained_rect.width,
+                                             constrained_rect.height) ||
                flags & META_MOVE_RESIZE_STATE_CHANGED)
         {
           MetaWaylandWindowConfiguration *configuration;
