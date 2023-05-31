@@ -617,15 +617,16 @@ stacking_tests = [
 ]
 
 foreach stacking_test: stacking_tests
-  test(stacking_test, test_runner,
-    suite: ['core', 'mutter/stacking'],
-    env: test_env,
-    args: [
-      files('stacking' / stacking_test + '.metatest'),
-    ],
-    depends: default_plugin,
-    timeout: 60,
-  )
+  test_cases += [
+    {
+      'name': stacking_test,
+      'suite': ['stacking'],
+      'exe': test_runner,
+      'args': [
+        files('stacking' / stacking_test + '.metatest'),
+      ],
+    }
+  ]
 
   if have_installed_tests
     installed_tests_cdata = configuration_data()
