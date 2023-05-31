@@ -549,57 +549,6 @@ if have_native_tests
       ],
     },
   ]
-
-  sh = find_program('sh', required: true)
-
-  foreach test_case: test_cases
-    suites = []
-    foreach suite: test_case.get('suite', [])
-      suites += 'mutter/' + suite
-    endforeach
-
-    if test_case.get('skip', false)
-      test(test_case['name'], sh,
-        args: ['-c', 'exit 77'],
-        suite: ['core'] + suites,
-      )
-      continue
-    endif
-
-    test_executable = executable('mutter-' + test_case['name'],
-      sources: test_case.get('sources', fs.exists(test_case['name'] + '.c') ?
-        test_case['name'] + '.c' : test_case['name'] + '-tests.c'),
-      include_directories: tests_includes,
-      c_args: [
-        tests_c_args,
-        '-DG_LOG_DOMAIN="mutter-@0@-test"'.format(test_case['name']),
-      ],
-      dependencies: libmutter_test_dep,
-      install: have_installed_tests,
-      install_dir: mutter_installed_tests_libexecdir,
-      install_rpath: pkglibdir,
-    )
-
-    test_depends = [ default_plugin ] + test_case.get('depends', [])
-    test_args = test_case.get('args', [])
-    wrappers = test_case.get('wrappers', [])
-
-    if wrappers.length() > 0
-      test_args = []
-      test_args = wrappers + [ '--', test_executable.full_path() ] + test_args
-      test_depends += test_executable
-      test_executable = wrappers_launcher
-    endif
-
-    test(test_case['name'], test_executable,
-      args: test_args,
-      suite: ['core'] + suites,
-      env: test_env,
-      depends: test_depends,
-      is_parallel: test_case.get('is_parallel', true),
-      timeout: 60,
-    )
-  endforeach
 endif
 
 stacking_tests = [
@@ -790,3 +739,54 @@ test('get-state-tool-gdbus', mutter,
   env: tools_test_env,
   timeout: 60,
 )
+
+sh = find_program('sh', required: true)
+
+foreach test_case: test_cases
+  suites = []
+  foreach suite: test_case.get('suite', [])
+    suites += 'mutter/' + suite
+  endforeach
+
+  if test_case.get('skip', false)
+    test(test_case['name'], sh,
+      args: ['-c', 'exit 77'],
+      suite: ['core'] + suites,
+    )
+    continue
+  endif
+
+  test_executable = executable('mutter-' + test_case['name'],
+    sources: test_case.get('sources', fs.exists(test_case['name'] + '.c') ?
+      test_case['name'] + '.c' : test_case['name'] + '-tests.c'),
+    include_directories: tests_includes,
+    c_args: [
+      tests_c_args,
+      '-DG_LOG_DOMAIN="mutter-@0@-test"'.format(test_case['name']),
+    ],
+    dependencies: libmutter_test_dep,
+    install: have_installed_tests,
+    install_dir: mutter_installed_tests_libexecdir,
+    install_rpath: pkglibdir,
+  )
+
+  test_depends = [default_plugin] + test_case.get('depends', [])
+  test_args = test_case.get('args', [])
+  wrappers = test_case.get('wrappers', [])
+
+  if wrappers.length() > 0
+    test_args = []
+    test_args = wrappers + [ '--', test_executable.full_path() ] + test_args
+    test_depends += test_executable
+    test_executable = wrappers_launcher
+  endif
+
+  test(test_case['name'], test_executable,
+    args: test_args,
+    suite: ['core'] + suites,
+    env: test_env,
+    depends: test_depends,
+    is_parallel: test_case.get('is_parallel', true),
+    timeout: 60,
+  )
+endforeach
