@@ -706,39 +706,36 @@ endif
 tools_test_env = test_env
 tools_test_env.set('G_DEBUG', 'fatal-warnings')
 
-test('get-state-tool-gio', mutter,
-  args: [
+tool_test_base = {
+  'suite': ['tools'],
+  'exe': mutter,
+  'args': [
     '--headless',
     '--mutter-plugin=@0@'.format(default_plugin.full_path()),
     '--virtual-monitor', '800x600',
-    '--wayland-display', 'get-state-gio',
-    get_state_tool.full_path(),
+      '--wayland-display',
   ],
-  depends: [
-    default_plugin,
-  ],
-  suite: ['tools'],
-  env: tools_test_env,
-  timeout: 60,
-)
+  'env': tools_test_env,
+}
 
-test('get-state-tool-gdbus', mutter,
-  args: [
-    '--headless',
-    '--mutter-plugin=@0@'.format(default_plugin.full_path()),
-    '--virtual-monitor', '800x600',
-    '--wayland-display', 'get-state-gdbus',
-    '--',
-    get_state_tool.full_path(),
-    '--gdbus',
+test_cases += tool_test_base + {
+  'name': 'get-state-tool-gio',
+  'args': tool_test_base.get('args') + [
+     'get-state-gio',
+     '--',
+     get_state_tool.full_path(),
   ],
-  depends: [
-    default_plugin,
+}
+
+test_cases += tool_test_base + {
+  'name': 'get-state-tool-gdbus',
+  'args': tool_test_base.get('args') + [
+     'get-state-gdbus',
+     '--',
+     get_state_tool.full_path(),
+     '--gdbus',
   ],
-  suite: ['tools'],
-  env: tools_test_env,
-  timeout: 60,
-)
+}
 
 sh = find_program('sh', required: true)
 
