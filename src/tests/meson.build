@@ -551,6 +551,33 @@ if have_native_tests
   ]
 endif
 
+if have_x11
+  x11_test = {
+    'name': 'x11',
+    'suite': [ 'x11', 'ignore-catch' ],
+    'depends': [
+      mutter,
+      x11_frames,
+    ],
+    'exe': safer_xvfb,
+    'args': [
+      xvfb.full_path(),
+      xvfb_args,
+      '--',
+      find_program('x11-test.sh').full_path(),
+      mutter.full_path(),
+    ],
+  }
+  test_cases += x11_test
+
+  sync_env = test_env
+  sync_env.set('MUTTER_SYNC', '1')
+  test_cases += x11_test + {
+    'name': 'x11-sync',
+    'env': sync_env,
+  }
+endif
+
 stacking_tests = [
   'basic-x11',
   'basic-wayland',
@@ -673,34 +700,6 @@ if have_kvm_tests or have_tty_tests
       )
     endforeach
   endif
-endif
-
-if have_x11
-  foreach mode: ['', 'sync']
-    x11_env = test_env
-    if mode == 'sync'
-      x11_env.set('MUTTER_SYNC', '1')
-    endif
-    test('x11' + (mode != '' ? '-' + mode : ''),
-      safer_xvfb,
-      args: [
-        xvfb.full_path(),
-        xvfb_args,
-        '--',
-        find_program('x11-test.sh').full_path(),
-        mutter.full_path(),
-      ],
-      depends: [
-        mutter,
-        default_plugin,
-        x11_frames,
-      ],
-      env: x11_env,
-      suite: ['core', 'mutter/x11', 'mutter/ignore-catch'],
-      is_parallel: false,
-      timeout: 60,
-    )
-  endforeach
 endif
 
 tools_test_env = test_env
