@@ -409,7 +409,8 @@ if have_tests
     '-s',
     '+iglx -noreset',
   ]
-  xvfb_command = [xvfb] + xvfb_args
+  safer_xvfb = find_program('src/tests/safer-xvfb-run.sh')
+  xvfb_command = [safer_xvfb] + [xvfb] + xvfb_args + ['--']
 
   add_test_setup('CI',
     env: default_test_env,

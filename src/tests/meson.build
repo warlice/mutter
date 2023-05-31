@@ -718,9 +718,12 @@ if have_x11
     if mode == 'sync'
       x11_env.set('MUTTER_SYNC', '1')
     endif
-    test('x11' + (mode != '' ? '-' + mode : ''), xvfb,
+    test('x11' + (mode != '' ? '-' + mode : ''),
+      safer_xvfb,
       args: [
+        xvfb.full_path(),
         xvfb_args,
+        '--',
         find_program('x11-test.sh').full_path(),
         mutter.full_path(),
       ],
