@@ -756,19 +756,23 @@ foreach test_case: test_cases
     continue
   endif
 
-  test_executable = executable('mutter-' + test_case['name'],
-    sources: test_case.get('sources', fs.exists(test_case['name'] + '.c') ?
-      test_case['name'] + '.c' : test_case['name'] + '-tests.c'),
-    include_directories: tests_includes,
-    c_args: [
-      tests_c_args,
-      '-DG_LOG_DOMAIN="mutter-@0@-test"'.format(test_case['name']),
-    ],
-    dependencies: libmutter_test_dep,
-    install: have_installed_tests,
-    install_dir: mutter_installed_tests_libexecdir,
-    install_rpath: pkglibdir,
-  )
+  if test_case.has_key('exe')
+    test_executable = test_case['exe']
+  else
+    test_executable = executable('mutter-' + test_case['name'],
+      sources: test_case.get('sources', fs.exists(test_case['name'] + '.c') ?
+        test_case['name'] + '.c' : test_case['name'] + '-tests.c'),
+      include_directories: tests_includes,
+      c_args: [
+        tests_c_args,
+        '-DG_LOG_DOMAIN="mutter-@0@-test"'.format(test_case['name']),
+      ],
+      dependencies: libmutter_test_dep,
+      install: have_installed_tests,
+      install_dir: mutter_installed_tests_libexecdir,
+      install_rpath: pkglibdir,
+    )
+  endif
 
   test_depends = [default_plugin] + test_case.get('depends', [])
   test_args = test_case.get('args', [])
@@ -784,9 +788,9 @@ foreach test_case: test_cases
   test(test_case['name'], test_executable,
     args: test_args,
     suite: ['core'] + suites,
-    env: test_env,
+    env: test_case.get('env', test_env),
     depends: test_depends,
     is_parallel: test_case.get('is_parallel', true),
-    timeout: 60,
+    timeout: test_case.get('timeout', 60),
   )
 endforeach
