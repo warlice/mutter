@@ -107,8 +107,6 @@ static void meta_window_actor_get_property (GObject      *object,
                                             GValue       *value,
                                             GParamSpec   *pspec);
 
-static MetaSurfaceActor * meta_window_actor_real_get_scanout_candidate (MetaWindowActor *self);
-
 static void meta_window_actor_real_assign_surface_actor (MetaWindowActor  *self,
                                                          MetaSurfaceActor *surface_actor);
 
@@ -129,7 +127,6 @@ meta_window_actor_class_init (MetaWindowActorClass *klass)
   object_class->get_property = meta_window_actor_get_property;
   object_class->constructed  = meta_window_actor_constructed;
 
-  klass->get_scanout_candidate = meta_window_actor_real_get_scanout_candidate;
   klass->assign_surface_actor = meta_window_actor_real_assign_surface_actor;
 
   /**
@@ -560,18 +557,6 @@ meta_window_actor_get_surface (MetaWindowActor *self)
     meta_window_actor_get_instance_private (self);
 
   return priv->surface;
-}
-
-static MetaSurfaceActor *
-meta_window_actor_real_get_scanout_candidate (MetaWindowActor *self)
-{
-  return NULL;
-}
-
-MetaSurfaceActor *
-meta_window_actor_get_scanout_candidate (MetaWindowActor *self)
-{
-  return META_WINDOW_ACTOR_GET_CLASS (self)->get_scanout_candidate (self);
 }
 
 /**

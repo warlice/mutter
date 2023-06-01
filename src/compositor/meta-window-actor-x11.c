@@ -249,38 +249,6 @@ meta_window_actor_x11_frame_complete (MetaWindowActor  *actor,
     }
 }
 
-static MetaSurfaceActor *
-meta_window_actor_x11_get_scanout_candidate (MetaWindowActor *actor)
-{
-  MetaSurfaceActor *surface_actor;
-
-  surface_actor = meta_window_actor_get_surface (actor);
-
-  if (!surface_actor)
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No surface-actor for window-actor");
-      return NULL;
-    }
-
-  if (CLUTTER_ACTOR (surface_actor) !=
-      clutter_actor_get_last_child (CLUTTER_ACTOR (actor)))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "Top child of window-actor not a surface");
-      return NULL;
-    }
-
-  if (!meta_window_actor_is_opaque (actor))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "Window-actor is not opaque");
-      return NULL;
-    }
-
-  return surface_actor;
-}
-
 static void
 surface_size_changed (MetaSurfaceActor *actor,
                       gpointer          user_data)
@@ -1583,7 +1551,6 @@ meta_window_actor_x11_class_init (MetaWindowActorX11Class *klass)
   GParamSpec *pspec;
 
   window_actor_class->frame_complete = meta_window_actor_x11_frame_complete;
-  window_actor_class->get_scanout_candidate = meta_window_actor_x11_get_scanout_candidate;
   window_actor_class->assign_surface_actor = meta_window_actor_x11_assign_surface_actor;
   window_actor_class->queue_frame_drawn = meta_window_actor_x11_queue_frame_drawn;
   window_actor_class->before_paint = meta_window_actor_x11_before_paint;

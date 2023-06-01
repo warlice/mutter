@@ -325,53 +325,6 @@ cullable_iface_init (MetaCullableInterface *iface)
   iface->reset_culling = meta_window_actor_wayland_reset_culling;
 }
 
-static MetaSurfaceActor *
-meta_window_actor_wayland_get_scanout_candidate (MetaWindowActor *actor)
-{
-  MetaWindowActorWayland *self = META_WINDOW_ACTOR_WAYLAND (actor);
-  ClutterActor *surface_container = CLUTTER_ACTOR (self->surface_container);
-  ClutterActor *child_actor;
-  ClutterActorIter iter;
-  MetaSurfaceActor *topmost_surface_actor = NULL;
-  MetaWindow *window;
-  int n_mapped_surfaces = 0;
-
-  if (clutter_actor_get_last_child (CLUTTER_ACTOR (self)) != surface_container)
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "Top child of window-actor not a surface");
-      return NULL;
-    }
-
-  clutter_actor_iter_init (&iter, surface_container);
-  while (clutter_actor_iter_next (&iter, &child_actor))
-    {
-      if (!clutter_actor_is_mapped (child_actor))
-        continue;
-
-      topmost_surface_actor = META_SURFACE_ACTOR (child_actor);
-      n_mapped_surfaces++;
-    }
-
-  if (!topmost_surface_actor)
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No surface-actor for window-actor");
-      return NULL;
-    }
-
-  window = meta_window_actor_get_meta_window (actor);
-  if (!meta_surface_actor_is_opaque (topmost_surface_actor) &&
-      !(meta_window_is_fullscreen (window) && n_mapped_surfaces == 1))
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "Window-actor is not opaque");
-      return NULL;
-    }
-
-  return topmost_surface_actor;
-}
-
 static void
 meta_window_actor_wayland_assign_surface_actor (MetaWindowActor  *actor,
                                                 MetaSurfaceActor *surface_actor)
@@ -592,7 +545,6 @@ meta_window_actor_wayland_class_init (MetaWindowActorWaylandClass *klass)
   MetaWindowActorClass *window_actor_class = META_WINDOW_ACTOR_CLASS (klass);
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
-  window_actor_class->get_scanout_candidate = meta_window_actor_wayland_get_scanout_candidate;
   window_actor_class->assign_surface_actor = meta_window_actor_wayland_assign_surface_actor;
   window_actor_class->frame_complete = meta_window_actor_wayland_frame_complete;
   window_actor_class->queue_frame_drawn = meta_window_actor_wayland_queue_frame_drawn;
