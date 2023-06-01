@@ -639,6 +639,11 @@ meta_test_client_new (MetaContext           *context,
       g_subprocess_launcher_setenv (launcher,
                                     "DISPLAY", x11_display_name,
                                     TRUE);
+
+      if (g_getenv ("MUTTER_SYNC"))
+        g_subprocess_launcher_setenv (launcher,
+                                      "GDK_SYNCHRONIZE", "1",
+                                      TRUE);
     }
 #endif
 
