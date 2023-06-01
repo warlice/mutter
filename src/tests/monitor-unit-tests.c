@@ -4668,6 +4668,9 @@ meta_test_monitor_orientation_initial_stored_rotated_no_touch (void)
                       check_monitor_configuration_per_orientation (
                         &test_case, 0, META_ORIENTATION_NORMAL,
                         960, 540));
+
+  g_test_message ("Open lid, restoring state");
+  meta_backend_test_set_is_lid_closed (META_BACKEND_TEST (backend), FALSE);
 }
 
 static void
@@ -7947,6 +7950,8 @@ meta_test_monitor_custom_lid_switch_config (void)
   };
   MetaMonitorTestSetup *test_setup;
   MetaBackend *backend = meta_context_get_backend (test_context);
+
+  meta_backend_test_set_is_lid_closed (META_BACKEND_TEST (backend), FALSE);
 
   test_setup = meta_create_monitor_test_setup (test_backend,
                                                &test_case.setup,
