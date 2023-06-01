@@ -15564,52 +15564,60 @@ clutter_actor_finish_layout (ClutterActor *self,
   gboolean actor_moved = FALSE;
   gboolean old_visible_paint_volume_valid = FALSE;
   ClutterPaintVolume old_visible_paint_volume;
-
-  if (!priv->needs_finish_layout)
-    return;
+  GList *l;
 
   if ((!CLUTTER_ACTOR_IS_MAPPED (self) &&
        !clutter_actor_has_mapped_clones (self)) ||
       CLUTTER_ACTOR_IN_DESTRUCTION (self))
     return;
 
-  if (priv->needs_visible_paint_volume_update)
+  if (priv->needs_finish_layout)
     {
-      ensure_paint_volume (self);
-
-      actor_moved = TRUE;
-      old_visible_paint_volume = priv->visible_paint_volume;
-      old_visible_paint_volume_valid = priv->visible_paint_volume_valid;
-
-      if (priv->has_paint_volume)
+      if (priv->needs_visible_paint_volume_update)
         {
-          _clutter_paint_volume_copy_static (&priv->paint_volume,
-                                             &priv->visible_paint_volume);
-          _clutter_paint_volume_transform_relative (&priv->visible_paint_volume,
-                                                    NULL); /* eye coordinates */
+          ensure_paint_volume (self);
+
+          actor_moved = TRUE;
+          old_visible_paint_volume = priv->visible_paint_volume;
+          old_visible_paint_volume_valid = priv->visible_paint_volume_valid;
+
+          if (priv->has_paint_volume)
+            {
+              _clutter_paint_volume_copy_static (&priv->paint_volume,
+                                                 &priv->visible_paint_volume);
+              _clutter_paint_volume_transform_relative (&priv->visible_paint_volume,
+                                                        NULL); /* eye coordinates */
+            }
+
+          priv->visible_paint_volume_valid = priv->has_paint_volume;
+          priv->needs_visible_paint_volume_update = FALSE;
         }
 
-      priv->visible_paint_volume_valid = priv->has_paint_volume;
-      priv->needs_visible_paint_volume_update = FALSE;
+      if (priv->needs_update_stage_views)
+        {
+          update_stage_views (self);
+          update_resource_scale (self, use_max_scale);
+
+          priv->needs_update_stage_views = FALSE;
+        }
+
+      if (priv->needs_redraw)
+        {
+          add_actor_to_redraw_clip (self,
+                                    actor_moved,
+                                    old_visible_paint_volume_valid ? &old_visible_paint_volume : NULL);
+          priv->needs_redraw = FALSE;
+        }
+
+      priv->needs_finish_layout = FALSE;
     }
 
-  if (priv->needs_update_stage_views)
+  for (l = clutter_actor_peek_stage_views (self); l; l = l->next)
     {
-      update_stage_views (self);
-      update_resource_scale (self, use_max_scale);
+      ClutterStageView *view = l->data;
 
-      priv->needs_update_stage_views = FALSE;
+      clutter_stage_view_update_topmost_actor (view, self);
     }
-
-  if (priv->needs_redraw)
-    {
-      add_actor_to_redraw_clip (self,
-                                actor_moved,
-                                old_visible_paint_volume_valid ? &old_visible_paint_volume : NULL);
-      priv->needs_redraw = FALSE;
-    }
-
-  priv->needs_finish_layout = FALSE;
 
   for (child = priv->first_child; child; child = child->priv->next_sibling)
     clutter_actor_finish_layout (child, use_max_scale);
