@@ -90,4 +90,10 @@ gboolean clutter_stage_view_has_shadowfb (ClutterStageView *view);
 CLUTTER_EXPORT
 void clutter_stage_view_schedule_update_now (ClutterStageView *view);
 
+void clutter_stage_view_update_topmost_actor (ClutterStageView *view,
+                                              ClutterActor     *actor);
+
+CLUTTER_EXPORT
+ClutterActor * clutter_stage_view_get_topmost_actor (ClutterStageView *view);
+
 #endif /* __CLUTTER_STAGE_VIEW_H__ */
