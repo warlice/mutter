@@ -4663,7 +4663,6 @@ meta_test_monitor_orientation_initial_stored_rotated_no_touch (void)
   meta_backend_test_set_is_lid_closed (META_BACKEND_TEST (backend), TRUE);
   meta_monitor_manager_lid_is_closed_changed (monitor_manager);
 
-
   META_TEST_LOG_CALL ("Checking configuration per orientation",
                       check_monitor_configuration_per_orientation (
                         &test_case, 0, META_ORIENTATION_NORMAL,
