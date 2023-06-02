@@ -251,10 +251,6 @@ test_cases += [
       test_client,
       x11_frames,
     ],
-    # FIXME: Enable this when gtk4 and gtk3 fixes are in CI:
-    # - https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/6046
-    # - https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/6047
-    'is_parallel': false,
   },
   {
     'name': 'monitor-utils',
