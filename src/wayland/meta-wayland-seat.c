@@ -328,6 +328,14 @@ meta_wayland_seat_update (MetaWaylandSeat    *seat,
   switch (event->type)
     {
     case CLUTTER_MOTION:
+      {
+        MetaWaylandDragGrab *current_grab;
+
+        current_grab = meta_wayland_data_device_get_current_grab (&seat->data_device);
+        if (current_grab)
+          meta_wayland_drag_grab_update_feedback_actor (current_grab, event);
+      }
+      G_GNUC_FALLTHROUGH;
     case CLUTTER_BUTTON_PRESS:
     case CLUTTER_BUTTON_RELEASE:
     case CLUTTER_SCROLL:

@@ -323,8 +323,11 @@ void
 meta_wayland_drag_grab_update_feedback_actor (MetaWaylandDragGrab *drag_grab,
                                               const ClutterEvent  *event)
 {
-  meta_feedback_actor_update (META_FEEDBACK_ACTOR (drag_grab->feedback_actor),
-                              event);
+  if (drag_grab->feedback_actor)
+    {
+      meta_feedback_actor_update (META_FEEDBACK_ACTOR (drag_grab->feedback_actor),
+                                  event);
+    }
 }
 
 static void
