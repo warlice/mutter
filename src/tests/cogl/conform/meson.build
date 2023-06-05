@@ -70,6 +70,7 @@ test_env = environment()
 test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
 test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
 test_env.set('G_ENABLE_DIAGNOSTIC', '0')
+test_env.set('GSETTINGS_SCHEMA_DIR', fs.parent(compiled_gschemas.full_path()))
 test_env.set('MUTTER_TEST_PLUGIN_PATH', '@0@'.format(default_plugin.full_path()))
 
 cogl_test_variants = [ 'gl3', 'gles2' ]
@@ -99,7 +100,10 @@ foreach cogl_test: cogl_tests
       suite: ['cogl', 'cogl/conform'],
       env: variant_test_env,
       should_fail: variant in known_failures,
-      depends: default_plugin,
+      depends: [
+        default_plugin,
+        compiled_gschemas,
+      ],
     )
   endforeach
 endforeach

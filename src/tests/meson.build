@@ -137,6 +137,7 @@ test_env = environment()
 test_env_variables = {
   'G_TEST_SRCDIR': mutter_srcdir / 'src',
   'G_TEST_BUILDDIR': mutter_builddir,
+  'GSETTINGS_SCHEMA_DIR': fs.parent(compiled_gschemas.full_path()),
   'XDG_CONFIG_HOME': mutter_builddir / '.config',
   'MUTTER_TEST_PLUGIN_PATH': '@0@'.format(default_plugin.full_path()),
 }
@@ -771,7 +772,7 @@ foreach test_case: test_cases
     )
   endif
 
-  test_depends = [default_plugin] + test_case.get('depends', [])
+  test_depends = [default_plugin, compiled_gschemas] + test_case.get('depends', [])
   test_args = test_case.get('args', [])
   wrappers = test_case.get('wrappers', [])
 

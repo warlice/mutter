@@ -434,7 +434,6 @@ build-wayland-only@x86_64:
 
 .test-setup:
   variables:
-    GSETTINGS_SCHEMA_DIR: "$CI_PROJECT_DIR/build/data"
     PIPEWIRE_DEBUG: 2
     PIPEWIRE_LOG: "$CI_PROJECT_DIR/build/meson-logs/pipewire.log"
     XVFB_SERVER_ARGS: "+iglx -noreset"
@@ -464,7 +463,6 @@ build-wayland-only@x86_64:
     - .mutter.distribution-image
     - .test-mutter-base
   script:
-    - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
     - xvfb-run -a -s "$XVFB_SERVER_ARGS"
         meson test
           -C build
@@ -607,7 +605,6 @@ dist-mutter:
   script:
     - meson setup . build --werror --prefix /usr
         -Dbuildtype=debugoptimized
-    - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
     - xvfb-run -a -s "$XVFB_SERVER_ARGS"
         meson dist -C build
   rules:
