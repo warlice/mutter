@@ -227,6 +227,7 @@ test_cases += [
   {
     'name': 'unit',
     'suite': [ 'unit' ],
+    'needs-x11': true,
     'sources': [
       'unit-tests.c',
       'boxes-tests.c',
@@ -247,6 +248,7 @@ test_cases += [
   {
     'name': 'monitor-unit',
     'suite': [ 'backend' ],
+    'needs-x11': true,
     'depends': [
       test_client,
       x11_frames,
@@ -261,6 +263,7 @@ test_cases += [
     'name': 'stage-views',
     'suite': [ 'compositor' ],
     'sources': [ 'stage-view-tests.c', ],
+    'needs-x11': true,
     'depends': [
       test_client,
       x11_frames,
@@ -277,6 +280,7 @@ test_cases += [
   {
     'name': 'color-management',
     'suite': [ 'unit', 'color-management' ],
+    'needs-x11': true,
   },
   {
     'name': 'color-management-profile-conflict',
@@ -781,6 +785,13 @@ foreach test_case: test_cases
     ]
     test_depends += test_executable
     test_executable = bash
+  endif
+
+  if test_case.get('needs-x11', false)
+    default_exe = test_executable
+    test_executable = bash
+    test_args = xvfb_command + [default_exe] + test_args
+    suites += 'mutter/x11'
   endif
 
   test(test_case['name'], test_executable,

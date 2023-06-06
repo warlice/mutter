@@ -459,7 +459,6 @@ build-wayland-only@x86_64:
   variables:
     PIPEWIRE_DEBUG: 2
     PIPEWIRE_LOG: "$CI_PROJECT_DIR/build/meson-logs/pipewire.log"
-    XVFB_SERVER_ARGS: "+iglx -noreset"
     MESON_TEST_DEFAULT_ARGS: |
       -C build
       --no-rebuild
@@ -492,14 +491,12 @@ build-wayland-only@x86_64:
     - .mutter.distribution-image
     - .test-mutter-base
   script:
-    - xvfb-run -a -s "$XVFB_SERVER_ARGS"
-        meson test ${MESON_TEST_DEFAULT_ARGS}
-          --no-suite 'mutter/kvm'
-    - xvfb-run -a -s "$XVFB_SERVER_ARGS"
-        meson test ${MESON_TEST_DEFAULT_ARGS}
-          --setup no_catch
-          --suite mutter/ignore-catch
-          --suite ignore-catch
+      - meson test ${MESON_TEST_DEFAULT_ARGS}
+        --no-suite 'mutter/kvm'
+      - meson test ${MESON_TEST_DEFAULT_ARGS}
+        --setup no_catch
+        --suite mutter/ignore-catch
+        --suite ignore-catch
   artifacts:
     reports:
       junit: "build/meson-logs/testlog*.junit.xml"
@@ -623,8 +620,7 @@ dist-mutter:
   script:
     - meson setup . build --werror --prefix /usr
         -Dbuildtype=debugoptimized
-    - xvfb-run -a -s "$XVFB_SERVER_ARGS"
-        meson dist -C build
+    - meson dist -C build
   rules:
     - if: '$CI_PIPELINE_SOURCE != "merge_request_event"'
       when: manual
