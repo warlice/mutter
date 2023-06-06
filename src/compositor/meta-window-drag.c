@@ -1446,13 +1446,6 @@ update_resize (MetaWindowDrag          *window_drag,
   new_rect.width = window_drag->initial_window_pos.width;
   new_rect.height = window_drag->initial_window_pos.height;
 
-  /* Don't bother doing anything if no move has been specified.  (This
-   * happens often, even in keyboard resizing, due to the warping of the
-   * pointer.
-   */
-  if (dx == 0 && dy == 0)
-    return;
-
   if ((window_drag->grab_op & META_GRAB_OP_KEYBOARD_RESIZING_UNKNOWN) ==
       META_GRAB_OP_KEYBOARD_RESIZING_UNKNOWN)
     {
