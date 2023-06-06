@@ -556,11 +556,9 @@ if have_x11
       mutter,
       x11_frames,
     ],
-    'exe': safer_xvfb,
+    'exe': bash,
     'args': [
-      xvfb.full_path(),
-      xvfb_args,
-      '--',
+      xvfb_command,
       find_program('x11-test.sh').full_path(),
       mutter.full_path(),
     ],
@@ -774,9 +772,15 @@ foreach test_case: test_cases
 
   if wrappers.length() > 0
     test_args = []
-    test_args = wrappers + [ '--', test_executable.full_path() ] + test_args
+    test_args = [
+      wrappers_launcher.full_path(),
+      wrappers,
+      '--',
+      test_executable.full_path(),
+      test_args,
+    ]
     test_depends += test_executable
-    test_executable = wrappers_launcher
+    test_executable = bash
   endif
 
   test(test_case['name'], test_executable,

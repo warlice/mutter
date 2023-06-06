@@ -372,8 +372,11 @@ if have_tests
   have_clutter_tests = get_option('clutter_tests')
   have_installed_tests = get_option('installed_tests')
 
+  python3 = find_program('python3')
+  bash = find_program('bash')
   meta_dbus_runner = find_program('src/tests/meta-dbus-runner.py')
   default_test_wrappers = [
+    python3,
     meta_dbus_runner,
     '--isolate-dirs',
     '--',
@@ -428,7 +431,7 @@ if have_tests
     '+iglx -noreset',
   ]
   safer_xvfb = find_program('src/tests/safer-xvfb-run.sh')
-  xvfb_command = [safer_xvfb] + [xvfb] + xvfb_args + ['--']
+  xvfb_command = [safer_xvfb.full_path(), xvfb.full_path()] + xvfb_args + ['--']
 
   add_test_setup('CI',
     env: [
@@ -437,6 +440,7 @@ if have_tests
     ],
     exe_wrapper: [
       default_test_wrappers,
+      bash,
       xvfb_command,
     ],
     timeout_multiplier: 10,
