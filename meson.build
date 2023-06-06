@@ -378,6 +378,13 @@ if have_tests
     '--',
   ]
 
+  default_test_env = [
+    'MUTTER_DEBUG_DUMMY_MODE_SPECS=800x600@10.0',
+    'GTK_A11Y=none',
+    'NO_AT_BRIDGE=1',
+    'MALLOC_CHECK_=3',
+  ]
+
   if get_option('catch')
     catch = find_program('catch')
     default_test_wrappers += [
@@ -388,9 +395,12 @@ if have_tests
   add_test_setup('default',
     is_default: true,
     exe_wrapper: default_test_wrappers,
+    env: default_test_env,
   )
 
-  add_test_setup('plain')
+  add_test_setup('plain',
+    env: default_test_env,
+  )
 
   xvfb = find_program('xvfb-run')
   xvfb_args = [
@@ -401,9 +411,7 @@ if have_tests
   xvfb_command = [xvfb] + xvfb_args
 
   add_test_setup('CI',
-    env: [
-      'MUTTER_DEBUG_DUMMY_MODE_SPECS=800x600@10.0',
-    ],
+    env: default_test_env,
     exe_wrapper: [
       default_test_wrappers,
       xvfb_command,
