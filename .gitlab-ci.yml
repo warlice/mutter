@@ -440,7 +440,6 @@ build-wayland-only@x86_64:
     PIPEWIRE_DEBUG: 2
     PIPEWIRE_LOG: "$CI_PROJECT_DIR/build/meson-logs/pipewire.log"
     XVFB_SERVER_ARGS: "+iglx -noreset"
-    G_SLICE: "always-malloc"
     MALLOC_CHECK_: "3"
     NO_AT_BRIDGE: "1"
     GTK_A11Y: "none"
