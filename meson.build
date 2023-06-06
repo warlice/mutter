@@ -432,19 +432,6 @@ if have_tests
   ]
   safer_xvfb = find_program('src/tests/safer-xvfb-run.sh')
   xvfb_command = [safer_xvfb.full_path(), xvfb.full_path()] + xvfb_args + ['--']
-
-  add_test_setup('CI',
-    env: [
-      default_test_env,
-      'MUTTER_TEST_SETUP=CI',
-    ],
-    exe_wrapper: [
-      default_test_wrappers,
-      bash,
-      xvfb_command,
-    ],
-    timeout_multiplier: 10,
-  )
 endif
 
 have_profiler = get_option('profiler')
