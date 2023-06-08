@@ -212,9 +212,19 @@ set_surface_actor_index (GNode    *node,
     }
   else
     {
+      g_object_ref (surface_actor);
+
+      if (clutter_actor_get_parent (surface_actor))
+        {
+          clutter_actor_remove_child (clutter_actor_get_parent (surface_actor),
+                                      surface_actor);
+        }
+
       clutter_actor_insert_child_at_index (container,
                                            surface_actor,
                                            traverse_data->index);
+
+      g_object_unref (surface_actor);
     }
   traverse_data->index++;
 
