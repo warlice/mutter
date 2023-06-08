@@ -23,7 +23,7 @@
 #ifndef META_EVENTS_H
 #define META_EVENTS_H
 
-#include "meta/display.h"
+#include "meta/types.h"
 
 /**
  * META_PRIORITY_EVENTS: (value 0)
