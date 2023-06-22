@@ -142,10 +142,13 @@ variables:
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/GNOME/gtk.git \
+        -Ddemos=false -Dbuild-testsuite=false \
+        -Dbuild-examples=false -Dbuild-tests=false \
         main . 55dd5f47808730ae4f1ffaa481ae37dd536b410a
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/GNOME/libadwaita.git \
+        -Dtests=false -Dexamples=false \
         main . 72f512f01113a64cf332ae0f79becfc487d54b56
 
       rpm -e --nodeps gnome-bluetooth-libs-devel \
