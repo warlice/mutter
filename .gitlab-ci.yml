@@ -113,6 +113,22 @@ variables:
       # Enable sudo for $MUTTER_USER
       echo "%$MUTTER_USER ALL = (ALL) NOPASSWD: ALL" > /etc/sudoers.d/99_mutter-user
 
+      dnf install -y 'dnf-command(debuginfo-install)'
+      dnf debuginfo-install -y \
+        cairo-devel \
+        glib2 \
+        graphene-devel \
+        mesa-dri-drivers \
+        mesa-libGL \
+        wayland-devel \
+        libX11-devel \
+        libXi-devel \
+        libXi-devel \
+        libxcb-devel \
+        pixman-devel \
+        pipewire \
+        pipewire-libs
+
       dnf install -y 'dnf-command(builddep)'
 
       dnf builddep -y mutter --setopt=install_weak_deps=False
