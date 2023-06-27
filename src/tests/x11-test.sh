@@ -32,7 +32,8 @@ echo \# Replacing existing mutter with a new instance > /dev/stderr
 $MUTTER --x11 --replace --mutter-plugin="$MUTTER_TEST_PLUGIN_PATH" &
 MUTTER2_PID=$!
 echo \# Launched with pid $MUTTER2_PID
-wait $MUTTER1_PID
+wait -f $MUTTER1_PID
+echo \# Old mutter instance \(pid $MUTTER1_PID\) replaced correctly
 
 sleep 2
 
@@ -44,4 +45,5 @@ sleep 1
 
 echo \# Terminating mutter > /dev/stderr
 kill $MUTTER2_PID
-wait $MUTTER2_PID
+wait -f $MUTTER2_PID
+echo \# Mutter instance \(pid $MUTTER2_PID\) terminated correctly
