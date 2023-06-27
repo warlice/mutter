@@ -30,8 +30,8 @@ sleep 4
 
 echo \# Replacing existing mutter with a new instance > /dev/stderr
 $MUTTER --x11 --replace --mutter-plugin="$MUTTER_TEST_PLUGIN_PATH" &
-echo \# Launched with pid $MUTTER2_PID
 MUTTER2_PID=$!
+echo \# Launched with pid $MUTTER2_PID
 wait $MUTTER1_PID
 
 sleep 2
