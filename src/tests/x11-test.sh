@@ -23,10 +23,10 @@ sleep 2
 echo Launching a couple of X11 clients > /dev/stderr
 zenity --warning &
 ZENITY1_PID=$!
-sleep 2
+sleep 0.4
 zenity --info &
 ZENITY2_PID=$!
-sleep 4
+sleep 0.5
 
 echo \# Replacing existing mutter with a new instance > /dev/stderr
 $MUTTER --x11 --replace --mutter-plugin="$MUTTER_TEST_PLUGIN_PATH" &
