@@ -39,9 +39,16 @@ sleep 2
 
 echo \# Terminating clients > /dev/stderr
 kill $ZENITY1_PID
-sleep 1
+wait -f $ZENITY1_PID || exit_code=$?
+test "$exit_code" = $((128 + 15)) # SIGTERM
+
+sleep 0.4
+
 kill $ZENITY2_PID
-sleep 1
+wait -f $ZENITY2_PID || exit_code=$?
+test "$exit_code" = $((128 + 15)) # SIGTERM
+
+sleep 0.2
 
 echo \# Terminating mutter > /dev/stderr
 kill $MUTTER2_PID

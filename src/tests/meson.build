@@ -555,7 +555,7 @@ endif
 if have_x11
   x11_test = {
     'name': 'x11',
-    'suite': [ 'x11', 'ignore-catch' ],
+    'suite': [ 'x11' ],
     'depends': [
       mutter,
       x11_frames,
