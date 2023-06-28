@@ -624,6 +624,7 @@ foreach stacking_test: stacking_tests
       'args': [
         files('stacking' / stacking_test + '.metatest'),
       ],
+      'depends': [ test_client ],
     }
   ]
 
