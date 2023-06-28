@@ -55,6 +55,10 @@ variables:
           rm -rv "$tmpdir"
         fi
       fi
+      if [ "$(git -C "$MUTTER_CLONE_PATH" rev-parse HEAD)" != "$CI_COMMIT_SHA" ]; then
+        git -C "$MUTTER_CLONE_PATH" fetch origin "$CI_COMMIT_SHA"
+        git -C "$MUTTER_CLONE_PATH" reset --hard "$CI_COMMIT_SHA"
+      fi
       set +x
     fi
 
@@ -190,6 +194,10 @@ variables:
             $CI_REPOSITORY_URL mutter-src -b "$CI_COMMIT_BRANCH"
         else
           git clone --depth $MUTTER_CLONE_DEPTH $CI_REPOSITORY_URL mutter-src
+        fi
+        if [ "$(git -C mutter-src rev-parse HEAD)" != "$CI_COMMIT_SHA" ]; then
+          git -C mutter-src fetch origin "$CI_COMMIT_SHA"
+          git -C mutter-src reset --hard "$CI_COMMIT_SHA"
         fi
         meson setup build mutter-src -Dkvm_tests=true
         ninja -C build src/tests/kvm/bzImage
