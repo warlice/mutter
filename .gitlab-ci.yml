@@ -83,7 +83,7 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 38
-    BASE_TAG: '2023-06-28.0'
+    BASE_TAG: '2023-06-28.1'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       asciidoc
@@ -99,7 +99,7 @@ variables:
       qemu-system-x86-core
       busybox
       gi-docgen
-      python3-dbusmock
+      python3-pip
       pkgconfig(libgcrypt)
       pkgconfig(libnma-gtk4)
       pkgconfig(appstream)
@@ -150,6 +150,9 @@ variables:
         https://gitlab.gnome.org/GNOME/libadwaita.git \
         -Dtests=false -Dexamples=false \
         main . 72f512f01113a64cf332ae0f79becfc487d54b56
+
+      pip install \
+        git+https://github.com/martinpitt/python-dbusmock.git@f405d03268dbcb77c6fa5519f5b2e48d5b7a549f
 
       rpm -e --nodeps gnome-bluetooth-libs-devel \
                       mutter mutter-devel \
