@@ -35,6 +35,10 @@ shift
 shift
 shift
 
+CPUs=$(grep -w -c processor /proc/cpuinfo)
+CONCURRENCY_LEVEL=$((CPUs+CPUs/4))
+export MAKEFLAGS="-j$CONCURRENCY_LEVEL $MAKEFLAGS"
+
 # ./scripts/config  --enable CONFIG_DRM_VKMS
 CONFIGS=()
 while [[ "x$1" != "x" ]]; do
@@ -63,7 +67,7 @@ echo Enabling ${CONFIGS[@]}...
 ./scripts/config ${CONFIGS[@]/#/--enable }
 
 make oldconfig
-make -j8 WERROR=0
+make WERROR=0
 
 popd
 
