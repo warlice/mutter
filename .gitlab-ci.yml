@@ -493,6 +493,7 @@ build-wayland-only@x86_64:
           --no-rebuild
           --timeout-multiplier 10
           --print-errorlogs
+          --no-stdsplit
     - xvfb-run -a -s "$XVFB_SERVER_ARGS"
         meson test
           -C build
@@ -502,6 +503,7 @@ build-wayland-only@x86_64:
           --no-rebuild
           --timeout-multiplier 10
           --print-errorlogs
+          --no-stdsplit
   artifacts:
     reports:
       junit: "build/meson-logs/testlog*.junit.xml"
@@ -528,6 +530,7 @@ test-mutter-kvm@x86_64:
         --setup plain
         --suite 'mutter/kvm'
         --print-errorlogs
+        --no-stdsplit
   needs:
     - build-mutter@x86_64
   artifacts:
