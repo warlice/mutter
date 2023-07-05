@@ -210,6 +210,33 @@ security_context_destroy (struct wl_client   *client,
   wl_resource_destroy (resource);
 }
 
+static gboolean
+check_metadata (MetaWaylandSecurityContext *security_context,
+                struct wl_resource         *resource)
+{
+  if (!security_context->auth.sandbox_engine)
+    {
+      wl_resource_post_error (resource,
+                              WP_SECURITY_CONTEXT_V1_ERROR_INVALID_METADATA,
+                              "no sandbox engine specified");
+      return FALSE;
+    }
+
+  if (g_strcmp0 (security_context->auth.sandbox_engine, "flatpak") == 0)
+    {
+      if (!security_context->auth.app_id ||
+          !security_context->auth.instance_id)
+        {
+          wl_resource_post_error (resource,
+                                  WP_SECURITY_CONTEXT_V1_ERROR_INVALID_METADATA,
+                                  "flatpak requires app id and instance id");
+          return FALSE;
+        }
+    }
+
+  return TRUE;
+}
+
 static void
 security_context_commit (struct wl_client   *client,
                          struct wl_resource *resource)
@@ -217,6 +244,9 @@ security_context_commit (struct wl_client   *client,
   MetaWaylandSecurityContext *security_context =
     wl_resource_get_user_data (resource);
   struct wl_event_loop *loop;
+
+  if (!check_metadata (security_context, resource))
+    return;
 
   if (!security_context)
     {
