@@ -44,6 +44,7 @@
 #include "wayland/meta-wayland-surface.h"
 #include "wayland/meta-wayland-window-configuration.h"
 #include "wayland/meta-wayland-xdg-shell.h"
+#include "wayland/meta-wayland-security-context.h"
 
 enum
 {
@@ -783,6 +784,40 @@ meta_window_wayland_get_wayland_surface (MetaWindow *window)
   return wl_window->surface;
 }
 
+static void
+meta_window_wayland_get_security_context (MetaWindow  *window,
+                                          char       **sandbox_engine,
+                                          char       **app_id,
+                                          char       **instance_id)
+{
+  MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
+  MetaWaylandSurface *surface = wl_window->surface;
+  MetaDisplay *display = meta_window_get_display (window);
+  MetaContext *context = meta_display_get_context (display);
+  MetaWaylandCompositor *compositor =
+    meta_context_get_wayland_compositor (context);
+  struct wl_resource *resource;
+  MetaWaylandAuthClient *auth_client;
+  const MetaWaylandSecurityContextAuthentication *auth;
+
+  resource = surface->resource;
+
+  if (!resource)
+    return;
+
+  auth_client = meta_wayland_security_context_manager_get_auth_client (
+    compositor->security_context_manager,
+    wl_resource_get_client (resource));
+
+  if (!auth_client)
+    return;
+
+  auth = meta_wayland_auth_client_get_authentication (auth_client);
+  *sandbox_engine = auth->sandbox_engine;
+  *app_id = auth->app_id;
+  *instance_id = auth->instance_id;
+}
+
 static MetaStackLayer
 meta_window_wayland_calculate_layer (MetaWindow *window)
 {
@@ -913,6 +948,7 @@ meta_window_wayland_class_init (MetaWindowWaylandClass *klass)
   window_class->unmap = meta_window_wayland_unmap;
   window_class->is_focus_async = meta_window_wayland_is_focus_async;
   window_class->get_wayland_surface = meta_window_wayland_get_wayland_surface;
+  window_class->get_security_context = meta_window_wayland_get_security_context;
 
   obj_props[PROP_SURFACE] =
     g_param_spec_object ("surface",

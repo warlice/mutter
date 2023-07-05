@@ -896,6 +896,47 @@ sync_client_window_mapped (MetaWindow *window)
     META_WINDOW_GET_CLASS (window)->unmap (window);
 }
 
+static void
+get_security_context (MetaWindow  *window,
+                      char       **sandbox_engine_out,
+                      char       **app_id_out,
+                      char       **instance_id_out)
+{
+  char *sandbox_engine = NULL;
+  char *app_id = NULL;
+  char *instance_id = NULL;
+
+  if (META_WINDOW_GET_CLASS (window)->get_security_context)
+    META_WINDOW_GET_CLASS (window)->get_security_context (window,
+                                                          &sandbox_engine,
+                                                          &app_id,
+                                                          &instance_id);
+
+  if (sandbox_engine_out)
+    *sandbox_engine_out = sandbox_engine;
+  if (app_id_out)
+    *app_id_out = app_id;
+  if (instance_id_out)
+    *instance_id_out = instance_id;
+}
+
+static gboolean
+meta_window_update_security_context_id (MetaWindow *window)
+{
+  char *sandbox_engine;
+  char *app_id;
+
+  get_security_context (window, &sandbox_engine, &app_id, NULL);
+
+  if (g_strcmp0 (sandbox_engine, "flatpak") == 0)
+    {
+      window->sandboxed_app_id = g_strdup (app_id);
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
 static gboolean
 meta_window_update_flatpak_id (MetaWindow *window,
                                uint32_t    pid)
@@ -977,6 +1018,9 @@ meta_window_update_sandboxed_app_id (MetaWindow *window)
   pid = meta_window_get_pid (window);
 
   if (pid < 1)
+    return;
+
+  if (meta_window_update_security_context_id (window))
     return;
 
   if (meta_window_update_flatpak_id (window, pid))

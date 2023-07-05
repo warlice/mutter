@@ -605,6 +605,11 @@ struct _MetaWindowClass
 
   void (* map)   (MetaWindow *window);
   void (* unmap) (MetaWindow *window);
+
+  void (*get_security_context) (MetaWindow  *window,
+                                char       **sandbox_engine,
+                                char       **app_id,
+                                char       **instance_id);
 };
 
 /* These differ from window->has_foo_func in that they consider
