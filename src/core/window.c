@@ -1761,7 +1761,7 @@ implement_showing (MetaWindow *window,
        * Force placing windows only when they should be already mapped,
        * see #751887
        */
-      if (!window->placed && window_has_buffer (window))
+      if (!window->placed && client_window_should_be_mapped (window))
         meta_window_force_placement (window, FALSE);
 
       meta_window_hide (window);
