@@ -20,8 +20,18 @@ MUTTER_DEBUG=$MUTTER_DEBUG \
 $VM_ENV \
 "
 
+cleanup_paths=""
+trap '{ rm -rf $cleanup_paths; }' EXIT
+
 if [ ! -v $MUTTER_DEBUG_FORCE_KMS_MODE ]; then
   VIRTME_ENV="$VIRTME_ENV MUTTER_DEBUG_FORCE_KMS_MODE=$MUTTER_DEBUG_FORCE_KMS_MODE"
+fi
+
+if [ ! -v "$XDG_RUNTIME_DIR" ]; then
+  tmpdir=$(mktemp -d --tmpdir mutter-runtime-XXXXXX)
+  chmod 700 "$tmpdir"
+  cleanup_paths="$cleanup_paths $tmpdir"
+  export XDG_RUNTIME_DIR="$tmpdir"
 fi
 
 if [[ "$(stat -c '%t:%T' -L /proc/$$/fd/0)" == "0:0" ]]; then
@@ -37,6 +47,10 @@ SCRIPT="\
   $(printf "\"%s\" " "${@:6}")\
 "
 
+if [ ! -z "$MUTTER_TEST_ROOT" ]; then
+  ISOLATE_DIRS_ARGS="--rwdir=$MUTTER_TEST_ROOT"
+fi
+
 echo Running tests in virtual machine ...
 virtme-run \
   --memory=1024M \
@@ -44,6 +58,7 @@ virtme-run \
   --pwd \
   --kimg "$IMAGE" \
   --script-sh "sh -c \"$SCRIPT\"" \
+  $ISOLATE_DIRS_ARGS \
   --qemu-opts -cpu host,pdcm=off -smp 2
 VM_RESULT=$?
 if [ $VM_RESULT != 0 ]; then

@@ -27,18 +27,29 @@ gschema_config.set('XWAYLAND_GRAB_DEFAULT_ACCESS_RULES',
                    xwayland_grab_default_access_rules)
 
 schemadir = datadir / 'glib-2.0' / 'schemas'
-configure_file(
+schema_files = []
+schema_files += configure_file(
   input: 'org.gnome.mutter.gschema.xml.in',
   output: 'org.gnome.mutter.gschema.xml',
   configuration: gschema_config,
   install_dir: schemadir
 )
 
-configure_file(
+schema_files += configure_file(
   input: 'org.gnome.mutter.wayland.gschema.xml.in',
   output: 'org.gnome.mutter.wayland.gschema.xml',
   configuration: gschema_config,
   install_dir: schemadir
+)
+
+compiled_gschemas = custom_target('compile-schemas',
+  input: schema_files,
+  output: 'gschemas.compiled',
+  command: [
+    find_program('glib-compile-schemas'),
+    '--strict',
+    meson.current_build_dir(),
+  ],
 )
 
 install_data(['mutter-schemas.convert'],

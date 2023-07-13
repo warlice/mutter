@@ -261,12 +261,33 @@ run_tests_idle (gpointer user_data)
   return G_SOURCE_REMOVE;
 }
 
+static void
+sig_handler (int        sig,
+             siginfo_t *siginfo,
+             void      *context)
+{
+  pid_t sender_pid = siginfo->si_pid;
+  g_autofree char *sender = g_strdup_printf ("/proc/%d/cmdline", sender_pid);
+  g_autofree char *proc_cmdline = NULL;
+
+  if (g_file_get_contents (sender, &proc_cmdline, NULL, NULL))
+    {
+      g_warning ("Test has ben stopped by %d (%s) via signal %d!",
+                 sender_pid, proc_cmdline, sig);
+    }
+  else
+    {
+      g_warning ("Test has ben stopped by %d via signal %d!", sender_pid, sig);
+    }
+}
+
 int
 meta_context_test_run_tests (MetaContextTest  *context_test,
                              MetaTestRunFlags  flags)
 {
   MetaContext *context = META_CONTEXT (context_test);
   g_autoptr (GError) error = NULL;
+  static struct sigaction sa;
 
   if (!meta_context_setup (context, &error))
     {
@@ -297,6 +318,11 @@ meta_context_test_run_tests (MetaContextTest  *context_test,
   g_idle_add (run_tests_idle, context_test);
 
   meta_context_notify_ready (context);
+
+  sa.sa_sigaction = sig_handler;
+  sa.sa_flags |= SA_SIGINFO;
+  sigaction (SIGTERM, &sa, NULL);
+  sigaction (SIGKILL, &sa, NULL);
 
   if (!meta_context_run_main_loop (context, &error))
     {

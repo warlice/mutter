@@ -55,6 +55,10 @@ variables:
           rm -rv "$tmpdir"
         fi
       fi
+      if [ "$(git -C "$MUTTER_CLONE_PATH" rev-parse HEAD)" != "$CI_COMMIT_SHA" ]; then
+        git -C "$MUTTER_CLONE_PATH" fetch origin "$CI_COMMIT_SHA"
+        git -C "$MUTTER_CLONE_PATH" reset --hard "$CI_COMMIT_SHA"
+      fi
       set +x
     fi
 
@@ -83,7 +87,7 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 38
-    BASE_TAG: '2023-06-20.2'
+    BASE_TAG: '2023-07-05.2'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       asciidoc
@@ -99,7 +103,7 @@ variables:
       qemu-system-x86-core
       busybox
       gi-docgen
-      python3-dbusmock
+      python3-pip
       pkgconfig(libgcrypt)
       pkgconfig(libnma-gtk4)
       pkgconfig(appstream)
@@ -113,6 +117,22 @@ variables:
       # Enable sudo for $MUTTER_USER
       echo "%$MUTTER_USER ALL = (ALL) NOPASSWD: ALL" > /etc/sudoers.d/99_mutter-user
 
+      dnf install -y 'dnf-command(debuginfo-install)'
+      dnf debuginfo-install -y \
+        cairo-devel \
+        glib2 \
+        graphene-devel \
+        mesa-dri-drivers \
+        mesa-libGL \
+        wayland-devel \
+        libX11-devel \
+        libXi-devel \
+        libXi-devel \
+        libxcb-devel \
+        pixman-devel \
+        pipewire \
+        pipewire-libs
+
       dnf install -y 'dnf-command(builddep)'
 
       dnf builddep -y mutter --setopt=install_weak_deps=False
@@ -124,8 +144,16 @@ variables:
       dnf builddep -y gtk4 --setopt=install_weak_deps=False
 
       ./.gitlab-ci/install-meson-project.sh \
-        https://gitlab.gnome.org/jadahl/catch.git \
-        main . 29ad36e2b1d28ac9d8b2bc44af46296cb1db5d66
+        https://gitlab.gnome.org/3v1n0/catch.git \
+        catch-at-exit . 214c1171
+
+      # Pull in fix for gtk clients, see:
+      # - https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/6047
+      dnf builddep -y gtk3 --setopt=install_weak_deps=False
+      ./.gitlab-ci/install-meson-project.sh \
+        -Ddemos=false -Dtests=false -Dexamples=false \
+        https://gitlab.gnome.org/GNOME/gtk.git \
+        gtk-3-24 . 6803508442580eb6b2be64e0c5795ccc6a28ede7
 
       # Pull in fix for # https://gitlab.gnome.org/GNOME/zenity/-/issues/58
       ./.gitlab-ci/install-meson-project.sh \
@@ -134,11 +162,17 @@ variables:
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/GNOME/gtk.git \
+        -Ddemos=false -Dbuild-testsuite=false \
+        -Dbuild-examples=false -Dbuild-tests=false \
         main . 55dd5f47808730ae4f1ffaa481ae37dd536b410a
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/GNOME/libadwaita.git \
+        -Dtests=false -Dexamples=false \
         main . 72f512f01113a64cf332ae0f79becfc487d54b56
+
+      pip install \
+        git+https://github.com/martinpitt/python-dbusmock.git@f405d03268dbcb77c6fa5519f5b2e48d5b7a549f
 
       rpm -e --nodeps gnome-bluetooth-libs-devel \
                       mutter mutter-devel \
@@ -161,21 +195,18 @@ variables:
         else
           git clone --depth $MUTTER_CLONE_DEPTH $CI_REPOSITORY_URL mutter-src
         fi
+        if [ "$(git -C mutter-src rev-parse HEAD)" != "$CI_COMMIT_SHA" ]; then
+          git -C mutter-src fetch origin "$CI_COMMIT_SHA"
+          git -C mutter-src reset --hard "$CI_COMMIT_SHA"
+        fi
         meson setup build mutter-src -Dkvm_tests=true
         ninja -C build src/tests/kvm/bzImage
         mkdir -p /opt/mutter
         cp build/src/tests/kvm/bzImage /opt/mutter/bzImage
-
-        dnf install -y python3-argcomplete
-
-        git clone https://github.com/arighi/virtme-ng.git
-        cd virtme-ng
-        git fetch --tags
-        git checkout v1.8
-        ./setup.py install --prefix=/usr
-        cd ..
-        rm -rf virtme-ng
         rm -rf build mutter-src
+
+        pip install \
+          git+https://github.com/arighi/virtme-ng.git@v1.12
       fi
   retry:
     max: 2
@@ -434,21 +465,14 @@ build-wayland-only@x86_64:
 
 .test-setup:
   variables:
-    XDG_RUNTIME_DIR: "$CI_PROJECT_DIR/runtime-dir"
-    GSETTINGS_SCHEMA_DIR: "$CI_PROJECT_DIR/build/data"
-    MUTTER_DEBUG_DUMMY_MODE_SPECS: "800x600@10.0"
     PIPEWIRE_DEBUG: 2
     PIPEWIRE_LOG: "$CI_PROJECT_DIR/build/meson-logs/pipewire.log"
-    XVFB_SERVER_ARGS: "+iglx -noreset"
-    G_SLICE: "always-malloc"
-    MALLOC_CHECK_: "3"
-    NO_AT_BRIDGE: "1"
-    GTK_A11Y: "none"
-  before_script:
-    - !reference [.mutter.git-clone, before_script]
-    # Disable e.g. audio support to not dead lock screen cast tests
-    - mkdir -m 700 $XDG_RUNTIME_DIR
-    - pipewire & sleep 2
+    MESON_TEST_DEFAULT_ARGS: |
+      -C build
+      --no-rebuild
+      --timeout-multiplier 10
+      --print-errorlogs
+      --no-stdsplit
 
 .test-mutter-base:
   extends:
@@ -475,20 +499,15 @@ build-wayland-only@x86_64:
     - .mutter.distribution-image
     - .test-mutter-base
   script:
-    - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
-    - xvfb-run -a -s "$XVFB_SERVER_ARGS"
-        ./src/tests/meta-dbus-runner.py
-          --launch=wireplumber
-          meson test
-            -C build
-            --setup plain
-            --no-suite 'mutter/kvm'
-            --no-rebuild
-            --timeout-multiplier 10
-            --print-errorlogs
+      - meson test ${MESON_TEST_DEFAULT_ARGS}
+        --no-suite 'mutter/kvm'
+      - meson test ${MESON_TEST_DEFAULT_ARGS}
+        --setup no_catch
+        --suite mutter/ignore-catch
+        --suite ignore-catch
   artifacts:
     reports:
-      junit: "build/meson-logs/testlog-plain.junit.xml"
+      junit: "build/meson-logs/testlog*.junit.xml"
 
 test-mutter@x86_64:
   extends:
@@ -506,12 +525,9 @@ test-mutter-kvm@x86_64:
   tags:
     - kvm
   script:
-    - meson test -C build
-        --no-rebuild
-        --timeout-multiplier 10
+    - meson test ${MESON_TEST_DEFAULT_ARGS}
         --setup plain
         --suite 'mutter/kvm'
-        --print-errorlogs
   needs:
     - build-mutter@x86_64
   artifacts:
@@ -612,11 +628,7 @@ dist-mutter:
   script:
     - meson setup . build --werror --prefix /usr
         -Dbuildtype=debugoptimized
-    - glib-compile-schemas $GSETTINGS_SCHEMA_DIR
-    - xvfb-run -a -s "$XVFB_SERVER_ARGS"
-        ./src/tests/meta-dbus-runner.py
-          --launch=wireplumber
-          meson dist -C build
+    - meson dist -C build
   rules:
     - if: '$CI_PIPELINE_SOURCE != "merge_request_event"'
       when: manual

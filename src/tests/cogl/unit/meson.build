@@ -14,6 +14,7 @@ test_env = environment()
 test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
 test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
 test_env.set('G_ENABLE_DIAGNOSTIC', '0')
+test_env.set('GSETTINGS_SCHEMA_DIR', fs.parent(compiled_gschemas.full_path()))
 test_env.set('MUTTER_TEST_PLUGIN_PATH', '@0@'.format(default_plugin.full_path()))
 
 foreach unit_test: cogl_unit_tests
@@ -52,8 +53,8 @@ foreach unit_test: cogl_unit_tests
     test('@0@-@1@'.format(test_name, variant), test_executable,
       suite: ['cogl', 'cogl/unit'],
       env: variant_test_env,
-      is_parallel: false,
       should_fail: not should_pass,
+      depends: default_plugin,
     )
   endforeach
 endforeach

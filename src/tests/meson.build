@@ -137,6 +137,7 @@ test_env = environment()
 test_env_variables = {
   'G_TEST_SRCDIR': mutter_srcdir / 'src',
   'G_TEST_BUILDDIR': mutter_builddir,
+  'GSETTINGS_SCHEMA_DIR': fs.parent(compiled_gschemas.full_path()),
   'XDG_CONFIG_HOME': mutter_builddir / '.config',
   'MUTTER_TEST_PLUGIN_PATH': '@0@'.format(default_plugin.full_path()),
 }
@@ -182,6 +183,7 @@ test_runner = executable('mutter-test-runner',
 )
 
 meta_dbus_runner = find_program('meta-dbus-runner.py')
+wrappers_launcher = find_program('wrappers-launcher.sh')
 
 tests_datadir = pkgdatadir / 'tests'
 
@@ -224,7 +226,8 @@ privileged_test_cases = []
 test_cases += [
   {
     'name': 'unit',
-    'suite': 'unit',
+    'suite': [ 'unit' ],
+    'needs-x11': true,
     'sources': [
       'unit-tests.c',
       'boxes-tests.c',
@@ -244,8 +247,8 @@ test_cases += [
   },
   {
     'name': 'monitor-unit',
-    'suite': 'backend',
-    'sources': [ 'monitor-unit-tests.c', ],
+    'suite': [ 'backend' ],
+    'needs-x11': true,
     'depends': [
       test_client,
       x11_frames,
@@ -253,13 +256,14 @@ test_cases += [
   },
   {
     'name': 'monitor-utils',
-    'suite': 'unit',
+    'suite': [ 'unit' ],
     'sources': [ 'monitor-util-tests.c', ],
   },
   {
     'name': 'stage-views',
-    'suite': 'compositor',
+    'suite': [ 'compositor' ],
     'sources': [ 'stage-view-tests.c', ],
+    'needs-x11': true,
     'depends': [
       test_client,
       x11_frames,
@@ -267,27 +271,27 @@ test_cases += [
   },
   {
     'name': 'anonymous-file',
-    'suite': 'unit',
-    'sources': [ 'anonymous-file.c', ],
+    'suite': [ 'unit' ],
   },
   {
     'name': 'edid',
-    'suite': 'unit',
-    'sources': [ 'edid-tests.c', ],
+    'suite': [ 'unit' ],
   },
   {
     'name': 'color-management',
-    'suite': 'unit',
-    'sources': [ 'color-management-tests.c', ],
+    'suite': [ 'unit', 'color-management' ],
+    'needs-x11': true,
   },
   {
     'name': 'color-management-profile-conflict',
-    'suite': 'unit',
+    'suite': [ 'unit', 'color-management' ],
     'sources': [ 'color-management-profile-conflict-test.c', ],
   },
 ]
 
 if have_native_tests
+  pipewire = find_program('pipewire', required: true)
+  wireplumber = find_program('wireplumber', required: true)
   screen_cast_client = executable('mutter-screen-cast-client',
     sources: [
       'screen-cast-client.c',
@@ -312,37 +316,40 @@ if have_native_tests
   test_cases += [
     {
       'name': 'kms-utils',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native' ],
       'sources': [ 'kms-utils-unit-tests.c', ],
     },
     {
       'name': 'native-unit',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native', 'virtual-monitor' ],
       'sources': [
         'native-headless.c',
-        'native-screen-cast.c',
-        'native-screen-cast.h',
         'native-virtual-monitor.c',
         'native-virtual-monitor.h',
       ],
-      'depends': [
-        screen_cast_client,
+    },
+    {
+      'name': 'native-screen-cast',
+      'suite': [ 'backends/native', 'screen-cast' ],
+      'depends': [ screen_cast_client ],
+      'wrappers': [
+        pipewire.full_path(),
+        wireplumber.full_path(),
       ],
     },
     {
       'name': 'pointer-constraints',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native' ],
       'sources': [ 'native-pointer-constraints.c' ],
       'depends': [ test_client ],
     },
     {
       'name': 'ref-test-sanity',
-      'suite': 'backends/native',
-      'sources': [ 'ref-test-sanity.c' ],
+      'suite': [ 'backends/native' ],
     },
     {
       'name': 'persistent-virtual-monitor',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native', 'virtual-monitor' ],
       'sources': [ 'native-persistent-virtual-monitor.c' ],
     },
   ]
@@ -367,23 +374,17 @@ if have_native_tests
   kms_test_cases = [
     {
       'name': 'kms-force-atomic-sanity',
-      'suite': 'backends/native/kms',
-      'sources': [
-        'native-kms-force-atomic-sanity.c',
-      ],
+      'suite': [ 'backends/native/kms' ],
       'variants': [['', test_env_variables + kms_atomic_variables]],
     },
     {
       'name': 'kms-force-simple-sanity',
-      'suite': 'backends/native/kms',
-      'sources': [
-        'native-kms-force-simple-sanity.c',
-      ],
+      'suite': [ 'backends/native/kms' ],
       'variants': [['', test_env_variables + kms_simple_variables]],
     },
     {
       'name': 'kms-render',
-      'suite': 'backends/native/kms',
+      'suite': [ 'backends/native/kms' ],
       'sources': [
         'native-kms-render.c',
         wayland_test_utils,
@@ -392,7 +393,7 @@ if have_native_tests
     },
     {
       'name': 'kms-device',
-      'suite': 'backends/native/kms',
+      'suite': [ 'backends/native/kms' ],
       'sources': [
         'meta-kms-test-utils.c',
         'meta-kms-test-utils.h',
@@ -402,7 +403,7 @@ if have_native_tests
     },
     {
       'name': 'kms-update',
-      'suite': 'backends/native/kms',
+      'suite': [ 'backends/native/kms' ],
       'sources': [
         'meta-kms-test-utils.c',
         'meta-kms-test-utils.h',
@@ -412,12 +413,12 @@ if have_native_tests
     },
     {
       'name': 'kms-headless-start',
-      'suite': 'backend/native/kms',
+      'suite': [ 'backend/native/kms' ],
       'sources': [ 'native-kms-headless-start.c', ],
     },
     {
       'name': 'kms-hotplug',
-      'suite': 'backends/native/kms',
+      'suite': [ 'backends/native/kms' ],
       'sources': [
         'meta-kms-test-utils.c',
         'meta-kms-test-utils.h',
@@ -427,7 +428,7 @@ if have_native_tests
     },
     {
       'name': 'kms-cursor-hotplug',
-      'suite': 'backends/native',
+      'suite': [ 'backends/native' ],
       'sources': [
         'native-kms-cursor-hotplug.c',
         wayland_test_utils,
@@ -441,14 +442,11 @@ if have_native_tests
   test_cases += [
     {
       'name': 'wayland-client-tests',
-      'suite': 'wayland',
-      'sources': [
-        'wayland-client-tests.c',
-      ],
+      'suite': [ 'wayland' ],
     },
     {
       'name': 'wayland-fullscreen',
-      'suite': 'wayland',
+      'suite': [ 'wayland' ],
       'sources': [
         'wayland-fullscreen-test.c',
         wayland_test_utils,
@@ -459,7 +457,7 @@ if have_native_tests
     },
     {
       'name': 'wayland-fractional-scale',
-      'suite': 'wayland',
+      'suite': [ 'wayland' ],
       'sources': [
         'wayland-fractional-scale-test.c',
         wayland_test_utils,
@@ -470,7 +468,7 @@ if have_native_tests
     },
     {
       'name': 'wayland-unit',
-      'suite': 'wayland',
+      'suite': [ 'wayland' ],
       'sources': [
         'wayland-unit-tests.c',
         dummy_client_header,
@@ -512,7 +510,7 @@ if have_native_tests
     test_cases += [
       {
         'name': 'wayland-x11-interop',
-        'suite': 'wayland',
+        'suite': [ 'wayland', 'xwayland' ],
         'sources': [
           'wayland-x11-interop-tests.c',
           wayland_test_client_utils,
@@ -527,14 +525,12 @@ if have_native_tests
       },
       {
         'name': 'xwayland',
-        'suite': 'wayland',
+        'suite': [ 'wayland', 'xwayland', 'ignore-catch' ],
+        'is_parallel': false,
         'depends': [
           test_client,
           x11_compositor_checker,
           x11_frames,
-        ],
-        'sources': [
-          'xwayland-tests.c',
         ],
       },
     ]
@@ -544,7 +540,7 @@ if have_native_tests
   test_cases += [
     {
       'name': 'service-channel',
-      'suite': 'wayland',
+      'suite': [ 'wayland' ],
       'sources': [
         'service-channel-tests.c',
         wayland_test_utils,
@@ -554,31 +550,31 @@ if have_native_tests
       ],
     },
   ]
+endif
 
-  foreach test_case: test_cases
-    test_executable = executable('mutter-' + test_case['name'],
-      sources: test_case['sources'],
-      include_directories: tests_includes,
-      c_args: [
-        tests_c_args,
-        '-DG_LOG_DOMAIN="mutter-@0@-test"'.format(test_case['name']),
-      ],
-      dependencies: libmutter_test_dep,
-      install: have_installed_tests,
-      install_dir: mutter_installed_tests_libexecdir,
-      install_rpath: pkglibdir,
-    )
+if have_x11
+  x11_test = {
+    'name': 'x11',
+    'suite': [ 'x11' ],
+    'depends': [
+      mutter,
+      x11_frames,
+    ],
+    'exe': bash,
+    'args': [
+      xvfb_command,
+      find_program('x11-test.sh').full_path(),
+      mutter.full_path(),
+    ],
+  }
+  test_cases += x11_test
 
-    test_depends = [ default_plugin ] + test_case.get('depends', [])
-
-    test(test_case['name'], test_executable,
-      suite: ['core', 'mutter/' + test_case['suite']],
-      env: test_env,
-      depends: test_depends,
-      is_parallel: false,
-      timeout: 60,
-    )
-  endforeach
+  sync_env = test_env
+  sync_env.set('MUTTER_SYNC', '1')
+  test_cases += x11_test + {
+    'name': 'x11-sync',
+    'env': sync_env,
+  }
 endif
 
 stacking_tests = [
@@ -620,15 +616,17 @@ stacking_tests = [
 ]
 
 foreach stacking_test: stacking_tests
-  test(stacking_test, test_runner,
-    suite: ['core', 'mutter/stacking'],
-    env: test_env,
-    args: [
-      files('stacking' / stacking_test + '.metatest'),
-    ],
-    is_parallel: false,
-    timeout: 60,
-  )
+  test_cases += [
+    {
+      'name': stacking_test,
+      'suite': ['stacking'],
+      'exe': test_runner,
+      'args': [
+        files('stacking' / stacking_test + '.metatest'),
+      ],
+      'depends': [ test_client ],
+    }
+  ]
 
   if have_installed_tests
     installed_tests_cdata = configuration_data()
@@ -657,7 +655,8 @@ if have_kvm_tests or have_tty_tests
     endif
 
     test_executable = executable('mutter-' + test_case['name'],
-      sources: test_case['sources'],
+      sources: test_case.get('sources', fs.exists(test_case['name'] + '.c') ?
+        test_case['name'] + '.c' : 'native-' + test_case['name'] + '.c'),
       include_directories: tests_includes,
       c_args: [
         tests_c_args,
@@ -696,75 +695,112 @@ if have_kvm_tests or have_tty_tests
   if have_tty_tests
     foreach test_case: privileged_tests
       test('tty-' + test_case['name'], test_case['executable'],
-        suite: ['core', 'mutter/tty', 'mutter/tty/' + test_case['suite']],
+        suite: ['core', 'mutter/tty', 'mutter/tty/'] + test_case['suite'],
         env: test_case['env'],
-        is_parallel: false,
         timeout: 60,
       )
     endforeach
   endif
 endif
 
-if have_x11
-  foreach mode: ['', 'sync']
-    x11_env = test_env
-    if mode == 'sync'
-      x11_env.set('MUTTER_SYNC', '1')
-    endif
-    test('x11' + (mode != '' ? '-' + mode : ''), xvfb,
-      args: [
-        xvfb_args,
-        find_program('x11-test.sh').full_path(),
-        mutter.full_path(),
-      ],
-      depends: [
-        mutter,
-        default_plugin,
-        x11_frames,
-      ],
-      env: x11_env,
-      suite: ['core', 'mutter/x11'],
-      is_parallel: false,
-      timeout: 60,
-    )
-  endforeach
-endif
-
 tools_test_env = test_env
 tools_test_env.set('G_DEBUG', 'fatal-warnings')
 
-test('get-state-tool-gio', mutter,
-  args: [
+tool_test_base = {
+  'suite': ['tools'],
+  'exe': mutter,
+  'args': [
     '--headless',
     '--mutter-plugin=@0@'.format(default_plugin.full_path()),
     '--virtual-monitor', '800x600',
-    '--wayland-display', 'get-state-gio',
-    get_state_tool.full_path(),
+      '--wayland-display',
   ],
-  depends: [
-    default_plugin,
-  ],
-  suite: ['tools'],
-  env: tools_test_env,
-  is_parallel: false,
-  timeout: 60,
-)
+  'env': tools_test_env,
+}
 
-test('get-state-tool-gdbus', mutter,
-  args: [
-    '--headless',
-    '--mutter-plugin=@0@'.format(default_plugin.full_path()),
-    '--virtual-monitor', '800x600',
-    '--wayland-display', 'get-state-gdbus',
-    '--',
-    get_state_tool.full_path(),
-    '--gdbus',
+test_cases += tool_test_base + {
+  'name': 'get-state-tool-gio',
+  'args': tool_test_base.get('args') + [
+     'get-state-gio',
+     '--',
+     get_state_tool.full_path(),
   ],
-  depends: [
-    default_plugin,
+}
+
+test_cases += tool_test_base + {
+  'name': 'get-state-tool-gdbus',
+  'args': tool_test_base.get('args') + [
+     'get-state-gdbus',
+     '--',
+     get_state_tool.full_path(),
+     '--gdbus',
   ],
-  suite: ['tools'],
-  env: tools_test_env,
-  is_parallel: false,
-  timeout: 60,
-)
+}
+
+sh = find_program('sh', required: true)
+
+foreach test_case: test_cases
+  suites = []
+  foreach suite: test_case.get('suite', [])
+    suites += 'mutter/' + suite
+  endforeach
+
+  if test_case.get('skip', false)
+    test(test_case['name'], sh,
+      args: ['-c', 'exit 77'],
+      suite: ['core'] + suites,
+    )
+    continue
+  endif
+
+  if test_case.has_key('exe')
+    test_executable = test_case['exe']
+  else
+    test_executable = executable('mutter-' + test_case['name'],
+      sources: test_case.get('sources', fs.exists(test_case['name'] + '.c') ?
+        test_case['name'] + '.c' : test_case['name'] + '-tests.c'),
+      include_directories: tests_includes,
+      c_args: [
+        tests_c_args,
+        '-DG_LOG_DOMAIN="mutter-@0@-test"'.format(test_case['name']),
+      ],
+      dependencies: libmutter_test_dep,
+      install: have_installed_tests,
+      install_dir: mutter_installed_tests_libexecdir,
+      install_rpath: pkglibdir,
+    )
+  endif
+
+  test_depends = [default_plugin, compiled_gschemas] + test_case.get('depends', [])
+  test_args = test_case.get('args', [])
+  wrappers = test_case.get('wrappers', [])
+
+  if wrappers.length() > 0
+    test_args = []
+    test_args = [
+      wrappers_launcher.full_path(),
+      wrappers,
+      '--',
+      test_executable.full_path(),
+      test_args,
+    ]
+    test_depends += test_executable
+    test_executable = bash
+  endif
+
+  if test_case.get('needs-x11', false)
+    default_exe = test_executable
+    test_executable = bash
+    test_args = xvfb_command + [default_exe] + test_args
+    suites += 'mutter/x11'
+  endif
+
+  test(test_case['name'], test_executable,
+    args: test_args,
+    suite: ['core'] + suites,
+    env: test_case.get('env', test_env),
+    depends: test_depends,
+    is_parallel: test_case.get('is_parallel', true),
+    timeout: test_case.get('timeout', 60),
+  )
+endforeach

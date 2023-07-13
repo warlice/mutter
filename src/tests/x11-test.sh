@@ -23,25 +23,34 @@ sleep 2
 echo Launching a couple of X11 clients > /dev/stderr
 zenity --warning &
 ZENITY1_PID=$!
-sleep 2
+sleep 0.4
 zenity --info &
 ZENITY2_PID=$!
-sleep 4
+sleep 0.5
 
 echo \# Replacing existing mutter with a new instance > /dev/stderr
 $MUTTER --x11 --replace --mutter-plugin="$MUTTER_TEST_PLUGIN_PATH" &
-echo \# Launched with pid $MUTTER2_PID
 MUTTER2_PID=$!
-wait $MUTTER1_PID
+echo \# Launched with pid $MUTTER2_PID
+wait -f $MUTTER1_PID
+echo \# Old mutter instance \(pid $MUTTER1_PID\) replaced correctly
 
 sleep 2
 
 echo \# Terminating clients > /dev/stderr
 kill $ZENITY1_PID
-sleep 1
+wait -f $ZENITY1_PID || exit_code=$?
+test "$exit_code" = $((128 + 15)) # SIGTERM
+
+sleep 0.4
+
 kill $ZENITY2_PID
-sleep 1
+wait -f $ZENITY2_PID || exit_code=$?
+test "$exit_code" = $((128 + 15)) # SIGTERM
+
+sleep 0.2
 
 echo \# Terminating mutter > /dev/stderr
 kill $MUTTER2_PID
-wait $MUTTER2_PID
+wait -f $MUTTER2_PID
+echo \# Mutter instance \(pid $MUTTER2_PID\) terminated correctly

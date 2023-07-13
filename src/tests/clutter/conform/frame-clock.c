@@ -2,7 +2,7 @@
 #include "clutter/clutter-frame.h"
 #include "tests/clutter-test-utils.h"
 
-static const float refresh_rate = 60.0;
+static const float refresh_rate = 10.0;
 static const int64_t refresh_interval_us = (int64_t) (0.5 + G_USEC_PER_SEC /
                                                       refresh_rate);
 
@@ -540,10 +540,10 @@ frame_clock_before_frame (void)
                                          &expected_frame_count);
 
   clutter_frame_clock_schedule_update (frame_clock);
-  g_timeout_add (100, quit_main_loop_timeout, main_loop);
+  g_timeout_add (200, quit_main_loop_timeout, main_loop);
   g_main_loop_run (main_loop);
 
-  /* We should have at least processed a couple of frames within 100 ms. */
+  /* We should have at least processed a couple of frames within 200 ms. */
   g_assert_cmpint (expected_frame_count, >, 2);
 
   g_main_loop_unref (main_loop);

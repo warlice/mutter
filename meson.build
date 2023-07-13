@@ -372,25 +372,57 @@ if have_tests
   have_clutter_tests = get_option('clutter_tests')
   have_installed_tests = get_option('installed_tests')
 
+  python3 = find_program('python3')
+  bash = find_program('bash')
   meta_dbus_runner = find_program('src/tests/meta-dbus-runner.py')
   default_test_wrappers = [
+    python3,
     meta_dbus_runner,
+    '--isolate-dirs',
     '--',
   ]
 
-  if get_option('catch')
-    catch = find_program('catch')
-    default_test_wrappers += [
-      catch,
-    ]
+  default_test_env = [
+    'MUTTER_DEBUG_DUMMY_MODE_SPECS=800x600@10.0',
+    'GTK_A11Y=none',
+    'NO_AT_BRIDGE=1',
+    'MALLOC_CHECK_=3',
+  ]
+
+  have_catch = get_option('catch')
+  if have_catch
+    catch = find_program('catch', required: true)
   endif
 
   add_test_setup('default',
     is_default: true,
-    exe_wrapper: default_test_wrappers,
+    exe_wrapper: [
+      default_test_wrappers,
+      [have_catch ? catch : []],
+    ],
+    exclude_suites: have_catch ? ['ignore-catch', 'mutter/ignore-catch'] : [],
+    env: [
+      default_test_env,
+      'MUTTER_TEST_SETUP=default',
+    ]
   )
 
-  add_test_setup('plain')
+  if have_catch
+    add_test_setup('no_catch',
+      exe_wrapper: default_test_wrappers,
+      env: [
+        default_test_env,
+        'MUTTER_TEST_SETUP=no_catch',
+      ]
+    )
+  endif
+
+  add_test_setup('plain',
+    env: [
+      default_test_env,
+      'MUTTER_TEST_SETUP=plain',
+    ]
+  )
 
   xvfb = find_program('xvfb-run')
   xvfb_args = [
@@ -398,18 +430,8 @@ if have_tests
     '-s',
     '+iglx -noreset',
   ]
-  xvfb_command = [xvfb] + xvfb_args
-
-  add_test_setup('CI',
-    env: [
-      'MUTTER_DEBUG_DUMMY_MODE_SPECS=800x600@10.0',
-    ],
-    exe_wrapper: [
-      default_test_wrappers,
-      xvfb_command,
-    ],
-    timeout_multiplier: 10,
-  )
+  safer_xvfb = find_program('src/tests/safer-xvfb-run.sh')
+  xvfb_command = [safer_xvfb.full_path(), xvfb.full_path()] + xvfb_args + ['--']
 endif
 
 have_profiler = get_option('profiler')

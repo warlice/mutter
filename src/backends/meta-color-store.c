@@ -345,10 +345,12 @@ init_profile_directory (MetaColorStore  *color_store,
                                          "icc", NULL);
   icc_directory = g_file_new_for_path (icc_directory_path);
 
-  if (!g_file_query_exists (icc_directory, NULL))
+  if (!g_file_make_directory_with_parents (icc_directory, NULL, &local_error))
     {
-      if (!g_file_make_directory_with_parents (icc_directory, NULL, error))
+      if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_EXISTS))
         return FALSE;
+
+      g_clear_error (&local_error);
     }
 
   color_store->icc_directory_monitor =
@@ -363,9 +365,9 @@ init_profile_directory (MetaColorStore  *color_store,
     }
   else
     {
-      g_warning ("Failed to monitor ICC profile directory '%s': %s",
-                 icc_directory_path,
-                 local_error->message);
+      meta_warning ("Failed to monitor ICC profile directory '%s': %s",
+                    icc_directory_path,
+                    local_error->message);
       g_clear_error (&local_error);
     }
 
@@ -448,7 +450,7 @@ meta_color_store_new (MetaColorManager *color_manager)
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
 
   if (!init_profile_directory (color_store, &error))
-    g_warning ("Failed to monitor ICC directory: %s", error->message);
+    meta_warning ("Failed to monitor ICC directory: %s", error->message);
 
   return color_store;
 }
