@@ -93,6 +93,8 @@ typedef struct _ClutterStageViewPrivate
   int64_t vblank_duration_us;
   ClutterFrameClock *frame_clock;
 
+  ClutterActor *topmost_actor;
+
   struct {
     int frame_count;
     int64_t last_print_time_us;
@@ -1633,4 +1635,29 @@ clutter_stage_view_invalidate_input_devices (ClutterStageView *view)
     clutter_stage_view_get_instance_private (view);
 
   priv->needs_update_devices = TRUE;
+}
+
+void
+clutter_stage_view_update_topmost_actor (ClutterStageView *view,
+                                         ClutterActor     *actor)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+
+  priv->topmost_actor = actor;
+}
+
+/**
+ * clutter_stage_view_get_topmost_actor:
+ * @view: a #ClutterStageView
+ *
+ * Returns: (transfer none): a #ClutterActor
+ */
+ClutterActor *
+clutter_stage_view_get_topmost_actor (ClutterStageView *view)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+
+  return priv->topmost_actor;
 }
