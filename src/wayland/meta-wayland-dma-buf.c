@@ -51,6 +51,7 @@
 #include "cogl/cogl-egl.h"
 #include "cogl/cogl.h"
 #include "common/meta-cogl-drm-formats.h"
+#include "compositor/meta-multi-texture-format-private.h"
 #include "meta/meta-backend.h"
 #include "wayland/meta-wayland-buffer.h"
 #include "wayland/meta-wayland-private.h"
@@ -343,12 +344,8 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
   EGLDisplay egl_display = cogl_egl_context_get_egl_display (cogl_context);
   MetaWaylandDmaBufBuffer *dma_buf = buffer->dma_buf.dma_buf;
-  uint32_t n_planes;
-  uint64_t modifiers[META_WAYLAND_DMA_BUF_MAX_FDS];
+  MetaMultiTextureFormat multi_format;
   CoglPixelFormat cogl_format;
-  EGLImageKHR egl_image;
-  CoglEglImageFlags flags;
-  CoglTexture2D *texture;
 #ifdef HAVE_NATIVE_BACKEND
   MetaDrmFormatBuf format_buf;
 #endif
@@ -357,7 +354,8 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
     return TRUE;
 
   if (!meta_cogl_pixel_format_from_drm_format (dma_buf->drm_format,
-                                               &cogl_format))
+                                               &cogl_format,
+                                               &multi_format))
     {
       g_set_error (error, G_IO_ERROR,
                    G_IO_ERROR_FAILED,
@@ -367,49 +365,140 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
 
 #ifdef HAVE_NATIVE_BACKEND
   meta_topic (META_DEBUG_WAYLAND,
-              "[dma-buf] wl_buffer@%u DRM format %s -> CoglPixelFormat %s",
+              "[dma-buf] wl_buffer@%u DRM format %s "
+              "-> MetaMultiTextureFormat %s / CoglPixelFormat %s",
               wl_resource_get_id (meta_wayland_buffer_get_resource (buffer)),
               meta_drm_format_to_string (&format_buf, dma_buf->drm_format),
+              meta_multi_texture_format_to_string (multi_format),
               cogl_pixel_format_to_string (cogl_format));
 #endif
 
-  for (n_planes = 0; n_planes < META_WAYLAND_DMA_BUF_MAX_FDS; n_planes++)
+  if (multi_format == META_MULTI_TEXTURE_FORMAT_SIMPLE)
     {
-      if (dma_buf->fds[n_planes] < 0)
-        break;
+      EGLImageKHR egl_image;
+      CoglEglImageFlags flags;
+      CoglTexture2D *cogl_texture;
+      uint64_t modifiers[META_WAYLAND_DMA_BUF_MAX_FDS];
+      uint32_t n_planes;
 
-      modifiers[n_planes] = dma_buf->drm_modifier;
-    }
+      for (n_planes = 0; n_planes < META_WAYLAND_DMA_BUF_MAX_FDS; n_planes++)
+        {
+          if (dma_buf->fds[n_planes] < 0)
+            break;
 
-  egl_image = meta_egl_create_dmabuf_image (egl,
-                                            egl_display,
-                                            dma_buf->width,
-                                            dma_buf->height,
-                                            dma_buf->drm_format,
-                                            n_planes,
-                                            dma_buf->fds,
-                                            dma_buf->strides,
-                                            dma_buf->offsets,
-                                            modifiers,
-                                            error);
-  if (egl_image == EGL_NO_IMAGE_KHR)
-    return FALSE;
+          modifiers[n_planes] = dma_buf->drm_modifier;
+        }
 
-  flags = COGL_EGL_IMAGE_FLAG_NO_GET_DATA;
-  texture = cogl_egl_texture_2d_new_from_image (cogl_context,
+      egl_image = meta_egl_create_dmabuf_image (egl,
+                                                egl_display,
                                                 dma_buf->width,
                                                 dma_buf->height,
-                                                cogl_format,
-                                                egl_image,
-                                                flags,
+                                                dma_buf->drm_format,
+                                                n_planes,
+                                                dma_buf->fds,
+                                                dma_buf->strides,
+                                                dma_buf->offsets,
+                                                modifiers,
                                                 error);
+      if (egl_image == EGL_NO_IMAGE_KHR)
+        return FALSE;
 
-  meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
+      flags = COGL_EGL_IMAGE_FLAG_NO_GET_DATA;
+      cogl_texture = cogl_egl_texture_2d_new_from_image (cogl_context,
+                                                         dma_buf->width,
+                                                         dma_buf->height,
+                                                         cogl_format,
+                                                         egl_image,
+                                                         flags,
+                                                         error);
 
-  if (!texture)
-    return FALSE;
+      meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
 
-  buffer->dma_buf.texture = COGL_TEXTURE (texture);
+      if (!cogl_texture)
+        return FALSE;
+
+      buffer->dma_buf.texture =
+        meta_multi_texture_new_simple (COGL_TEXTURE (cogl_texture));
+    }
+  else
+    {
+      CoglTexture **textures;
+      g_autoptr (GPtrArray) planes = NULL;
+      CoglPixelFormat subformats[META_WAYLAND_DMA_BUF_MAX_FDS];
+      uint8_t horizontal_factors[META_WAYLAND_DMA_BUF_MAX_FDS];
+      uint8_t vertical_factors[META_WAYLAND_DMA_BUF_MAX_FDS];
+      uint8_t plane_indices[META_WAYLAND_DMA_BUF_MAX_FDS];
+      int n_planes, i;
+
+      n_planes = meta_multi_texture_format_get_n_planes (multi_format);
+
+      /* Each EGLImage is a plane in the final CoglMultiPlaneTexture */
+      planes = g_ptr_array_new_full (n_planes, cogl_object_unref);
+      meta_multi_texture_format_get_subformats (multi_format, subformats);
+      meta_multi_texture_format_get_plane_indices (multi_format, plane_indices);
+      meta_multi_texture_format_get_subsampling_factors (multi_format,
+                                                         horizontal_factors,
+                                                         vertical_factors);
+
+      for (i = 0; i < n_planes; i++)
+        {
+          EGLImageKHR egl_image;
+          CoglEglImageFlags flags;
+          CoglTexture2D *cogl_texture;
+          uint32_t drm_format = 0;
+          int plane_index, j;
+
+          for (j = 0; j < G_N_ELEMENTS (meta_cogl_drm_format_map); j++)
+            {
+              if (meta_cogl_drm_format_map[j].cogl_format == subformats[i])
+                {
+                  drm_format = meta_cogl_drm_format_map[j].drm_format;
+                  break;
+                }
+            }
+          g_return_val_if_fail (drm_format != 0, FALSE);
+
+          plane_index = plane_indices[i];
+
+          egl_image = meta_egl_create_dmabuf_image (egl,
+                                                    egl_display,
+                                                    dma_buf->width /
+                                                    horizontal_factors[i],
+                                                    dma_buf->height /
+                                                    vertical_factors[i],
+                                                    drm_format,
+                                                    1,
+                                                    &dma_buf->fds[plane_index],
+                                                    &dma_buf->strides[plane_index],
+                                                    &dma_buf->offsets[plane_index],
+                                                    &dma_buf->drm_modifier,
+                                                    error);
+          if (egl_image == EGL_NO_IMAGE_KHR)
+            return FALSE;
+
+          flags = COGL_EGL_IMAGE_FLAG_NO_GET_DATA;
+          cogl_texture = cogl_egl_texture_2d_new_from_image (cogl_context,
+                                                             dma_buf->width,
+                                                             dma_buf->height,
+                                                             subformats[i],
+                                                             egl_image,
+                                                             flags,
+                                                             error);
+
+          meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
+
+          if (!cogl_texture)
+            return FALSE;
+
+          g_ptr_array_add (planes, cogl_texture);
+        }
+
+      textures = (CoglTexture**) g_ptr_array_free (g_steal_pointer (&planes),
+                                                   FALSE);
+      buffer->dma_buf.texture = meta_multi_texture_new (multi_format,
+                                                        textures,
+                                                        n_planes);
+    }
   buffer->is_y_inverted = dma_buf->is_y_inverted;
 
   return TRUE;
@@ -417,14 +506,14 @@ meta_wayland_dma_buf_realize_texture (MetaWaylandBuffer  *buffer,
 
 gboolean
 meta_wayland_dma_buf_buffer_attach (MetaWaylandBuffer  *buffer,
-                                    CoglTexture       **texture,
+                                    MetaMultiTexture  **texture,
                                     GError            **error)
 {
   if (!meta_wayland_dma_buf_realize_texture (buffer, error))
     return FALSE;
 
-  cogl_clear_object (texture);
-  *texture = cogl_object_ref (buffer->dma_buf.texture);
+  g_clear_object (texture);
+  *texture = g_object_ref (buffer->dma_buf.texture);
   return TRUE;
 }
 
@@ -1562,7 +1651,9 @@ init_formats (MetaWaylandDmaBufManager  *dma_buf_manager,
     {
       for (j = 0; j < num_formats; j++)
         {
-          if (meta_cogl_drm_format_map[i].drm_format == driver_formats[j])
+          if ((meta_cogl_drm_format_map[i].drm_format == driver_formats[j]) &&
+              (meta_cogl_drm_format_map[i].multi_texture_format !=
+               META_MULTI_TEXTURE_FORMAT_INVALID))
             add_format (dma_buf_manager, egl_display, driver_formats[j]);
         }
     }
