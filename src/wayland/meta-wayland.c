@@ -59,6 +59,7 @@
 #include "wayland/meta-xwayland.h"
 #endif
 #include "wayland/meta-wayland-hdr.h"
+#include "wayland/meta-wayland-colorspace.h"
 
 #ifdef HAVE_NATIVE_BACKEND
 #include "backends/native/meta-frame-native.h"
@@ -801,6 +802,7 @@ meta_wayland_compositor_new (MetaContext *context)
   init_dma_buf_support (compositor);
   meta_wayland_init_single_pixel_buffer_manager (compositor);
   meta_wayland_hdr_init (compositor);
+  meta_wayland_colorspace_init (compositor);
   meta_wayland_keyboard_shortcuts_inhibit_init (compositor);
   meta_wayland_surface_inhibit_shortcuts_dialog_init ();
   meta_wayland_text_input_init (compositor);

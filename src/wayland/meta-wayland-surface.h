@@ -139,6 +139,7 @@ struct _MetaWaylandSurfaceState
   MetaWaylandXdgPositioner *xdg_positioner;
   uint32_t xdg_popup_reposition_token;
   MetaOutputHdrMetadata *hdr_metadata;
+  MetaOutputColorspace colorspace;
 };
 
 struct _MetaWaylandDragDestFuncs
@@ -273,6 +274,7 @@ struct _MetaWaylandSurface
   } transaction;
   struct wl_resource *hdr_surface_resource;
   MetaOutputHdrMetadata *hdr_metadata;
+  MetaOutputColorspace colorspace;
 };
 
 void                meta_wayland_shell_init     (MetaWaylandCompositor *compositor);
