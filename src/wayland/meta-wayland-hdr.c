@@ -25,6 +25,7 @@
 
 #include <drm_fourcc.h>
 #include "backends/meta-backend-private.h"
+#include "backends/meta-hdr.h"
 #include "meta/meta-backend.h"
 #include "wayland/meta-wayland-buffer.h"
 #include "wayland/meta-wayland-private.h"
@@ -48,6 +49,9 @@ hdr_surface_set_metadata (struct wl_client *client,
                           uint32_t max_cll, uint32_t max_fall)
 {
   MetaWaylandSurface *surface = wl_resource_get_user_data (surface_resource);
+  MetaContext *context =
+    meta_wayland_compositor_get_context (surface->compositor);
+  MetaBackend *backend = meta_context_get_backend (context);
 
   meta_verbose ("Implement set hdr metadata on the surface");
 
@@ -71,6 +75,7 @@ hdr_surface_set_metadata (struct wl_client *client,
   metadata->max_cll  = max_cll;
   metadata->max_fall  = max_fall;
 
+  meta_hdr_set_metadata (backend, metadata);
 }
 
 /* Implements the protocol function set_eotf */
@@ -80,6 +85,9 @@ hdr_surface_set_eotf (struct wl_client *client,
 		      uint32_t eotf)
 {
   MetaWaylandSurface *surface = wl_resource_get_user_data (surface_resource);
+  MetaContext *context =
+    meta_wayland_compositor_get_context (surface->compositor);
+  MetaBackend *backend = meta_context_get_backend (context);
 
   meta_verbose ("Implement set hdr transfer function (eotf) on the surface");
 
@@ -97,6 +105,7 @@ hdr_surface_set_eotf (struct wl_client *client,
 
   metadata->eotf = internal_eotf;
 
+  meta_hdr_set_eotf (backend, metadata->eotf);
 }
 
 /* Destroy the hdr surface */
@@ -113,7 +122,16 @@ destroy_hdr_surface (struct wl_resource *resource)
 {
   MetaWaylandSurface *surface = wl_resource_get_user_data (resource);
 
+  if (!surface)
+    return;
+
+  MetaContext *context =
+    meta_wayland_compositor_get_context (surface->compositor);
+  MetaBackend *backend = meta_context_get_backend (context);
+
   meta_verbose ("Destroy the hdr surface ==========> \n");
+
+  meta_hdr_destroy_metadata (backend);
 }
 
 static const struct zwp_hdr_surface_v1_interface
