@@ -390,6 +390,11 @@ handle_host_xevent (MetaBackend *backend,
           switch (xkb_ev->any.xkb_type)
             {
             case XkbNewKeyboardNotify:
+              XkbNewKeyboardNotifyEvent *xkb_nkb_ev = (XkbNewKeyboardNotifyEvent*)(xkb_ev);
+              if(xkb_nkb_ev->req_major == 0 && xkb_nkb_ev->req_minor == 0){
+                keymap_changed (backend);
+              }
+              break;
             case XkbMapNotify:
               keymap_changed (backend);
               break;
