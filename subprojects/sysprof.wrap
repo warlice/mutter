@@ -1,4 +1,7 @@
 [wrap-git]
 directory=sysprof
 url=https://gitlab.gnome.org/GNOME/sysprof.git
-revision=02e50efa49885a5a20a84a8cd7feda10ae7e7e98
+revision=5b4f2ec3a05ea5ac4aff9167f000a6e46ee7b994
+
+[provide]
+dependency_names = sysprof-6, sysprof-capture-4
