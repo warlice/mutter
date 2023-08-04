@@ -76,8 +76,10 @@ static const gchar *colorize_glsl_declarations =
 "uniform vec3 tint;\n";
 
 static const gchar *colorize_glsl_source =
-"float gray = dot (cogl_color_out.rgb, vec3 (0.299, 0.587, 0.114));\n"
-"cogl_color_out.rgb = gray * tint;\n";
+"if (cogl_color_out.r == cogl_color_out.g && cogl_color_out.g == cogl_color_out.b) { \n"
+"  float gray = dot (cogl_color_out.rgb, vec3 (0.299, 0.587, 0.114));\n"
+"  cogl_color_out.rgb = gray * tint; \n"
+"} \n";
 
 /* a lame sepia */
 static const ClutterColor default_tint = { 255, 204, 153, 255 };
