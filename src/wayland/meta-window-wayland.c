@@ -251,6 +251,16 @@ meta_window_wayland_grab_op_ended (MetaWindow *window,
   META_WINDOW_CLASS (meta_window_wayland_parent_class)->grab_op_ended (window, op);
 }
 
+static gboolean
+needs_reconfiguration (MetaWindow    *window,
+                       MetaRectangle *constrained_rect)
+{
+  MetaRectangle pending_rect = meta_window_get_pending_rect (window);
+
+  return pending_rect.width != constrained_rect->width ||
+         pending_rect.height != constrained_rect->height;
+}
+
 static void
 meta_window_wayland_move_resize_internal (MetaWindow                *window,
                                           MetaGravity                gravity,
@@ -357,8 +367,7 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
                 if (flags & META_MOVE_RESIZE_PLACEMENT_CHANGED ||
                     rel_x != wl_window->last_sent_rel_x ||
                     rel_y != wl_window->last_sent_rel_y ||
-                    constrained_rect.width != window->rect.width ||
-                    constrained_rect.height != window->rect.height)
+                    needs_reconfiguration (window, &constrained_rect))
                   {
                     MetaWaylandWindowConfiguration *configuration;
 
@@ -392,9 +401,8 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
               break;
             }
         }
-      else if (constrained_rect.width != window->rect.width ||
-               constrained_rect.height != window->rect.height ||
-               flags & META_MOVE_RESIZE_STATE_CHANGED)
+      else if (flags & META_MOVE_RESIZE_STATE_CHANGED ||
+               needs_reconfiguration (window, &constrained_rect))
         {
           MetaWaylandWindowConfiguration *configuration;
           int bounds_width;
@@ -879,6 +887,44 @@ meta_window_wayland_set_property (GObject      *object,
     }
 }
 
+static MetaRectangle
+meta_window_wayland_get_pending_rect (MetaWindow *window)
+{
+  MetaWindowWayland *wl_window = META_WINDOW_WAYLAND (window);
+
+  if (wl_window->pending_configurations)
+    {
+      MetaWaylandWindowConfiguration *last_config =
+        wl_window->pending_configurations->data;
+
+      MetaRectangle pending_rect = {
+        .width = last_config->width,
+        .height = last_config->height,
+      };
+
+      if (last_config->has_position)
+        {
+          pending_rect.x = last_config->x;
+          pending_rect.y = last_config->y;
+        }
+      else if (wl_window->has_last_sent_configuration)
+        {
+          pending_rect.x = wl_window->last_sent_rect.x;
+          pending_rect.y = wl_window->last_sent_rect.y;
+        }
+      else
+        {
+          pending_rect.x = window->rect.x;
+          pending_rect.y = window->rect.y;
+        }
+
+      return pending_rect;
+    }
+
+  return META_WINDOW_CLASS (meta_window_wayland_parent_class)->
+    get_pending_rect (window);
+}
+
 static void
 meta_window_wayland_class_init (MetaWindowWaylandClass *klass)
 {
@@ -913,6 +959,7 @@ meta_window_wayland_class_init (MetaWindowWaylandClass *klass)
   window_class->unmap = meta_window_wayland_unmap;
   window_class->is_focus_async = meta_window_wayland_is_focus_async;
   window_class->get_wayland_surface = meta_window_wayland_get_wayland_surface;
+  window_class->get_pending_rect = meta_window_wayland_get_pending_rect;
 
   obj_props[PROP_SURFACE] =
     g_param_spec_object ("surface", NULL, NULL,

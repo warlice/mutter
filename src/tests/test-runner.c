@@ -30,6 +30,7 @@
 #include "meta/util.h"
 #include "meta/window.h"
 #include "core/meta-workspace-manager-private.h"
+#include "core/workspace-private.h"
 #include "tests/meta-test-utils.h"
 #include "wayland/meta-wayland.h"
 #include "x11/meta-x11-display-private.h"
@@ -45,6 +46,15 @@ typedef struct {
   GHashTable *virtual_monitors;
   ClutterVirtualInputDevice *pointer;
 } TestCase;
+
+#define META_SIDE_TEST_CASE_NONE G_MAXINT32
+
+static gboolean test_case_do (TestCase    *test,
+                              const char  *filename,
+                              int          line_no,
+                              int          argc,
+                              char       **argv,
+                              GError     **error);
 
 static gboolean
 test_case_alarm_filter (MetaX11Display        *x11_display,
@@ -425,17 +435,87 @@ test_case_check_xserver_stacking (TestCase *test,
 }
 
 static int
-maybe_divide (const char *str,
-              int         value)
+maybe_multiply (const char  *str,
+                int          value,
+                const char **out_str)
 {
-  if (strstr (str, "/") == str)
+  *out_str = str;
+
+  if (str[0] == '*')
     {
-      int divisor;
+      double multiplier;
 
       str += 1;
-      divisor = atoi (str);
+      multiplier = g_strtod (str, (char **) out_str);
 
-      value /= divisor;
+      value = round (multiplier * value);
+    }
+
+  return value;
+}
+
+static int
+maybe_divide (const char  *str,
+              int          value,
+              const char **out_str)
+{
+  *out_str = str;
+
+  if (str[0] == '/')
+    {
+      double divider;
+
+      str += 1;
+      divider = g_strtod (str, (char **) out_str);
+
+      value = round (value / divider);
+    }
+
+  return value;
+}
+
+static int
+maybe_do_math (const char  *str,
+               int          value,
+               const char **out_str)
+{
+  switch (str[0])
+    {
+    case '*':
+      value = maybe_multiply (str, value, &str);
+      break;
+    case '/':
+      value = maybe_divide (str, value, &str);
+      break;
+    default:
+      *out_str = str;
+      return value;
+    }
+
+  return maybe_do_math (str, value, out_str);
+}
+
+static int
+parse_monitor_size (MetaRectangle *logical_monitor_layout,
+                    const char    *size_str)
+{
+  int value;
+
+  if (strstr (size_str, "MONITOR_WIDTH") == size_str)
+    {
+      value = logical_monitor_layout->width;
+      size_str += strlen ("MONITOR_WIDTH");
+      value = maybe_do_math (size_str, value, &size_str);
+    }
+  else if (strstr (size_str, "MONITOR_HEIGHT") == size_str)
+    {
+      value = logical_monitor_layout->height;
+      size_str += strlen ("MONITOR_HEIGHT");
+      value = maybe_do_math (size_str, value, &size_str);
+    }
+  else
+    {
+      value = atoi (size_str);
     }
 
   return value;
@@ -447,31 +527,56 @@ parse_window_size (MetaWindow *window,
 {
   MetaLogicalMonitor *logical_monitor;
   MetaRectangle logical_monitor_layout;
-  int value;
 
   logical_monitor = meta_window_find_monitor_from_frame_rect (window);
   g_assert_nonnull (logical_monitor);
 
   logical_monitor_layout = meta_logical_monitor_get_layout (logical_monitor);
 
-  if (strstr (size_str, "MONITOR_WIDTH") == size_str)
+  return parse_monitor_size (&logical_monitor_layout, size_str);
+}
+
+static MetaLogicalMonitor *
+get_logical_monitor (TestCase    *test,
+                     const char  *monitor_id,
+                     GError     **error)
+{
+  if (monitor_id)
     {
-      value = logical_monitor_layout.width;
-      size_str += strlen ("MONITOR_WIDTH");
-      value = maybe_divide (size_str, value);
-    }
-  else if (strstr (size_str, "MONITOR_HEIGHT") == size_str)
-    {
-      value = logical_monitor_layout.height;
-      size_str += strlen ("MONITOR_HEIGHT");
-      value = maybe_divide (size_str, value);
-    }
-  else
-    {
-      value = atoi (size_str);
+      MetaVirtualMonitor *virtual_monitor;
+      MetaOutput *output;
+      MetaMonitor *monitor;
+
+      virtual_monitor =
+        g_hash_table_lookup (test->virtual_monitors, monitor_id);
+
+      if (!virtual_monitor)
+        {
+          g_set_error (error, META_TEST_CLIENT_ERROR,
+                       META_TEST_CLIENT_ERROR_BAD_COMMAND,
+                       "Unknown monitor %s", monitor_id);
+          return NULL;
+        }
+
+      output = meta_virtual_monitor_get_output (virtual_monitor);
+      monitor = meta_output_get_monitor (output);
+
+      return meta_monitor_get_logical_monitor (monitor);
     }
 
-  return value;
+  MetaDisplay *display = meta_context_get_display (test->context);
+  MetaWindow *focus_window = meta_display_get_focus_window (display);
+  MetaLogicalMonitor *logical_monitor =
+    meta_window_get_main_logical_monitor (focus_window);
+
+  if (logical_monitor)
+    return logical_monitor;
+
+  MetaBackend *backend = meta_context_get_backend (test->context);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+
+  return meta_monitor_manager_get_primary_logical_monitor (monitor_manager);
 }
 
 static gboolean
@@ -491,6 +596,218 @@ str_to_bool (const char *str,
   }
 
   return FALSE;
+}
+
+static gboolean
+str_to_side (const char *str,
+             MetaSide   *out_side)
+{
+  if (g_str_equal (str, "left"))
+    {
+      *out_side = META_SIDE_LEFT;
+      return TRUE;
+    }
+
+  if (g_str_equal (str, "right"))
+    {
+      *out_side = META_SIDE_RIGHT;
+      return TRUE;
+    }
+
+  if (g_str_equal (str, "top"))
+    {
+      *out_side = META_SIDE_TOP;
+      return TRUE;
+    }
+
+  if (g_str_equal (str, "bottom"))
+    {
+      *out_side = META_SIDE_BOTTOM;
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
+static gboolean
+test_case_add_strut (TestCase    *test,
+                     int          x,
+                     int          y,
+                     int          width,
+                     int          height,
+                     MetaSide     side,
+                     GError     **error)
+{
+  MetaDisplay *display = meta_context_get_display (test->context);
+  MetaWorkspaceManager *workspace_manager =
+    meta_display_get_workspace_manager (display);
+  MetaRectangle rect = { x, y, width, height };
+  MetaStrut strut = { rect, side };
+  GList *workspaces =
+    meta_workspace_manager_get_workspaces (workspace_manager);
+  GList *l;
+
+  for (l = workspaces; l; l = l->next)
+    {
+      MetaWorkspace *workspace = l->data;
+      g_autoptr (GSList) struts_list = NULL;
+      g_autoslist (MetaStrut) struts = NULL;
+
+      struts_list = meta_workspace_get_builtin_struts (workspace);
+      struts = g_slist_append (g_steal_pointer (&struts_list),
+                               g_memdup2 (&strut, sizeof (MetaStrut)));
+      meta_workspace_set_builtin_struts (workspace, struts);
+    }
+
+  return TRUE;
+}
+
+static gboolean
+test_case_clear_struts (TestCase  *test,
+                        MetaSide   side,
+                        GError   **error)
+{
+  MetaDisplay *display = meta_context_get_display (test->context);
+  MetaWorkspaceManager *workspace_manager =
+    meta_display_get_workspace_manager (display);
+  GList *workspaces =
+    meta_workspace_manager_get_workspaces (workspace_manager);
+  GList *l;
+
+  for (l = workspaces; l; l = l->next)
+    {
+      MetaWorkspace *workspace = l->data;
+      g_autoslist (MetaStrut) struts = NULL;
+
+      if (side != META_SIDE_TEST_CASE_NONE)
+        {
+          GSList *sl;
+
+          struts = meta_workspace_get_builtin_struts (workspace);
+
+          for (sl = struts; sl;)
+            {
+              MetaStrut *strut = sl->data;
+              GSList *old;
+
+              old = sl;
+              sl = sl->next;
+
+              if (strut->side == side)
+                {
+                  struts = g_slist_remove_link (struts, old);
+                  g_clear_pointer (&strut, g_free);
+                }
+            }
+        }
+
+      meta_workspace_set_builtin_struts (workspace, struts);
+    }
+
+  return TRUE;
+}
+
+typedef struct {
+  TestCase *test_case;
+  const char *filename;
+  int line_no;
+  int argc;
+  char **argv;
+  GError **error;
+  GObject *instance;
+  gulong handler_id;
+} TestCaseArgs;
+
+static void
+test_case_signal_cb (TestCaseArgs *test_case_args)
+{
+  g_autoptr (GError) error = NULL;
+
+  g_signal_handler_disconnect (test_case_args->instance,
+                               test_case_args->handler_id);
+
+  if (!test_case_do (test_case_args->test_case,
+                     test_case_args->filename,
+                     test_case_args->line_no,
+                     test_case_args->argc,
+                     test_case_args->argv,
+                     &error))
+    g_warning ("Failed to run test command in signal handler: %s",
+               error->message);
+
+  g_strfreev (test_case_args->argv);
+  g_free (test_case_args);
+}
+
+static gboolean
+test_case_parse_signal (TestCase *test,
+                        int       argc,
+                        char    **argv,
+                        char    **out_signal_name,
+                        GObject **out_signal_instance,
+                        GError  **error)
+{
+  *out_signal_instance = NULL;
+  *out_signal_name = NULL;
+
+  if (argc < 3 || !g_str_equal (argv[1], "=>"))
+    BAD_COMMAND ("usage: [window-id]::signal => command");
+
+  const char *signal_start = strstr (argv[0], "::");
+  if (!signal_start)
+    BAD_COMMAND ("Invalid syntax, no signal parameter");
+
+  GObject *instance_obj = NULL;
+  const char *signal_name = signal_start + 2;
+
+  if (!strlen (signal_name))
+    BAD_COMMAND ("Invalid syntax, empty signal name");
+
+  if (signal_start != argv[0])
+    {
+      g_autofree char *instance = g_strndup (argv[0], signal_start - argv[0]);
+      MetaTestClient *client;
+      const char *window_id;
+      MetaWindow *window;
+
+      if (!test_case_parse_window_id (test, instance, &client,
+                                      &window_id, error))
+        BAD_COMMAND ("Cannot find window for instance %s", instance);
+
+      window = meta_test_client_find_window (client, window_id, error);
+      if (!window)
+        BAD_COMMAND ("Cannot find window for window id %s", window_id);
+
+      instance_obj = G_OBJECT (window);
+    }
+
+  if (!instance_obj)
+    {
+      if (g_str_equal (signal_name, "monitors-changed"))
+        {
+          MetaBackend *backend = meta_context_get_backend (test->context);
+          MetaMonitorManager *monitor_manager =
+            meta_backend_get_monitor_manager (backend);
+
+          instance_obj = G_OBJECT (monitor_manager);
+        }
+      else
+        {
+          BAD_COMMAND ("Unknown global signal name '%s'", signal_name);
+        }
+    }
+
+  if (!g_signal_lookup (signal_name, G_TYPE_FROM_INSTANCE (instance_obj)))
+    {
+      BAD_COMMAND ("No signal '%s' in object of type %s",
+                   signal_name,
+                   g_type_name_from_instance ((GTypeInstance *) instance_obj));
+    }
+
+  *out_signal_instance = g_object_ref (instance_obj);
+  *out_signal_name = g_strdup (signal_name);
+
+  return TRUE;
 }
 
 static gboolean
@@ -859,63 +1176,55 @@ test_case_do (TestCase    *test,
       if (!test_case_sleep (test, (guint32) interval, error))
         return FALSE;
     }
-  else if (strcmp (argv[0], "set_strut") == 0)
+  else if (g_str_equal (argv[0], "add_strut") ||
+           g_str_equal (argv[0], "set_strut"))
     {
-      if (argc != 6)
-        BAD_COMMAND("usage: %s <x> <y> <width> <height> <side>", argv[0]);
-
-      int x = atoi (argv[1]);
-      int y = atoi (argv[2]);
-      int width = atoi (argv[3]);
-      int height = atoi (argv[4]);
-
-      MetaSide side;
-      if (strcmp (argv[5], "left") == 0)
-        side = META_SIDE_LEFT;
-      else if (strcmp (argv[5], "right") == 0)
-        side = META_SIDE_RIGHT;
-      else if (strcmp (argv[5], "top") == 0)
-        side = META_SIDE_TOP;
-      else if (strcmp (argv[5], "bottom") == 0)
-        side = META_SIDE_BOTTOM;
-      else
-        return FALSE;
-
-      MetaDisplay *display = meta_context_get_display (test->context);
-      MetaWorkspaceManager *workspace_manager =
-        meta_display_get_workspace_manager (display);
-      MetaRectangle rect = { x, y, width, height };
-      MetaStrut strut = { rect, side };
-      GSList *struts = g_slist_append (NULL, &strut);
-      GList *workspaces =
-        meta_workspace_manager_get_workspaces (workspace_manager);
-      GList *l;
-
-      for (l = workspaces; l; l = l->next)
+      if (argc < 6 || argc > 7)
         {
-          MetaWorkspace *workspace = l->data;
-          meta_workspace_set_builtin_struts (workspace, struts);
+          BAD_COMMAND ("usage: %s <x> <y> <width> <height> <side> [monitor-id]",
+                       argv[0]);
         }
 
-      g_slist_free (struts);
+      MetaLogicalMonitor *logical_monitor;
+      const char *monitor_id = argc > 6 ? argv[6] : NULL;
+
+      logical_monitor = get_logical_monitor (test, monitor_id, error);
+      if (!logical_monitor)
+        return FALSE;
+
+      if (g_str_equal (argv[0], "set_strut"))
+        {
+          if (!test_case_clear_struts (test, META_SIDE_TEST_CASE_NONE, error))
+            return FALSE;
+        }
+
+      MetaRectangle monitor_layout =
+        meta_logical_monitor_get_layout (logical_monitor);
+
+      int x = parse_monitor_size (&monitor_layout, argv[1]);
+      int y = parse_monitor_size (&monitor_layout, argv[2]);
+      int width = parse_monitor_size (&monitor_layout, argv[3]);
+      int height = parse_monitor_size (&monitor_layout, argv[4]);
+
+      MetaSide side;
+      if (!str_to_side (argv[5], &side))
+        BAD_COMMAND ("Invalid side: %s", argv[5]);
+
+      if (!test_case_add_strut (test, x, y, width, height, side, error))
+        return FALSE;
     }
   else if (strcmp (argv[0], "clear_struts") == 0)
     {
-      if (argc != 1)
-        BAD_COMMAND("usage: %s", argv[0]);
+      MetaSide side = META_SIDE_TEST_CASE_NONE;
 
-      MetaDisplay *display = meta_context_get_display (test->context);
-      MetaWorkspaceManager *workspace_manager =
-        meta_display_get_workspace_manager (display);
-      GList *workspaces =
-        meta_workspace_manager_get_workspaces (workspace_manager);
-      GList *l;
+      if (argc < 1 || argc > 2)
+        BAD_COMMAND ("usage: %s [side]", argv[0]);
 
-      for (l = workspaces; l; l = l->next)
-        {
-          MetaWorkspace *workspace = l->data;
-          meta_workspace_set_builtin_struts (workspace, NULL);
-        }
+      if (argc > 1 && !str_to_side (argv[1], &side))
+        BAD_COMMAND ("Invalid side: %s", argv[1]);
+
+      if (!test_case_clear_struts (test, side, error))
+        return FALSE;
     }
   else if (strcmp (argv[0], "assert_stacking") == 0)
     {
@@ -996,8 +1305,8 @@ test_case_do (TestCase    *test,
 
       MetaRectangle frame_rect;
       meta_window_get_frame_rect (window, &frame_rect);
-      int x = atoi (argv[2]);
-      int y = atoi (argv[3]);
+      int x = parse_window_size (window, argv[2]);
+      int y = parse_window_size (window, argv[3]);
       if (frame_rect.x != x || frame_rect.y != y)
         {
           g_set_error (error,
@@ -1100,6 +1409,17 @@ test_case_do (TestCase    *test,
                        "Monitor %s is not the primary monitor", argv[1]);
           return FALSE;
         }
+    }
+  else if (strcmp (argv[0], "reload_monitors") == 0)
+    {
+      MetaBackend *backend = meta_context_get_backend (test->context);
+      MetaMonitorManager *monitor_manager =
+        meta_backend_get_monitor_manager (backend);
+
+      if (argc != 1)
+        BAD_COMMAND ("usage: %s", argv[0]);
+
+      meta_monitor_manager_reload (monitor_manager);
     }
   else if (strcmp (argv[0], "num_workspaces") == 0)
     {
@@ -1307,6 +1627,33 @@ test_case_do (TestCase    *test,
       else {
         BAD_COMMAND("Unknown preference %s", argv[1]);
       }
+    }
+  else if (argc > 2 && g_str_equal (argv[1], "=>"))
+    {
+      g_autoptr (GObject) signal_instance = NULL;
+      g_autofree char *signal_name = NULL;
+      TestCaseArgs *test_case_args;
+
+      if (!test_case_parse_signal (test, argc, argv,
+                                   &signal_name, &signal_instance, error))
+        return FALSE;
+
+      g_debug ("Connected to signal '%s' on object %p (%s)",
+               signal_name, signal_instance,
+               g_type_name_from_instance ((GTypeInstance *) signal_instance));
+
+      test_case_args = g_new0 (TestCaseArgs, 1);
+      test_case_args->test_case = test;
+      test_case_args->filename = filename;
+      test_case_args->line_no = line_no;
+      test_case_args->argc = argc - 2;
+      test_case_args->argv = g_strdupv (&argv[2]);
+      test_case_args->instance = signal_instance;
+      test_case_args->handler_id =
+        g_signal_connect_swapped (signal_instance,
+                                  signal_name,
+                                  G_CALLBACK (test_case_signal_cb),
+                                  test_case_args);
     }
   else
     {

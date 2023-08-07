@@ -230,12 +230,6 @@ test_basic_fitting (void)
   g_assert (!meta_rectangle_could_fit_rect (&temp3, &temp2));
 }
 
-static void
-free_strut_list (GSList *struts)
-{
-  g_slist_free_full (struts, g_free);
-}
-
 static GSList*
 get_strut_list (int which)
 {
@@ -285,8 +279,8 @@ get_strut_list (int which)
 static GList*
 get_screen_region (int which)
 {
+  g_autoslist (MetaStrut) struts = NULL;
   GList *ret;
-  GSList *struts;
   MetaRectangle basic_rect;
 
   basic_rect = meta_rect (0, 0, 1600, 1200);
@@ -294,7 +288,6 @@ get_screen_region (int which)
 
   struts = get_strut_list (which);
   ret = meta_rectangle_get_minimal_spanning_set_for_region (&basic_rect, struts);
-  free_strut_list (struts);
 
   return ret;
 }
@@ -302,8 +295,8 @@ get_screen_region (int which)
 static GList*
 get_screen_edges (int which)
 {
+  g_autoslist (MetaStrut) struts = NULL;
   GList *ret;
-  GSList *struts;
   MetaRectangle basic_rect;
 
   basic_rect = meta_rect (0, 0, 1600, 1200);
@@ -311,7 +304,6 @@ get_screen_edges (int which)
 
   struts = get_strut_list (which);
   ret = meta_rectangle_find_onscreen_edges (&basic_rect, struts);
-  free_strut_list (struts);
 
   return ret;
 }
@@ -319,8 +311,8 @@ get_screen_edges (int which)
 static GList*
 get_monitor_edges (int which_monitor_set, int which_strut_set)
 {
+  g_autoslist (MetaStrut) struts = NULL;
   GList *ret;
-  GSList *struts;
   GList *xins;
 
   xins = NULL;
@@ -350,7 +342,6 @@ get_monitor_edges (int which_monitor_set, int which_strut_set)
   struts = get_strut_list (which_strut_set);
   ret = meta_rectangle_find_nonintersected_monitor_edges (xins, struts);
 
-  free_strut_list (struts);
   meta_rectangle_free_list_and_elements (xins);
 
   return ret;

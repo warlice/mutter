@@ -468,6 +468,12 @@ meta_window_set_property(GObject         *object,
     }
 }
 
+static MetaRectangle
+meta_window_real_get_pending_rect (MetaWindow *window)
+{
+  return window->rect;
+}
+
 static void
 meta_window_class_init (MetaWindowClass *klass)
 {
@@ -484,6 +490,7 @@ meta_window_class_init (MetaWindowClass *klass)
   klass->current_workspace_changed = meta_window_real_current_workspace_changed;
   klass->update_struts = meta_window_real_update_struts;
   klass->get_default_skip_hints = meta_window_real_get_default_skip_hints;
+  klass->get_pending_rect = meta_window_real_get_pending_rect;
   klass->get_client_pid = meta_window_real_get_client_pid;
 
   obj_props[PROP_TITLE] =
@@ -2145,9 +2152,11 @@ meta_window_show (MetaWindow *window)
           window->has_maximize_func)
         {
           MetaRectangle work_area;
+          MetaRectangle pending_rect = meta_window_get_pending_rect (window);
           meta_window_get_work_area_for_monitor (window, window->monitor->number, &work_area);
           /* Automaximize windows that map with a size > MAX_UNMAXIMIZED_WINDOW_AREA of the work area */
-          if (window->rect.width * window->rect.height > work_area.width * work_area.height * MAX_UNMAXIMIZED_WINDOW_AREA)
+          if (pending_rect.width * pending_rect.height >
+              work_area.width * work_area.height * MAX_UNMAXIMIZED_WINDOW_AREA)
             {
               window->maximize_horizontally_after_placement = TRUE;
               window->maximize_vertically_after_placement = TRUE;
@@ -2501,16 +2510,18 @@ meta_window_save_rect (MetaWindow *window)
 {
   if (!(META_WINDOW_MAXIMIZED (window) || META_WINDOW_TILED_SIDE_BY_SIDE (window) || window->fullscreen))
     {
+      MetaRectangle pending_rect = meta_window_get_pending_rect (window);
+
       /* save size/pos as appropriate args for move_resize */
       if (!window->maximized_horizontally)
         {
-          window->saved_rect.x      = window->rect.x;
-          window->saved_rect.width  = window->rect.width;
+          window->saved_rect.x      = pending_rect.x;
+          window->saved_rect.width  = pending_rect.width;
         }
       if (!window->maximized_vertically)
         {
-          window->saved_rect.y      = window->rect.y;
-          window->saved_rect.height = window->rect.height;
+          window->saved_rect.y      = pending_rect.y;
+          window->saved_rect.height = pending_rect.height;
         }
     }
 }
@@ -3169,7 +3180,7 @@ meta_window_make_fullscreen_internal (MetaWindow  *window)
       meta_topic (META_DEBUG_WINDOW_OPS,
                   "Fullscreening %s", window->desc);
 
-      window->saved_rect_fullscreen = window->rect;
+      window->saved_rect_fullscreen = meta_window_get_pending_rect (window);
 
       window->fullscreen = TRUE;
 
@@ -3466,7 +3477,7 @@ meta_window_reposition (MetaWindow *window)
                                      META_MOVE_RESIZE_RESIZE_ACTION |
                                      META_MOVE_RESIZE_CONSTRAIN),
                                     META_GRAVITY_NORTH_WEST,
-                                    window->rect);
+                                    meta_window_get_pending_rect (window));
 }
 
 static gboolean
@@ -3663,6 +3674,12 @@ meta_window_update_monitor (MetaWindow                   *window,
     g_signal_emit (window, window_signals[HIGHEST_SCALE_MONITOR_CHANGED], 0);
 }
 
+MetaRectangle
+meta_window_get_pending_rect (MetaWindow *window)
+{
+  return META_WINDOW_GET_CLASS (window)->get_pending_rect (window);
+}
+
 void
 meta_window_move_resize_internal (MetaWindow          *window,
                                   MetaMoveResizeFlags  flags,
@@ -3710,8 +3727,13 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   did_placement = !window->placed && window->calc_placement;
 
-  /* We don't need it in the idle queue anymore. */
-  meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
+  /* We don't need it in the idle queue anymore, but we keep it in
+   * idle queue on ACKed configurations from Wayland clients, as the
+   * ACKed configuration may be more stale than the idle queued
+   * request.
+   */
+  if (!(flags & META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE))
+    meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
 
   if ((flags & META_MOVE_RESIZE_RESIZE_ACTION) && (flags & META_MOVE_RESIZE_MOVE_ACTION))
     {
@@ -3720,10 +3742,12 @@ meta_window_move_resize_internal (MetaWindow          *window,
     }
   else if ((flags & META_MOVE_RESIZE_RESIZE_ACTION))
     {
+      MetaRectangle pending_rect = meta_window_get_pending_rect (window);
+
       /* If this is only a resize, then ignore the position given in
        * the parameters and instead calculate the new position from
        * resizing the old rectangle with the given gravity. */
-      meta_rectangle_resize_with_gravity (&window->rect,
+      meta_rectangle_resize_with_gravity (&pending_rect,
                                           &unconstrained_rect,
                                           gravity,
                                           frame_rect.width,
@@ -3731,12 +3755,14 @@ meta_window_move_resize_internal (MetaWindow          *window,
     }
   else if ((flags & META_MOVE_RESIZE_MOVE_ACTION))
     {
+      MetaRectangle pending_rect = meta_window_get_pending_rect (window);
+
       /* If this is only a move, then ignore the passed in size and
        * just use the existing size of the window. */
       unconstrained_rect.x = frame_rect.x;
       unconstrained_rect.y = frame_rect.y;
-      unconstrained_rect.width = window->rect.width;
-      unconstrained_rect.height = window->rect.height;
+      unconstrained_rect.width = pending_rect.width;
+      unconstrained_rect.height = pending_rect.height;
     }
   else if ((flags & META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE))
     {
@@ -3749,7 +3775,7 @@ meta_window_move_resize_internal (MetaWindow          *window,
     g_assert_not_reached ();
 
   constrained_rect = unconstrained_rect;
-  temporary_rect = window->rect;
+  temporary_rect = meta_window_get_pending_rect (window);
   if (flags & META_MOVE_RESIZE_CONSTRAIN && window->monitor)
     {
       MetaRectangle old_rect;
@@ -4115,15 +4141,16 @@ meta_window_get_gravity_position (MetaWindow  *window,
                                   int         *root_y)
 {
   MetaRectangle frame_extents;
+  MetaRectangle pending_rect = meta_window_get_pending_rect (window);
   int w, h;
   int x, y;
 
-  w = window->rect.width;
-  h = window->rect.height;
+  w = pending_rect.width;
+  h = pending_rect.height;
 
   if (gravity == META_GRAVITY_STATIC)
     {
-      frame_extents = window->rect;
+      frame_extents = pending_rect;
       if (window->frame)
         {
           frame_extents.x = window->frame->rect.x + window->frame->child_x;
@@ -4133,7 +4160,7 @@ meta_window_get_gravity_position (MetaWindow  *window,
   else
     {
       if (window->frame == NULL)
-        frame_extents = window->rect;
+        frame_extents = pending_rect;
       else
         frame_extents = window->frame->rect;
     }
@@ -4199,13 +4226,14 @@ meta_window_get_session_geometry (MetaWindow  *window,
                                   int         *width,
                                   int         *height)
 {
+  MetaRectangle pending_rect = meta_window_get_pending_rect (window);
   meta_window_get_gravity_position (window,
                                     window->size_hints.win_gravity,
                                     x, y);
 
-  *width = (window->rect.width - window->size_hints.base_width) /
+  *width = (pending_rect.width - window->size_hints.base_width) /
     window->size_hints.width_inc;
-  *height = (window->rect.height - window->size_hints.base_height) /
+  *height = (pending_rect.height - window->size_hints.base_height) /
     window->size_hints.height_inc;
 }
 
@@ -4330,7 +4358,7 @@ void
 meta_window_get_frame_rect (const MetaWindow *window,
                             MetaRectangle    *rect)
 {
-  *rect = window->rect;
+  *rect = meta_window_get_pending_rect ((MetaWindow *) window);
 }
 
 /**
