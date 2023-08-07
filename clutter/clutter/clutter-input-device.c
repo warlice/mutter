@@ -363,7 +363,7 @@ clutter_input_device_class_init (ClutterInputDeviceClass *klass)
   obj_props[PROP_DEVICE_MODE] =
     g_param_spec_enum ("device-mode", NULL, NULL,
                        CLUTTER_TYPE_INPUT_MODE,
-                       CLUTTER_INPUT_MODE_FLOATING,
+                       CLUTTER_INPUT_MODE_PHYSICAL_VIRTUAL,
                        CLUTTER_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY);
 
   /**

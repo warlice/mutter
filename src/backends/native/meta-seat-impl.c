@@ -739,6 +739,9 @@ meta_seat_impl_notify_key_in_impl (MetaSeatImpl       *seat_impl,
 
   keycode = meta_xkb_evdev_to_keycode (key);
 
+  if (clutter_input_device_get_device_mode (device) == CLUTTER_INPUT_MODE_PHYSICAL_VIRTUAL)
+    clutter_event_set_flags (event, CLUTTER_EVENT_FLAG_OSK);
+
   /* We must be careful and not pass multiple releases to xkb, otherwise it gets
      confused and locks the modifiers */
   if (state != AUTOREPEAT_VALUE)
