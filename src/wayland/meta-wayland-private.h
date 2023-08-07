@@ -106,6 +106,7 @@ struct _MetaWaylandCompositor
 
   MetaWaylandPresentationTime presentation_time;
   MetaWaylandDmaBufManager *dma_buf_manager;
+  MetaWaylandSecurityContextManager *security_context_manager;
 
   /*
    * Queue of transactions which have been committed but not applied yet, in the

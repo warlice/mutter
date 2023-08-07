@@ -77,4 +77,6 @@ typedef struct _MetaWaylandFilterManager MetaWaylandFilterManager;
 
 typedef struct _MetaWaylandClient MetaWaylandClient;
 
+typedef struct _MetaWaylandSecurityContextManager MetaWaylandSecurityContextManager;
+
 #endif

@@ -47,6 +47,7 @@
 #include "wayland/meta-wayland-private.h"
 #include "wayland/meta-wayland-region.h"
 #include "wayland/meta-wayland-seat.h"
+#include "wayland/meta-wayland-security-context.h"
 #include "wayland/meta-wayland-subsurface.h"
 #include "wayland/meta-wayland-tablet-manager.h"
 #include "wayland/meta-wayland-transaction.h"
@@ -621,6 +622,7 @@ meta_wayland_compositor_finalize (GObject *object)
   meta_wayland_outputs_finalize (compositor);
   meta_wayland_presentation_time_finalize (compositor);
   meta_wayland_tablet_manager_finalize (compositor);
+  meta_wayland_security_context_finalize (compositor);
 
   g_hash_table_destroy (compositor->scheduled_surface_associations);
 
@@ -805,6 +807,7 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_init_presentation_time (compositor);
   meta_wayland_activation_init (compositor);
   meta_wayland_transaction_init (compositor);
+  meta_wayland_security_context_init (compositor);
 
 #ifdef HAVE_WAYLAND_EGLSTREAM
   {
