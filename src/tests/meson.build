@@ -694,6 +694,7 @@ stacking_tests = [
   'workspace-unmanaging-window',
   'click-to-focus-and-raise',
   'workspace-only-on-primary-focus',
+  'hide-pointer-when-typing',
 ]
 
 foreach stacking_test: stacking_tests

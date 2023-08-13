@@ -27,6 +27,7 @@
 #include "backends/meta-virtual-monitor.h"
 #include "core/window-private.h"
 #include "meta-test/meta-context-test.h"
+#include "meta/meta-cursor-tracker.h"
 #include "meta/util.h"
 #include "meta/window.h"
 #include "core/meta-workspace-manager-private.h"
@@ -44,6 +45,7 @@ typedef struct {
   gulong x11_display_opened_handler_id;
   GHashTable *virtual_monitors;
   ClutterVirtualInputDevice *pointer;
+  ClutterVirtualInputDevice *keyboard;
 } TestCase;
 
 static gboolean
@@ -98,6 +100,8 @@ test_case_new (MetaContext *context)
   test->loop = g_main_loop_new (NULL, FALSE);
   test->pointer = clutter_seat_create_virtual_device (seat,
                                                       CLUTTER_POINTER_DEVICE);
+  test->keyboard = clutter_seat_create_virtual_device (seat,
+                                                       CLUTTER_KEYBOARD_DEVICE);
 
   test->virtual_monitors = g_hash_table_new_full (g_str_hash,
                                                   g_str_equal,
@@ -1185,6 +1189,32 @@ test_case_do (TestCase    *test,
       if (!test_case_check_xserver_stacking (test, error))
         return FALSE;
     }
+  else if (strcmp (argv[0], "assert_pointer_visible") == 0)
+    {
+      if (argc < 2)
+        BAD_COMMAND("usage: %s {true,false}", argv[0]);
+
+      MetaBackend *backend = meta_context_get_backend (test->context);
+      MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
+      gboolean visible = meta_cursor_tracker_get_pointer_visible (cursor_tracker);
+      gboolean success = true;
+      if (strcmp (argv[1], "false") == 0) {
+        if (visible)
+          success = false;
+      } else if (strcmp (argv[1], "true") == 0) {
+        if (!visible)
+          success = false;
+      } else {
+        BAD_COMMAND("usage: %s {true,false}", argv[0]);
+      }
+      if (!success) {
+        g_set_error (error,
+                     META_TEST_CLIENT_ERROR,
+                     META_TEST_CLIENT_ERROR_ASSERTION_FAILED,
+                     "pointer visible: expected='%s', actual='%s'", argv[1],
+                     visible ? "true" : "false");
+      }
+    }
   else if (strcmp (argv[0], "window_to_workspace") == 0)
     {
       if (argc != 3)
@@ -1275,6 +1305,57 @@ test_case_do (TestCase    *test,
                                                   CLUTTER_BUTTON_STATE_RELEASED);
       meta_flush_input (test->context);
     }
+  else if (strcmp (argv[0], "type") == 0)
+    {
+      if (argc != 2)
+        BAD_COMMAND("usage: %s [{C,S}-]<letter>", argv[0]);
+
+      guint modifier = 0;
+      if (strlen(argv[1]) == 3) {
+        char modchar = argv[1][0];
+
+        if (argv[1][1] != '-') {
+          BAD_COMMAND("usage: %s [{C,S}-]<letter>. Invalid key sequence: %s",
+                      argv[0], argv[1]);
+        } else if (modchar == 'C') {
+          modifier = CLUTTER_KEY_Control_L;
+        } else if (modchar == 'S') {
+          modifier = CLUTTER_KEY_Shift_L;
+        } else {
+          BAD_COMMAND("usage: %s [{C,S}-]<letter>. Invalid modifier key: %c",
+                      argv[0], modchar);
+        }
+      }
+      char letter = argv[1][strlen(argv[1]) - 1];
+      if (letter < 'a' || letter > 'z') {
+        BAD_COMMAND("usage: %s [{C,S}-]<letter>. Letter must be lowercase in range a-z",
+                    argv[0]);
+      }
+
+      guint lettersym = clutter_unicode_to_keysym (letter);
+
+      if (modifier) {
+        clutter_virtual_input_device_notify_keyval (test->keyboard,
+                                                    CLUTTER_CURRENT_TIME,
+                                                    modifier,
+                                                    CLUTTER_KEY_STATE_PRESSED);
+      }
+      clutter_virtual_input_device_notify_keyval (test->keyboard,
+                                                  CLUTTER_CURRENT_TIME,
+                                                  lettersym,
+                                                  CLUTTER_KEY_STATE_PRESSED);
+      clutter_virtual_input_device_notify_keyval (test->keyboard,
+                                                  CLUTTER_CURRENT_TIME,
+                                                  lettersym,
+                                                  CLUTTER_KEY_STATE_RELEASED);
+      if (modifier) {
+        clutter_virtual_input_device_notify_keyval (test->keyboard,
+                                                    CLUTTER_CURRENT_TIME,
+                                                    modifier,
+                                                    CLUTTER_KEY_STATE_RELEASED);
+      }
+      meta_flush_input (test->context);
+    }
   else if (strcmp (argv[0], "set_pref") == 0)
     {
       GSettings *wm;
@@ -1303,6 +1384,14 @@ test_case_do (TestCase    *test,
             BAD_COMMAND("usage: %s %s [true|false]", argv[0], argv[1]);
 
           g_assert_true (g_settings_set_boolean (mutter, "workspaces-only-on-primary", value));
+        }
+      else if (strcmp (argv[1], "hide-pointer-when-typing") == 0)
+        {
+          gboolean value;
+          if (!str_to_bool (argv[2], &value))
+            BAD_COMMAND("usage: %s %s [true|false]", argv[0], argv[1]);
+
+          g_assert_true (g_settings_set_boolean (mutter, "hide-pointer-when-typing", value));
         }
       else {
         BAD_COMMAND("Unknown preference %s", argv[1]);
@@ -1358,6 +1447,7 @@ test_case_destroy (TestCase *test,
 
   g_hash_table_destroy (test->clients);
   g_hash_table_unref (test->virtual_monitors);
+  g_object_unref (test->keyboard);
   g_object_unref (test->pointer);
   g_free (test);
 

@@ -99,6 +99,7 @@ static gboolean bell_is_audible = TRUE;
 static gboolean gnome_accessibility = FALSE;
 static gboolean gnome_animations = TRUE;
 static gboolean locate_pointer_is_enabled = FALSE;
+static gboolean hide_pointer_when_typing = FALSE;
 static unsigned int check_alive_timeout = 5000;
 static char *cursor_theme = NULL;
 /* cursor_size will, when running as an X11 compositing window manager, be the
@@ -389,6 +390,13 @@ static MetaBoolPreference preferences_bool[] =
         META_PREF_LOCATE_POINTER,
       },
       &locate_pointer_is_enabled,
+    },
+    {
+      { "hide-pointer-when-typing",
+        SCHEMA_MUTTER,
+        META_PREF_HIDE_POINTER_WHEN_TYPING,
+      },
+      &hide_pointer_when_typing,
     },
     { { NULL, 0, 0 }, NULL },
   };
@@ -1689,6 +1697,9 @@ meta_preference_to_string (MetaPreference pref)
 
     case META_PREF_CHECK_ALIVE_TIMEOUT:
       return "CHECK_ALIVE_TIMEOUT";
+
+    case META_PREF_HIDE_POINTER_WHEN_TYPING:
+      return "META_PREF_HIDE_POINTER_WHEN_TYPING";
     }
 
   return "(unknown)";
@@ -2166,6 +2177,12 @@ int
 meta_prefs_get_drag_threshold (void)
 {
   return drag_threshold;
+}
+
+gboolean
+meta_prefs_is_hide_pointer_when_typing_enabled (void)
+{
+  return hide_pointer_when_typing;
 }
 
 void
