@@ -45,6 +45,7 @@ struct _CoglScanout
   GObject parent;
 
   CoglScanoutBuffer *scanout_buffer;
+  CoglOffscreen *fbo;
 
   gboolean has_src_rect;
   graphene_rect_t src_rect;
@@ -165,12 +166,26 @@ cogl_scanout_set_dst_rect (CoglScanout        *scanout,
   scanout->has_dst_rect = rect != NULL;
 }
 
+CoglOffscreen *
+cogl_scanout_get_fbo (CoglScanout *scanout)
+{
+  return scanout->fbo;
+}
+
+void
+cogl_scanout_set_fbo (CoglScanout   *scanout,
+                      CoglOffscreen *fbo)
+{
+  scanout->fbo = fbo;
+}
+
 static void
 cogl_scanout_finalize (GObject *object)
 {
   CoglScanout *scanout = COGL_SCANOUT (object);
 
   g_clear_object (&scanout->scanout_buffer);
+  g_clear_object (&scanout->fbo);
 
   G_OBJECT_CLASS (cogl_scanout_parent_class)->finalize (object);
 }

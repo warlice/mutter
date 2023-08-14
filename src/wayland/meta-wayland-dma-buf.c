@@ -140,6 +140,8 @@ struct _MetaWaylandDmaBufBuffer
   int fds[META_WAYLAND_DMA_BUF_MAX_FDS];
   uint32_t offsets[META_WAYLAND_DMA_BUF_MAX_FDS];
   uint32_t strides[META_WAYLAND_DMA_BUF_MAX_FDS];
+
+  CoglScanout *scanout;
 };
 
 G_DEFINE_TYPE (MetaWaylandDmaBufBuffer, meta_wayland_dma_buf_buffer, G_TYPE_OBJECT);
@@ -602,33 +604,23 @@ import_scanout_gbm_bo (MetaWaylandDmaBufBuffer  *dma_buf,
 
   return gbm_bo;
 }
-#endif
 
-CoglScanout *
-meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer     *buffer,
-                                          CoglOnscreen          *onscreen,
-                                          const graphene_rect_t *src_rect,
-                                          const MtkRectangle    *dst_rect)
+static CoglScanoutBuffer *
+meta_wayland_dma_buf_new_scanout_buffer (MetaWaylandDmaBufBuffer *dma_buf)
 {
-#ifdef HAVE_NATIVE_BACKEND
-  MetaWaylandDmaBufBuffer *dma_buf;
-  MetaContext *context;
-  MetaBackend *backend;
-  MetaRenderer *renderer;
-  MetaRendererNative *renderer_native;
+  MetaContext *context =
+    meta_wayland_compositor_get_context (dma_buf->manager->compositor);
+  MetaBackend *backend = meta_context_get_backend (context);
+  MetaRenderer *renderer = meta_backend_get_renderer (backend);
+  MetaRendererNative *renderer_native = META_RENDERER_NATIVE (renderer);
   MetaDeviceFile *device_file;
   MetaGpuKms *gpu_kms;
   struct gbm_bo *gbm_bo;
   g_autoptr (MetaDrmBufferGbm) fb = NULL;
-  g_autoptr (CoglScanout) scanout = NULL;
   g_autoptr (GError) error = NULL;
   MetaDrmBufferFlags flags;
   gboolean use_modifier;
   int n_planes;
-
-  dma_buf = meta_wayland_dma_buf_from_buffer (buffer);
-  if (!dma_buf)
-    return NULL;
 
   context = meta_wayland_compositor_get_context (dma_buf->manager->compositor);
   backend = meta_context_get_backend (context);
@@ -665,18 +657,71 @@ meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer     *buffer,
       return NULL;
     }
 
-  scanout = cogl_scanout_new (COGL_SCANOUT_BUFFER (g_steal_pointer (&fb)));
-  cogl_scanout_set_src_rect (scanout, src_rect);
-  cogl_scanout_set_dst_rect (scanout, dst_rect);
+  return COGL_SCANOUT_BUFFER (g_steal_pointer (&fb));
+}
 
-  if (!meta_onscreen_native_is_buffer_scanout_compatible (onscreen, scanout))
+static void
+scanout_ref_toggled (gpointer  data,
+                     GObject  *scanout_obj,
+                     gboolean  is_last_ref)
+{
+  MetaWaylandBuffer *buffer = data;
+
+  if (!is_last_ref)
+    return;
+
+  meta_wayland_buffer_dec_use_count (buffer);
+  g_object_unref (buffer);
+}
+#endif
+
+CoglScanout *
+meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandBuffer     *buffer,
+                                          CoglOnscreen          *onscreen,
+                                          const graphene_rect_t *src_rect,
+                                          const MtkRectangle    *dst_rect)
+{
+#ifdef HAVE_NATIVE_BACKEND
+  MetaWaylandDmaBufBuffer *dma_buf;
+
+  dma_buf = meta_wayland_dma_buf_from_buffer (buffer);
+  if (!dma_buf)
+    return NULL;
+
+  if (!dma_buf->scanout)
     {
+      CoglScanoutBuffer *scanout_buffer;
+
+      scanout_buffer = meta_wayland_dma_buf_new_scanout_buffer (dma_buf);
+      if (!scanout_buffer)
+        return NULL;
+
+      dma_buf->scanout = cogl_scanout_new (scanout_buffer);
+      g_object_add_toggle_ref (G_OBJECT (dma_buf->scanout),
+                               scanout_ref_toggled,
+                               buffer);
+    }
+  else
+    {
+      g_object_ref (dma_buf->scanout);
+    }
+
+  g_object_ref (buffer);
+  meta_wayland_buffer_inc_use_count (buffer);
+
+  cogl_scanout_set_src_rect (dma_buf->scanout, src_rect);
+  cogl_scanout_set_dst_rect (dma_buf->scanout, dst_rect);
+
+  if (!meta_onscreen_native_is_buffer_scanout_compatible (onscreen,
+                                                          dma_buf->scanout))
+    {
+      g_object_unref (dma_buf->scanout);
       meta_topic (META_DEBUG_RENDER,
                   "Buffer not scanout compatible (see also KMS debug topic)");
       return NULL;
     }
 
-  return g_steal_pointer (&scanout);
+  return dma_buf->scanout;
 #else
   return NULL;
 #endif
@@ -1903,6 +1948,8 @@ meta_wayland_dma_buf_buffer_finalize (GObject *object)
 {
   MetaWaylandDmaBufBuffer *dma_buf = META_WAYLAND_DMA_BUF_BUFFER (object);
   int i;
+
+  g_clear_object (&dma_buf->scanout);
 
   for (i = 0; i < META_WAYLAND_DMA_BUF_MAX_FDS; i++)
     g_clear_fd (&dma_buf->fds[i], NULL);

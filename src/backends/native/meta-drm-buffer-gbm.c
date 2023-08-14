@@ -229,15 +229,10 @@ meta_drm_buffer_gbm_new_take (MetaDeviceFile      *device_file,
   return buffer_gbm;
 }
 
-static gboolean
-meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
-                                         CoglFramebuffer  *framebuffer,
-                                         int               x,
-                                         int               y,
-                                         GError          **error)
+static CoglOffscreen *
+meta_drm_buffer_gbm_new_scanout_fbo (MetaDrmBufferGbm  *buffer_gbm,
+                                     GError           **error)
 {
-  CoglScanoutBuffer *scanout_buffer = cogl_scanout_get_buffer (scanout);
-  MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (scanout_buffer);
   MetaDrmBuffer *buffer = META_DRM_BUFFER (buffer_gbm);
   MetaDeviceFile *device_file = meta_drm_buffer_get_device_file (buffer);
   MetaDevicePool *device_pool = meta_device_file_get_pool (device_file);
@@ -264,7 +259,6 @@ meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
   uint32_t height;
   uint32_t drm_format;
   int *fds;
-  gboolean result;
   int dmabuf_fd = -1;
   uint32_t i;
   const MetaFormatInfo *format_info;
@@ -275,7 +269,7 @@ meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_EXISTS,
                    "Failed to export buffer's DMA fd: %s",
                    g_strerror (errno));
-      return FALSE;
+      return NULL;
     }
 
   drm_format = gbm_bo_get_format (buffer_gbm->bo);
@@ -312,10 +306,7 @@ meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
                                             modifiers,
                                             error);
   if (egl_image == EGL_NO_IMAGE_KHR)
-    {
-      result = FALSE;
-      goto out;
-    }
+    goto out;
 
   flags = COGL_EGL_IMAGE_FLAG_NO_GET_DATA;
   cogl_tex = cogl_egl_texture_2d_new_from_image (cogl_context,
@@ -329,19 +320,45 @@ meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
   meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
 
   if (!cogl_tex)
-    {
-      result = FALSE;
-      goto out;
-    }
+    goto out;
 
   cogl_fbo = cogl_offscreen_new_with_texture (cogl_tex);
   g_object_unref (cogl_tex);
 
   if (!cogl_framebuffer_allocate (COGL_FRAMEBUFFER (cogl_fbo), error))
+    g_clear_object (&cogl_fbo);
+
+out:
+  close (dmabuf_fd);
+  return cogl_fbo;
+}
+
+static gboolean
+meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
+                                         CoglFramebuffer  *framebuffer,
+                                         int               x,
+                                         int               y,
+                                         GError          **error)
+{
+  CoglScanoutBuffer *scanout_buffer = cogl_scanout_get_buffer (scanout);
+  MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (scanout_buffer);
+  CoglOffscreen *cogl_fbo;
+  gboolean result;
+  int width;
+  int height;
+
+  cogl_fbo = cogl_scanout_get_fbo (scanout);
+  if (!cogl_fbo)
     {
-      result = FALSE;
-      goto out;
+      cogl_fbo = meta_drm_buffer_gbm_new_scanout_fbo (buffer_gbm, error);
+      if (!cogl_fbo)
+        return FALSE;
+
+      cogl_scanout_set_fbo (scanout, cogl_fbo);
     }
+
+  width = cogl_framebuffer_get_width (COGL_FRAMEBUFFER (cogl_fbo));
+  height = cogl_framebuffer_get_height (COGL_FRAMEBUFFER (cogl_fbo));
 
   result = cogl_blit_framebuffer (COGL_FRAMEBUFFER (cogl_fbo),
                                   framebuffer,
@@ -349,10 +366,6 @@ meta_drm_buffer_gbm_blit_to_framebuffer (CoglScanout      *scanout,
                                   x, y,
                                   width, height,
                                   error);
-
-out:
-  g_clear_object (&cogl_fbo);
-  close (dmabuf_fd);
 
   return result;
 }
