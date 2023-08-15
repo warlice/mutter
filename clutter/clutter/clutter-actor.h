@@ -656,6 +656,14 @@ void                            clutter_actor_insert_child_at_index             
                                                                                  ClutterActor               *child,
                                                                                  gint                        index_);
 CLUTTER_EXPORT
+void                            clutter_actor_insert_child_after                (ClutterActor               *self,
+                                                                                 ClutterActor               *child,
+                                                                                 ClutterActor               *sibling);
+CLUTTER_EXPORT
+void                            clutter_actor_insert_child_before               (ClutterActor               *self,
+                                                                                 ClutterActor               *child,
+                                                                                 ClutterActor               *sibling);
+CLUTTER_EXPORT
 void                            clutter_actor_insert_child_above                (ClutterActor               *self,
                                                                                  ClutterActor               *child,
                                                                                  ClutterActor               *sibling);

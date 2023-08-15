@@ -11219,6 +11219,84 @@ clutter_actor_insert_child_at_index (ClutterActor *self,
 }
 
 /**
+ * clutter_actor_insert_child_after:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor
+ * @sibling: (nullable): a child of @self, or %NULL
+ *
+ * Inserts @child into the list of children of @self, after another
+ * child of @self or, if @sibling is %NULL, after all the children
+ * of @self.
+ *
+ * This function will acquire a reference on @child that will only
+ * be released when calling clutter_actor_remove_child().
+ *
+ * This function will not take into consideration the #ClutterActor:depth
+ * of @child.
+ *
+ * This function will emit the #ClutterContainer::actor-added signal
+ * on @self.
+ */
+void
+clutter_actor_insert_child_after (ClutterActor *self,
+                                  ClutterActor *child,
+                                  ClutterActor *sibling)
+{
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+  g_return_if_fail (CLUTTER_IS_ACTOR (child));
+  g_return_if_fail (self != child);
+  g_return_if_fail (child != sibling);
+  g_return_if_fail (child->priv->parent == NULL);
+  g_return_if_fail (sibling == NULL ||
+                    (CLUTTER_IS_ACTOR (sibling) &&
+                     sibling->priv->parent == self));
+
+  clutter_actor_add_child_internal (self, child,
+                                    ADD_CHILD_DEFAULT_FLAGS,
+                                    insert_child_above,
+                                    sibling);
+}
+
+/**
+ * clutter_actor_insert_child_before:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor
+ * @sibling: (nullable): a child of @self, or %NULL
+ *
+ * Inserts @child into the list of children of @self, before another
+ * child of @self or, if @sibling is %NULL, before all the children
+ * of @self.
+ *
+ * This function will acquire a reference on @child that will only
+ * be released when calling clutter_actor_remove_child().
+ *
+ * This function will not take into consideration the #ClutterActor:depth
+ * of @child.
+ *
+ * This function will emit the #ClutterContainer::actor-added signal
+ * on @self.
+ */
+void
+clutter_actor_insert_child_before (ClutterActor *self,
+                                   ClutterActor *child,
+                                   ClutterActor *sibling)
+{
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+  g_return_if_fail (CLUTTER_IS_ACTOR (child));
+  g_return_if_fail (self != child);
+  g_return_if_fail (child != sibling);
+  g_return_if_fail (child->priv->parent == NULL);
+  g_return_if_fail (sibling == NULL ||
+                    (CLUTTER_IS_ACTOR (sibling) &&
+                     sibling->priv->parent == self));
+
+  clutter_actor_add_child_internal (self, child,
+                                    ADD_CHILD_DEFAULT_FLAGS,
+                                    insert_child_below,
+                                    sibling);
+}
+
+/**
  * clutter_actor_insert_child_above:
  * @self: a #ClutterActor
  * @child: a #ClutterActor
