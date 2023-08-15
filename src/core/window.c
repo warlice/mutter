@@ -1939,10 +1939,10 @@ window_state_on_map (MetaWindow *window,
       return;
     }
 
-  /* Do not focus window on map if input is already taken by the
-   * compositor.
+  /* Do not focus x11 window on map if input is already taken by the
+   * compositor (wayland windows can't grab input anyway).
    */
-  if (!meta_display_windows_are_interactable (window->display))
+  if (!meta_display_windows_are_interactable (window->display) && window->client_type == META_WINDOW_CLIENT_TYPE_X11)
     {
       *takes_focus = FALSE;
       return;
