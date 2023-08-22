@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include "meta/display.h"
+#include "meta/types.h"
 
 /**
  * META_PRIORITY_EVENTS: (value 0)

@@ -19,7 +19,6 @@ fribidi_req = '>= 1.0.0'
 glib_req = '>= 2.75.1'
 gi_req = '>= 0.9.5'
 graphene_req = '>= 1.10.2'
-gtk3_req = '>= 3.19.8'
 gtk4_req = '>= 4.0.0'
 gdk_pixbuf_req = '>= 2.0'
 uprof_req = '>= 0.3'
@@ -338,8 +337,6 @@ have_tty_tests = false
 have_installed_tests = false
 
 if have_tests
-  gtk3_dep = dependency('gtk+-3.0', version: gtk3_req)
-
   have_core_tests = get_option('core_tests')
   if have_core_tests
     if not have_wayland

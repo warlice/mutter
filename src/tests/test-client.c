@@ -19,10 +19,11 @@
 
 #include "config.h"
 
+#include <gio/gio.h>
 #include <gio/gunixinputstream.h>
 #include <gtk/gtk.h>
-#include <gdk/gdkx.h>
-#include <gdk/gdkwayland.h>
+#include <gdk/x11/gdkx.h>
+#include <gdk/wayland/gdkwayland.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,35 +31,194 @@
 
 #include "core/events.h"
 
+#define TITLEBAR_HEIGHT 10
+
 const char *client_id = "0";
 static gboolean wayland;
 GHashTable *windows;
 GQuark event_source_quark;
 GQuark event_handlers_quark;
 GQuark can_take_focus_quark;
+GQuark accept_focus_quark;
+GQuark maximized_quark;
+GQuark fullscreen_quark;
+GQuark need_update_quark;
 gboolean sync_after_lines = -1;
+GMainLoop *main_loop = NULL;
 
-typedef void (*XEventHandler) (GtkWidget *window, XEvent *event);
+typedef void (*XEventHandler) (GdkSurface *window, XEvent *event);
 
 static void read_next_line (GDataInputStream *in);
 
-static void
-window_export_handle_cb (GdkWindow  *window,
-                         const char *handle_str,
-                         gpointer    user_data)
+static GdkToplevelLayout *
+get_base_layout (void)
 {
-  GdkWindow *gdk_window = gtk_widget_get_window (GTK_WIDGET (user_data));
+  GdkToplevelLayout *layout = gdk_toplevel_layout_new ();
 
-  if (!gdk_wayland_window_set_transient_for_exported (gdk_window,
-                                                      (gchar *) handle_str))
-    g_print ("Fail to set transient_for exported window handle %s\n", handle_str);
-  gdk_window_set_modal_hint (gdk_window, TRUE);
+  gdk_toplevel_layout_set_resizable (layout, TRUE);
+
+  return layout;
 }
 
-static GtkWidget *
+static void
+apply_layout (GdkSurface        *surface,
+              GdkToplevelLayout *layout)
+{
+  gdk_toplevel_present (GDK_TOPLEVEL (surface), layout);
+  gdk_toplevel_layout_unref (layout);
+
+  g_object_set_qdata (G_OBJECT (surface), need_update_quark, GUINT_TO_POINTER (TRUE));
+}
+
+static void
+surface_sync_visible (GdkSurface *surface)
+{
+  GdkToplevelLayout *layout = gdk_toplevel_layout_new ();
+  gboolean maximized = GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (surface), maximized_quark));
+  gboolean fullscreen = GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (surface), fullscreen_quark));
+
+  g_object_set_qdata (G_OBJECT (surface), need_update_quark, GUINT_TO_POINTER (TRUE));
+
+  gdk_toplevel_layout_set_resizable (layout, TRUE);
+  gdk_toplevel_layout_set_maximized (layout, maximized);
+  gdk_toplevel_layout_set_fullscreen (layout, fullscreen, NULL);
+  gdk_toplevel_present (GDK_TOPLEVEL (surface), layout);
+  gdk_toplevel_layout_unref (layout);
+}
+
+static void
+surface_set_size (GdkSurface *surface,
+                  int         width,
+                  int         height)
+{
+  g_object_set_data (G_OBJECT (surface), "surface-width", GINT_TO_POINTER (width));
+  g_object_set_data (G_OBJECT (surface), "surface-height", GINT_TO_POINTER (height));
+  g_object_set_qdata (G_OBJECT (surface), need_update_quark, GUINT_TO_POINTER (TRUE));
+
+  if (gdk_surface_get_mapped (surface))
+    gdk_surface_request_layout (surface);
+}
+
+static void
+ensure_wm_hints (GdkSurface *surface)
+{
+  GdkDisplay *display = gdk_display_get_default ();
+  Display *xdisplay = gdk_x11_display_get_xdisplay (display);
+  Window xwindow = gdk_x11_surface_get_xid (surface);
+  XWMHints wm_hints = { 0, };
+  gboolean enabled = GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (surface), accept_focus_quark));
+
+  wm_hints.flags = InputHint;
+  wm_hints.input = enabled ? True : False;
+  XSetWMHints (xdisplay, xwindow, &wm_hints);
+}
+
+static void
+ensure_wm_take_focus (GdkSurface *surface)
+{
+  GdkDisplay *display = gdk_display_get_default ();
+  Display *xdisplay = gdk_x11_display_get_xdisplay (display);
+  Window xwindow = gdk_x11_surface_get_xid (surface);
+  Atom wm_take_focus = gdk_x11_get_xatom_by_name_for_display (display, "WM_TAKE_FOCUS");
+  gboolean add = GPOINTER_TO_UINT (g_object_get_qdata (G_OBJECT (surface), can_take_focus_quark));
+  Atom *protocols = NULL;
+  Atom *new_protocols;
+  int n_protocols = 0;
+  int i, n = 0;
+
+  gdk_display_sync (display);
+  XGetWMProtocols (xdisplay, xwindow, &protocols, &n_protocols);
+  new_protocols = g_new0 (Atom, n_protocols + (add ? 1 : 0));
+
+  for (i = 0; i < n_protocols; ++i)
+    {
+      if (protocols[i] != wm_take_focus)
+        new_protocols[n++] = protocols[i];
+    }
+
+  if (add)
+    new_protocols[n++] = wm_take_focus;
+
+  XSetWMProtocols (xdisplay, xwindow, new_protocols, n);
+  XFree (new_protocols);
+  XFree (protocols);
+}
+
+static void
+surface_compute_size (GdkToplevel     *toplevel,
+                      GdkToplevelSize *size,
+                      gpointer         user_data)
+{
+  int width, height;
+
+  width = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (toplevel), "surface-width"));
+  height = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (toplevel), "surface-height"));
+
+  gdk_toplevel_size_set_size (size, width, height);
+  gdk_toplevel_size_set_min_size (size, 1, 1);
+  gdk_toplevel_size_set_shadow_width (size, 0, 0, 0, 0);
+
+  /* Enforce hints on X11 surfaces */
+  if (GDK_IS_X11_DISPLAY (gdk_display_get_default ()))
+    {
+      ensure_wm_hints (GDK_SURFACE (toplevel));
+      ensure_wm_take_focus (GDK_SURFACE (toplevel));
+    }
+}
+
+static gboolean
+surface_render (GdkSurface           *toplevel,
+                const cairo_region_t *region,
+                gpointer              user_data)
+{
+  GdkCairoContext *gdk_cr;
+  cairo_t *cr;
+
+  gdk_cr = gdk_surface_create_cairo_context (GDK_SURFACE (toplevel));
+
+  gdk_draw_context_begin_frame (GDK_DRAW_CONTEXT (gdk_cr), region);
+  cr = gdk_cairo_context_cairo_create (gdk_cr);
+
+  cairo_set_source_rgb (cr, 1, 0, 0);
+  cairo_paint (cr);
+  cairo_destroy (cr);
+
+  gdk_draw_context_end_frame (GDK_DRAW_CONTEXT (gdk_cr));
+  g_object_unref (gdk_cr);
+
+  return TRUE;
+}
+
+static void
+surface_layout (GdkSurface *surface,
+                int         width,
+                int         height,
+                gpointer    user_data)
+{
+  if (g_object_get_qdata (G_OBJECT (surface), need_update_quark))
+    {
+      gdk_surface_request_layout (surface);
+      g_object_set_qdata (G_OBJECT (surface), need_update_quark, GUINT_TO_POINTER (FALSE));
+    }
+}
+
+static void
+window_export_handle_cb (GdkToplevel *toplevel,
+                         const char  *handle_str,
+                         gpointer     user_data)
+{
+  GdkSurface *surface = user_data;
+
+  if (!gdk_wayland_toplevel_set_transient_for_exported (GDK_TOPLEVEL (surface),
+                                                        (gchar *) handle_str))
+    g_print ("Fail to set transient_for exported window handle %s\n", handle_str);
+  gdk_toplevel_set_modal (GDK_TOPLEVEL (surface), TRUE);
+}
+
+static GdkSurface *
 lookup_window (const char *window_id)
 {
-  GtkWidget *window = g_hash_table_lookup (windows, window_id);
+  GdkSurface *window = g_hash_table_lookup (windows, window_id);
   if (!window)
     g_print ("Window %s doesn't exist\n", window_id);
 
@@ -110,7 +270,7 @@ x_event_source_dispatch (GSource     *source,
       while (g_hash_table_iter_next (&iter, NULL, &value))
         {
           GList *l;
-          GtkWidget *window = value;
+          GdkSurface *window = value;
           GList *handlers =
             g_object_get_qdata (G_OBJECT (window), event_handlers_quark);
 
@@ -166,11 +326,11 @@ ensure_xsource_handler (GdkDisplay *gdkdisplay)
 }
 
 static gboolean
-window_has_x11_event_handler (GtkWidget     *window,
+window_has_x11_event_handler (GdkSurface    *surface,
                               XEventHandler  handler)
 {
   GList *handlers =
-    g_object_get_qdata (G_OBJECT (window), event_handlers_quark);
+    g_object_get_qdata (G_OBJECT (surface), event_handlers_quark);
 
   g_return_val_if_fail (handler, FALSE);
   g_return_val_if_fail (!wayland, FALSE);
@@ -188,7 +348,7 @@ unref_and_maybe_destroy_gsource (GSource *source)
 }
 
 static void
-window_add_x11_event_handler (GtkWidget     *window,
+window_add_x11_event_handler (GdkSurface    *window,
                               XEventHandler  handler)
 {
   GSource *source;
@@ -197,7 +357,7 @@ window_add_x11_event_handler (GtkWidget     *window,
 
   g_return_if_fail (!window_has_x11_event_handler (window, handler));
 
-  source = ensure_xsource_handler (gtk_widget_get_display (window));
+  source = ensure_xsource_handler (gdk_display_get_default ());
   g_object_set_qdata_full (G_OBJECT (window), event_source_quark, source,
                            (GDestroyNotify) unref_and_maybe_destroy_gsource);
 
@@ -206,7 +366,7 @@ window_add_x11_event_handler (GtkWidget     *window,
 }
 
 static void
-window_remove_x11_event_handler (GtkWidget     *window,
+window_remove_x11_event_handler (GdkSurface    *window,
                                  XEventHandler  handler)
 {
   GList *handlers =
@@ -221,61 +381,27 @@ window_remove_x11_event_handler (GtkWidget     *window,
 }
 
 static void
-handle_take_focus (GtkWidget *window,
-                   XEvent    *xevent)
+handle_take_focus (GdkSurface *surface,
+                   XEvent     *xevent)
 {
-  GdkWindow *gdkwindow = gtk_widget_get_window (window);
-  GdkDisplay *display = gtk_widget_get_display (window);
+  GdkDisplay *display = gdk_display_get_default ();
   Atom wm_protocols =
     gdk_x11_get_xatom_by_name_for_display (display, "WM_PROTOCOLS");
   Atom wm_take_focus =
     gdk_x11_get_xatom_by_name_for_display (display, "WM_TAKE_FOCUS");
 
   if (xevent->xany.type != ClientMessage ||
-      xevent->xany.window != GDK_WINDOW_XID (gdkwindow))
+      xevent->xany.window != gdk_x11_surface_get_xid (surface))
     return;
 
   if (xevent->xclient.message_type == wm_protocols &&
       xevent->xclient.data.l[0] == wm_take_focus)
     {
       XSetInputFocus (xevent->xany.display,
-                      GDK_WINDOW_XID (gdkwindow),
+                      gdk_x11_surface_get_xid (surface),
                       RevertToParent,
                       xevent->xclient.data.l[1]);
     }
-}
-
-static int
-calculate_titlebar_height (GtkWindow *window)
-{
-  GtkWidget *titlebar;
-  GdkWindow *gdk_window;
-
-  gdk_window = gtk_widget_get_window (GTK_WIDGET (window));
-  if (gdk_window_get_state (gdk_window) & GDK_WINDOW_STATE_FULLSCREEN)
-    return 0;
-
-  titlebar = gtk_window_get_titlebar (window);
-  if (!titlebar)
-    return 0;
-
-  return gtk_widget_get_allocated_height (titlebar);
-}
-
-static void
-text_get_func (GtkClipboard     *clipboard,
-               GtkSelectionData *selection_data,
-               unsigned int      info,
-               gpointer          data)
-{
-  gtk_selection_data_set_text (selection_data, data, -1);
-}
-
-static void
-text_clear_func (GtkClipboard *clipboard,
-                 gpointer      data)
-{
-  g_free (data);
 }
 
 static void
@@ -330,41 +456,45 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = gtk_window_new (override ? GTK_WINDOW_POPUP : GTK_WINDOW_TOPLEVEL);
-      g_hash_table_insert (windows, g_strdup (argv[1]), window);
+      GdkDisplay *display = gdk_display_get_default ();
+      GdkSurface *surface = gdk_surface_new_toplevel (display);
+      g_object_set_qdata (G_OBJECT (surface), accept_focus_quark, GUINT_TO_POINTER (TRUE));
+      g_signal_connect (surface, "compute-size",
+                        G_CALLBACK (surface_compute_size), NULL);
+      g_signal_connect (surface, "render",
+                        G_CALLBACK (surface_render), NULL);
+      g_signal_connect (surface, "layout",
+                        G_CALLBACK (surface_layout), NULL);
+
+      g_hash_table_insert (windows, g_strdup (argv[1]), surface);
 
       if (csd)
-        {
-          GtkWidget *headerbar = gtk_header_bar_new ();
-          gtk_window_set_titlebar (GTK_WINDOW (window), headerbar);
-          gtk_widget_show (headerbar);
-        }
+        gdk_toplevel_set_decorated (GDK_TOPLEVEL (surface), FALSE);
 
-      gtk_window_set_default_size (GTK_WINDOW (window), 100, 100);
+      surface_set_size (surface, 100, 100);
 
       gchar *title = g_strdup_printf ("test/%s/%s", client_id, argv[1]);
-      gtk_window_set_title (GTK_WINDOW (window), title);
+      gdk_toplevel_set_title (GDK_TOPLEVEL (surface), title);
       g_free (title);
 
-      g_object_set_qdata (G_OBJECT (window), can_take_focus_quark,
+      g_object_set_qdata (G_OBJECT (surface), can_take_focus_quark,
                           GUINT_TO_POINTER (TRUE));
 
-      gtk_widget_realize (window);
-
-      if (!wayland)
+      if (override)
         {
-          /* The cairo xlib backend creates a window when initialized, which
-           * confuses our testing if it happens asynchronously the first
-           * time a window is painted. By creating an Xlib surface and
-           * destroying it, we force initialization at a more predictable time.
-           */
-          GdkWindow *window_gdk = gtk_widget_get_window (window);
-          cairo_surface_t *surface = gdk_window_create_similar_surface (window_gdk,
-                                                                        CAIRO_CONTENT_COLOR,
-                                                                        1, 1);
-          cairo_surface_destroy (surface);
-        }
+          GdkDisplay *display = gdk_display_get_default ();
+          Display *xdisplay = gdk_x11_display_get_xdisplay (display);
+          XSetWindowAttributes attrs = { 0, };
+          unsigned long mask;
 
+          attrs.override_redirect = True;
+          mask = CWOverrideRedirect;
+
+          XChangeWindowAttributes (xdisplay,
+                                   gdk_x11_surface_get_xid (surface),
+                                   mask,
+                                   &attrs);
+        }
     }
   else if (strcmp (argv[0], "set_parent") == 0)
     {
@@ -374,22 +504,22 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         {
           g_print ("unknown window %s\n", argv[1]);
           goto out;
         }
 
-      GtkWidget *parent_window = lookup_window (argv[2]);
+      GdkSurface *parent_window = lookup_window (argv[2]);
       if (!parent_window)
         {
           g_print ("unknown parent window %s\n", argv[2]);
           goto out;
         }
 
-      gtk_window_set_transient_for (GTK_WINDOW (window),
-                                    GTK_WINDOW (parent_window));
+      gdk_toplevel_set_transient_for (GDK_TOPLEVEL (window),
+                                      parent_window);
     }
   else if (strcmp (argv[0], "set_parent_exported") == 0)
     {
@@ -399,25 +529,24 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         {
           g_print ("unknown window %s\n", argv[1]);
           goto out;
         }
 
-      GtkWidget *parent_window = lookup_window (argv[2]);
+      GdkSurface *parent_window = lookup_window (argv[2]);
       if (!parent_window)
         {
           g_print ("unknown parent window %s\n", argv[2]);
           goto out;
         }
 
-      GdkWindow *parent_gdk_window = gtk_widget_get_window (parent_window);
-      if (!gdk_wayland_window_export_handle (parent_gdk_window,
-                                             window_export_handle_cb,
-                                             window,
-                                             NULL))
+      if (!gdk_wayland_toplevel_export_handle (GDK_TOPLEVEL (parent_window),
+                                               window_export_handle_cb,
+                                               window,
+                                               NULL))
         g_print ("Fail to export handle for window id %s\n", argv[2]);
     }
   else if (strcmp (argv[0], "accept_focus") == 0)
@@ -428,7 +557,7 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         {
           g_print ("unknown window %s\n", argv[1]);
@@ -444,7 +573,12 @@ process_line (const char *line)
         }
 
       gboolean enabled = g_ascii_strcasecmp (argv[2], "true") == 0;
-      gtk_window_set_accept_focus (GTK_WINDOW (window), enabled);
+      g_object_set_qdata (G_OBJECT (window), accept_focus_quark,
+                          GUINT_TO_POINTER (enabled));
+      g_object_set_qdata (G_OBJECT (window), can_take_focus_quark,
+                          GUINT_TO_POINTER (enabled));
+      if (gdk_surface_get_mapped (window))
+        ensure_wm_hints (window);
     }
   else if (strcmp (argv[0], "can_take_focus") == 0)
     {
@@ -454,7 +588,7 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         {
           g_print ("unknown window %s\n", argv[1]);
@@ -474,36 +608,11 @@ process_line (const char *line)
           goto out;
         }
 
-      GdkDisplay *display = gdk_display_get_default ();
-      GdkWindow *gdkwindow = gtk_widget_get_window (window);
-      Display *xdisplay = gdk_x11_display_get_xdisplay (display);
-      Window xwindow = GDK_WINDOW_XID (gdkwindow);
-      Atom wm_take_focus = gdk_x11_get_xatom_by_name_for_display (display, "WM_TAKE_FOCUS");
       gboolean add = g_ascii_strcasecmp(argv[2], "true") == 0;
-      Atom *protocols = NULL;
-      Atom *new_protocols;
-      int n_protocols = 0;
-      int i, n = 0;
-
-      gdk_display_sync (display);
-      XGetWMProtocols (xdisplay, xwindow, &protocols, &n_protocols);
-      new_protocols = g_new0 (Atom, n_protocols + (add ? 1 : 0));
-
-      for (i = 0; i < n_protocols; ++i)
-        {
-          if (protocols[i] != wm_take_focus)
-            new_protocols[n++] = protocols[i];
-        }
-
-      if (add)
-        new_protocols[n++] = wm_take_focus;
-
-      XSetWMProtocols (xdisplay, xwindow, new_protocols, n);
       g_object_set_qdata (G_OBJECT (window), can_take_focus_quark,
                           GUINT_TO_POINTER (add));
-
-      XFree (new_protocols);
-      XFree (protocols);
+      if (gdk_surface_get_mapped (window))
+        ensure_wm_take_focus (window);
     }
   else if (strcmp (argv[0], "accept_take_focus") == 0)
     {
@@ -513,7 +622,7 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         {
           g_print ("unknown window %s\n", argv[1]);
@@ -526,7 +635,7 @@ process_line (const char *line)
           goto out;
         }
 
-      if (gtk_window_get_accept_focus (GTK_WINDOW (window)))
+      if (g_object_get_qdata (G_OBJECT (window), accept_focus_quark))
         {
           g_print ("%s not supported for input windows\n", argv[0]);
           goto out;
@@ -552,11 +661,11 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gtk_widget_show (window);
+      surface_sync_visible (window);
       gdk_display_sync (gdk_display_get_default ());
     }
   else if (strcmp (argv[0], "hide") == 0)
@@ -567,11 +676,11 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gtk_widget_hide (window);
+      gdk_surface_hide (window);
     }
   else if (strcmp (argv[0], "activate") == 0)
     {
@@ -581,11 +690,11 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gtk_window_present (GTK_WINDOW (window));
+      gdk_toplevel_focus (GDK_TOPLEVEL (window), GDK_CURRENT_TIME);
     }
   else if (strcmp (argv[0], "resize") == 0)
     {
@@ -595,16 +704,13 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
       int width = atoi (argv[2]);
       int height = atoi (argv[3]);
-      int titlebar_height = calculate_titlebar_height (GTK_WINDOW (window));
-      gtk_window_resize (GTK_WINDOW (window),
-                         width,
-                         height - titlebar_height);
+      surface_set_size (window, width, height);
     }
   else if (strcmp (argv[0], "raise") == 0)
     {
@@ -614,11 +720,13 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gdk_window_raise (gtk_widget_get_window (window));
+      GdkDisplay *display = gdk_display_get_default ();
+      Display *xdisplay = gdk_x11_display_get_xdisplay (display);
+      XRaiseWindow (xdisplay, gdk_x11_surface_get_xid (window));
     }
   else if (strcmp (argv[0], "lower") == 0)
     {
@@ -628,11 +736,11 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gdk_window_lower (gtk_widget_get_window (window));
+      gdk_toplevel_lower (GDK_TOPLEVEL (window));
     }
   else if (strcmp (argv[0], "destroy") == 0)
     {
@@ -642,12 +750,11 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
       g_hash_table_remove (windows, argv[1]);
-      gtk_widget_destroy (window);
     }
   else if (strcmp (argv[0], "destroy_all") == 0)
     {
@@ -656,13 +763,6 @@ process_line (const char *line)
           g_print ("usage: destroy_all\n");
           goto out;
         }
-
-      GHashTableIter iter;
-      gpointer key, value;
-
-      g_hash_table_iter_init (&iter, windows);
-      while (g_hash_table_iter_next (&iter, &key, &value))
-        gtk_widget_destroy (value);
 
       g_hash_table_remove_all (windows);
     }
@@ -709,11 +809,11 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gtk_window_iconify (GTK_WINDOW (window));
+      gdk_toplevel_minimize (GDK_TOPLEVEL (window));
     }
   else if (strcmp (argv[0], "unminimize") == 0)
     {
@@ -723,11 +823,11 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gtk_window_deiconify (GTK_WINDOW (window));
+      surface_sync_visible (window);
     }
   else if (strcmp (argv[0], "maximize") == 0)
     {
@@ -737,11 +837,18 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gtk_window_maximize (GTK_WINDOW (window));
+      g_object_set_qdata (G_OBJECT (window), maximized_quark,
+                          GUINT_TO_POINTER (TRUE));
+      if (gdk_surface_get_mapped (window))
+        {
+          GdkToplevelLayout *layout = get_base_layout ();
+          gdk_toplevel_layout_set_maximized (layout, TRUE);
+          apply_layout (window, layout);
+        }
     }
   else if (strcmp (argv[0], "unmaximize") == 0)
     {
@@ -751,11 +858,18 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gtk_window_unmaximize (GTK_WINDOW (window));
+      g_object_set_qdata (G_OBJECT (window), maximized_quark,
+                          GUINT_TO_POINTER (FALSE));
+      if (gdk_surface_get_mapped (window))
+        {
+          GdkToplevelLayout *layout = get_base_layout ();
+          gdk_toplevel_layout_set_maximized (layout, FALSE);
+          apply_layout (window, layout);
+        }
     }
   else if (strcmp (argv[0], "fullscreen") == 0)
     {
@@ -765,11 +879,18 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gtk_window_fullscreen (GTK_WINDOW (window));
+      g_object_set_qdata (G_OBJECT (window), fullscreen_quark,
+                          GUINT_TO_POINTER (TRUE));
+      if (gdk_surface_get_mapped (window))
+        {
+          GdkToplevelLayout *layout = get_base_layout ();
+          gdk_toplevel_layout_set_fullscreen (layout, TRUE, NULL);
+          apply_layout (window, layout);
+        }
     }
   else if (strcmp (argv[0], "unfullscreen") == 0)
     {
@@ -779,11 +900,18 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gtk_window_unfullscreen (GTK_WINDOW (window));
+      g_object_set_qdata (G_OBJECT (window), fullscreen_quark,
+                          GUINT_TO_POINTER (FALSE));
+      if (gdk_surface_get_mapped (window))
+        {
+          GdkToplevelLayout *layout = get_base_layout ();
+          gdk_toplevel_layout_set_fullscreen (layout, FALSE, NULL);
+          apply_layout (window, layout);
+        }
     }
   else if (strcmp (argv[0], "freeze") == 0)
     {
@@ -793,11 +921,12 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gdk_window_freeze_updates (gtk_widget_get_window (window));
+      /* FIXME */
+      /* gdk_window_freeze_updates (gtk_native_get_surface (GTK_NATIVE (window))); */
     }
   else if (strcmp (argv[0], "thaw") == 0)
     {
@@ -807,11 +936,12 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gdk_window_thaw_updates (gtk_widget_get_window (window));
+      /* FIXME */
+      /* gdk_window_thaw_updates (gtk_native_get_surface (GTK_NATIVE (window))); */
     }
   else if (strcmp (argv[0], "assert_size") == 0)
     {
@@ -826,12 +956,12 @@ process_line (const char *line)
           goto out;
         }
 
-      GtkWidget *window = lookup_window (argv[1]);
+      GdkSurface *window = lookup_window (argv[1]);
       if (!window)
         goto out;
 
-      gtk_window_get_size (GTK_WINDOW (window), &width, &height);
-      height += calculate_titlebar_height (GTK_WINDOW (window));
+      width = gdk_surface_get_width (window);
+      height = gdk_surface_get_height (window);
 
       expected_width = atoi (argv[2]);
       expected_height = atoi (argv[3]);
@@ -866,11 +996,9 @@ process_line (const char *line)
   else if (strcmp (argv[0], "clipboard-set") == 0)
     {
       GdkDisplay *display = gdk_display_get_default ();
-      GtkClipboard *clipboard;
-      GdkAtom atom;
-      GtkTargetList *target_list;
-      GtkTargetEntry *targets;
-      int n_targets;
+      GdkClipboard *clipboard;
+      GdkContentProvider *provider;
+      GBytes *content;
 
       if (argc != 3)
         {
@@ -878,21 +1006,11 @@ process_line (const char *line)
           goto out;
         }
 
-      clipboard = gtk_clipboard_get_for_display (display,
-                                                 GDK_SELECTION_CLIPBOARD);
+      clipboard = gdk_display_get_clipboard (display);
 
-      atom = gdk_atom_intern (argv[1], FALSE);
-      target_list = gtk_target_list_new (NULL, 0);
-      gtk_target_list_add (target_list, atom, 0, 0);
-
-      targets = gtk_target_table_new_from_list (target_list, &n_targets);
-      gtk_target_list_unref (target_list);
-
-      gtk_clipboard_set_with_data (clipboard,
-                                   targets, n_targets,
-                                   text_get_func, text_clear_func,
-                                   g_strdup (argv[2]));
-      gtk_target_table_free (targets, n_targets);
+      content = g_bytes_new (argv[2], strlen (argv[2]));
+      provider = gdk_content_provider_new_for_bytes (argv[1], content);
+      gdk_clipboard_set_content (clipboard, provider);
     }
   else
     {
@@ -920,7 +1038,7 @@ on_line_received (GObject      *source,
     {
       if (error != NULL)
         g_printerr ("Error reading from stdin: %s\n", error->message);
-      gtk_main_quit ();
+      g_main_loop_quit (main_loop);
       return;
     }
 
@@ -946,7 +1064,7 @@ read_next_line (GDataInputStream *in)
         {
           if (error)
             g_printerr ("Error reading from stdin: %s\n", error->message);
-          gtk_main_quit ();
+          g_main_loop_quit (main_loop);
           return;
         }
 
@@ -981,8 +1099,7 @@ main(int    argc,
      char **argv)
 {
   GOptionContext *context = g_option_context_new (NULL);
-  GdkScreen *screen;
-  GtkCssProvider *provider;
+  GdkDisplay *display;
   GError *error = NULL;
 
   g_log_writer_default_set_use_stderr (TRUE);
@@ -1001,43 +1118,29 @@ main(int    argc,
   else
     gdk_set_allowed_backends ("x11");
 
-  gtk_init (NULL, NULL);
+  gtk_init ();
 
-  screen = gdk_screen_get_default ();
-  g_assert_true (gdk_screen_is_composited (screen));
-
-  provider = gtk_css_provider_new ();
-  static const char *no_decoration_css =
-    "decoration {"
-    "  border-radius: 0 0 0 0;"
-    "  border-width: 0;"
-    "  padding: 0 0 0 0;"
-    "  box-shadow: 0 0 0 0 rgba(0, 0, 0, 0), 0 0 0 0 rgba(0, 0, 0, 0);"
-    "  margin: 0px;"
-    "}";
-  if (!gtk_css_provider_load_from_data (provider,
-                                        no_decoration_css,
-                                        strlen (no_decoration_css),
-                                        &error))
-    {
-      g_printerr ("%s", error->message);
-      return 1;
-    }
-  gtk_style_context_add_provider_for_screen (screen, GTK_STYLE_PROVIDER (provider),
-                                             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  display = gdk_display_get_default ();
+  g_assert_true (gdk_display_is_composited (display));
 
   windows = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                   g_free, NULL);
+                                   g_free, (GDestroyNotify) gdk_surface_destroy);
   event_source_quark = g_quark_from_static_string ("event-source");
   event_handlers_quark = g_quark_from_static_string ("event-handlers");
   can_take_focus_quark = g_quark_from_static_string ("can-take-focus");
+  accept_focus_quark = g_quark_from_static_string ("accept-focus");
+  maximized_quark = g_quark_from_static_string ("maximized");
+  fullscreen_quark = g_quark_from_static_string ("fullscreen");
+  need_update_quark = g_quark_from_static_string ("need-update");
 
   GInputStream *raw_in = g_unix_input_stream_new (0, FALSE);
   GDataInputStream *in = g_data_input_stream_new (raw_in);
 
   read_next_line (in);
 
-  gtk_main ();
+  main_loop = g_main_loop_new (NULL, FALSE);
+  g_main_loop_run (main_loop);
+  g_main_loop_unref (main_loop);
 
   return 0;
 }

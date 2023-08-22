@@ -155,7 +155,7 @@ test_client = executable('mutter-test-client',
     '-DG_LOG_DOMAIN="mutter-test-client"',
   ],
   dependencies: [
-    gtk3_dep,
+    gtk4_dep,
     gio_unix_dep,
     x11_dep,
     xext_dep,
