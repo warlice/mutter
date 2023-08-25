@@ -121,6 +121,9 @@ META_EXPORT
 gboolean meta_window_is_skip_taskbar (MetaWindow *window);
 
 META_EXPORT
+gboolean meta_window_is_mapped (MetaWindow *window);
+
+META_EXPORT
 void meta_window_get_buffer_rect (const MetaWindow *window,
                                   MtkRectangle     *rect);
 

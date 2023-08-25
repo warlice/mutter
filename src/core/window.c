@@ -215,6 +215,7 @@ enum
   PROP_EFFECT,
   PROP_XWINDOW,
   PROP_SUSPEND_STATE,
+  PROP_IS_MAPPED,
 
   PROP_LAST,
 };
@@ -450,6 +451,9 @@ meta_window_get_property(GObject         *object,
     case PROP_SUSPEND_STATE:
       g_value_set_enum (value, priv->suspend_state);
       break;
+    case PROP_IS_MAPPED:
+      g_value_set_boolean (value, win->is_mapped);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -630,6 +634,11 @@ meta_window_class_init (MetaWindowClass *klass)
                        META_TYPE_WINDOW_SUSPEND_STATE,
                        META_WINDOW_SUSPEND_STATE_SUSPENDED,
                        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+
+  obj_props[PROP_IS_MAPPED] =
+    g_param_spec_boolean ("is-mapped", NULL, NULL,
+                          TRUE,
+                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, PROP_LAST, obj_props);
 
@@ -1116,6 +1125,7 @@ meta_window_constructed (GObject *object)
   window->skip_taskbar = FALSE;
   window->skip_pager = FALSE;
   window->skip_from_window_list = FALSE;
+  window->is_mapped = TRUE;
   window->wm_state_above = FALSE;
   window->wm_state_below = FALSE;
   window->wm_state_demands_attention = FALSE;
@@ -8007,4 +8017,21 @@ int
 meta_get_window_suspend_timeout_s (void)
 {
   return SUSPEND_HIDDEN_TIMEOUT_S;
+}
+
+void
+meta_window_set_mapped (MetaWindow *window,
+                        gboolean    is_mapped)
+{
+  if (window->is_mapped == is_mapped)
+    return;
+
+  window->is_mapped = is_mapped;
+  g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_IS_MAPPED]);
+}
+
+gboolean
+meta_window_is_mapped (MetaWindow *window)
+{
+  return window->is_mapped;
 }
