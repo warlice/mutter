@@ -427,6 +427,11 @@ init_properties (MetaKmsCrtc       *crtc,
           .name = "GAMMA_LUT_SIZE",
           .type = DRM_MODE_PROP_RANGE,
         },
+      [META_KMS_CRTC_PROP_OUT_FENCE_PTR] =
+        {
+          .name = "OUT_FENCE_PTR",
+          .type = DRM_MODE_PROP_RANGE,
+        },
     }
   };
 }
