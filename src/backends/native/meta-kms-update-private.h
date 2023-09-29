@@ -77,6 +77,7 @@ typedef struct _MetaKmsModeSet
   MetaKmsCrtc *crtc;
   GList *connectors;
   MetaKmsMode *mode;
+  int out_fence_fd;
 } MetaKmsModeSet;
 
 typedef struct _MetaKmsConnectorUpdate

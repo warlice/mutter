@@ -19,6 +19,8 @@
 
 #include "backends/native/meta-kms-impl-device-atomic.h"
 
+#include <glib/gstdio.h>
+
 #include "backends/native/meta-backend-native-private.h"
 #include "backends/native/meta-kms-connector-private.h"
 #include "backends/native/meta-kms-crtc-private.h"
@@ -413,6 +415,77 @@ process_mode_set (MetaKmsImplDevice  *impl_device,
     }
 
   return TRUE;
+}
+
+static gboolean
+process_out_fence_ptr (MetaKmsImplDevice  *impl_device,
+                       MetaKmsUpdate      *update,
+                       drmModeAtomicReq   *req,
+                       GArray             *blob_ids,
+                       gpointer            update_entry,
+                       gpointer            user_data,
+                       GError            **error)
+{
+  MetaKmsModeSet *mode_set = update_entry;
+  MetaKmsCrtc *crtc = mode_set->crtc;
+
+  mode_set->out_fence_fd = -1;
+
+  if ((mode_set->mode || meta_kms_crtc_get_current_state (crtc)->is_active) &&
+      !add_crtc_property (impl_device,
+                          crtc, req,
+                          META_KMS_CRTC_PROP_OUT_FENCE_PTR,
+                          (ptrdiff_t)&mode_set->out_fence_fd,
+                          error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+process_wait_out_fence (MetaKmsImplDevice  *impl_device,
+                        MetaKmsUpdate      *update,
+                        drmModeAtomicReq   *req,
+                        GArray             *blob_ids,
+                        gpointer            update_entry,
+                        gpointer            user_data,
+                        GError            **error)
+{
+  MetaKmsModeSet *mode_set = update_entry;
+  GPollFD poll_fd;
+  int status;
+
+  if (mode_set->out_fence_fd == -1)
+    return TRUE;
+
+  poll_fd.fd = mode_set->out_fence_fd;
+  poll_fd.events = G_IO_IN;
+  poll_fd.revents = 0;
+
+  do
+    {
+      status = g_poll (&poll_fd, 1, -1);
+
+      if (status < 0 && errno != EINTR)
+        {
+          g_set_error_literal (error, G_IO_ERROR,
+                               g_io_error_from_errno (errno),
+                               strerror (errno));
+          return FALSE;
+        }
+    }
+  while (status <= 0);
+
+  if (!g_clear_fd (&mode_set->out_fence_fd, error))
+    return FALSE;
+
+  if (poll_fd.revents & G_IO_IN)
+    return TRUE;
+
+  g_set_error (error, G_FILE_ERROR,
+               G_FILE_ERROR_FAILED,
+               "Out fence failed to signal");
+  return FALSE;
 }
 
 static gboolean
@@ -906,7 +979,7 @@ meta_kms_impl_device_atomic_process_update (MetaKmsImplDevice *impl_device,
   drmModeAtomicReq *req;
   g_autoptr (GArray) blob_ids = NULL;
   int fd;
-  uint32_t commit_flags = 0;
+  uint32_t commit_flags = DRM_MODE_ATOMIC_NONBLOCK;
   int ret;
 
   blob_ids = g_array_new (FALSE, TRUE, sizeof (uint32_t));
@@ -970,11 +1043,23 @@ meta_kms_impl_device_atomic_process_update (MetaKmsImplDevice *impl_device,
 
   if (meta_kms_update_get_needs_modeset (update))
     commit_flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
-  else
-    commit_flags |= DRM_MODE_ATOMIC_NONBLOCK;
 
   if (meta_kms_update_get_page_flip_listeners (update))
-    commit_flags |= DRM_MODE_PAGE_FLIP_EVENT;
+    {
+      commit_flags |= DRM_MODE_PAGE_FLIP_EVENT;
+    }
+  else
+    {
+      if (!process_entries (impl_device,
+                            update,
+                            req,
+                            blob_ids,
+                            meta_kms_update_get_mode_sets (update),
+                            NULL,
+                            process_out_fence_ptr,
+                            &error))
+        goto err;
+    }
 
   if (flags & META_KMS_UPDATE_FLAG_TEST_ONLY)
     commit_flags |= DRM_MODE_ATOMIC_TEST_ONLY;
@@ -1002,6 +1087,17 @@ meta_kms_impl_device_atomic_process_update (MetaKmsImplDevice *impl_device,
                    NULL,
                    process_page_flip_listener,
                    NULL);
+
+  if (!(commit_flags & DRM_MODE_PAGE_FLIP_EVENT) &&
+      !process_entries (impl_device,
+                        update,
+                        req,
+                        blob_ids,
+                        meta_kms_update_get_mode_sets (update),
+                        NULL,
+                        process_wait_out_fence,
+                        NULL))
+    goto err;
 
   release_blob_ids (impl_device, blob_ids);
 

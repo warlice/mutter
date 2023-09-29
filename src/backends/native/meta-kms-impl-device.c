@@ -1464,8 +1464,7 @@ meta_kms_impl_device_handle_update (MetaKmsImplDevice *impl_device,
 
   crtc_frame->await_flush = FALSE;
 
-  if (crtc_frame->pending_page_flip &&
-      !meta_kms_update_get_mode_sets (update))
+  if (crtc_frame->pending_page_flip)
     {
       g_assert (latch_crtc);
 
