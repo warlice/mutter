@@ -856,9 +856,9 @@ commit_flags_string (uint32_t commit_flags)
 }
 
 static gboolean
-disable_connectors (MetaKmsImplDevice  *impl_device,
-                    drmModeAtomicReq   *req,
-                    GError            **error)
+disable_planes_and_connectors (MetaKmsImplDevice  *impl_device,
+                               drmModeAtomicReq   *req,
+                               GError            **error)
 {
   GList *l;
 
@@ -873,16 +873,6 @@ disable_connectors (MetaKmsImplDevice  *impl_device,
                                    error))
         return FALSE;
     }
-
-  return TRUE;
-}
-
-static gboolean
-disable_planes (MetaKmsImplDevice  *impl_device,
-                drmModeAtomicReq   *req,
-                GError            **error)
-{
-  GList *l;
 
   for (l = meta_kms_impl_device_peek_planes (impl_device); l; l = l->next)
     {
@@ -902,48 +892,6 @@ disable_planes (MetaKmsImplDevice  *impl_device,
                                error))
         return FALSE;
     }
-
-  return TRUE;
-}
-
-static gboolean
-disable_crtcs (MetaKmsImplDevice  *impl_device,
-               drmModeAtomicReq   *req,
-               GError            **error)
-{
-  GList *l;
-
-  for (l = meta_kms_impl_device_peek_crtcs (impl_device); l; l = l->next)
-    {
-      MetaKmsCrtc *crtc = l->data;
-
-      if (!add_crtc_property (impl_device,
-                              crtc, req,
-                              META_KMS_CRTC_PROP_ACTIVE,
-                              0,
-                              error))
-        return FALSE;
-
-      if (!add_crtc_property (impl_device,
-                              crtc, req,
-                              META_KMS_CRTC_PROP_MODE_ID,
-                              0,
-                              error))
-        return FALSE;
-    }
-
-  return TRUE;
-}
-
-static gboolean
-disable_planes_and_connectors (MetaKmsImplDevice  *impl_device,
-                               drmModeAtomicReq   *req,
-                               GError            **error)
-{
-  if (!disable_connectors (impl_device, req, error))
-    return FALSE;
-  if (!disable_planes (impl_device, req, error))
-    return FALSE;
 
   return TRUE;
 }
@@ -1073,48 +1021,32 @@ err:
 static void
 meta_kms_impl_device_atomic_disable (MetaKmsImplDevice *impl_device)
 {
-  g_autoptr (GError) error = NULL;
-  drmModeAtomicReq *req;
-  int fd;
-  int ret;
+  MetaKmsDevice *device = meta_kms_impl_device_get_device (impl_device);
+  MetaKmsUpdate *update;
+  GList *l;
 
   meta_topic (META_DEBUG_KMS, "[atomic] Disabling '%s'",
               meta_kms_impl_device_get_path (impl_device));
 
-  req = drmModeAtomicAlloc ();
-  if (!req)
+  update = meta_kms_update_new (device);
+
+  for (l = meta_kms_impl_device_peek_crtcs (impl_device); l; l = l->next)
     {
-      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to create atomic transaction request: %s",
-                   g_strerror (errno));
-      goto err;
+      MetaKmsCrtc *crtc = l->data;
+
+      if (!meta_kms_crtc_get_current_state (crtc)->is_active)
+        continue;
+
+      update = meta_kms_update_new (device);
+      meta_kms_update_set_flushing (update, crtc);
+      meta_kms_update_mode_set (update, crtc, NULL, NULL);
+
+      meta_topic (META_DEBUG_KMS, "Posting disable update for CRTC %u",
+                  meta_kms_crtc_get_id (crtc));
+
+      meta_kms_device_post_update (device, update,
+                                   META_KMS_UPDATE_FLAG_NONE);
     }
-
-  if (!disable_connectors (impl_device, req, &error))
-    goto err;
-  if (!disable_planes (impl_device, req, &error))
-    goto err;
-  if (!disable_crtcs (impl_device, req, &error))
-    goto err;
-
-  meta_topic (META_DEBUG_KMS, "[atomic] Committing disable-device transaction");
-
-  fd = meta_kms_impl_device_get_fd (impl_device);
-  ret = drmModeAtomicCommit (fd, req, DRM_MODE_ATOMIC_ALLOW_MODESET, impl_device);
-  drmModeAtomicFree (req);
-  if (ret < 0)
-    {
-      g_set_error (&error, G_IO_ERROR, g_io_error_from_errno (-ret),
-                   "drmModeAtomicCommit: %s", g_strerror (-ret));
-      goto err;
-    }
-
-  return;
-
-err:
-  g_warning ("[atomic] Failed to disable device '%s': %s",
-             meta_kms_impl_device_get_path (impl_device),
-             error->message);
 }
 
 static void
