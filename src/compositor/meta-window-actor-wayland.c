@@ -350,10 +350,6 @@ meta_window_actor_wayland_get_scanout_candidate (MetaWindowActor *actor)
   ClutterActor *child_actor;
   ClutterActorIter iter;
   MetaSurfaceActor *topmost_surface_actor = NULL;
-  int n_mapped_surfaces = 0;
-  MetaWindow *window;
-  ClutterActorBox window_box;
-  ClutterActorBox surface_box;
 
   if (clutter_actor_get_last_child (CLUTTER_ACTOR (self)) != surface_container)
     {
@@ -369,63 +365,13 @@ meta_window_actor_wayland_get_scanout_candidate (MetaWindowActor *actor)
         continue;
 
       topmost_surface_actor = META_SURFACE_ACTOR (child_actor);
-      n_mapped_surfaces++;
     }
 
   if (!topmost_surface_actor)
-    {
-      meta_topic (META_DEBUG_RENDER,
-                  "No surface-actor for window-actor");
-      return NULL;
-    }
+    meta_topic (META_DEBUG_RENDER,
+                "No surface-actor for window-actor");
 
-  window = meta_window_actor_get_meta_window (actor);
-  if (meta_window_is_fullscreen (window) && n_mapped_surfaces == 1)
-    return topmost_surface_actor;
-
-  if (meta_window_is_fullscreen (window) && n_mapped_surfaces == 2)
-    {
-      MetaSurfaceActorWayland *bg_surface_actor = NULL;
-      MetaWaylandSurface *bg_surface;
-      MetaWaylandBuffer *buffer;
-
-      clutter_actor_iter_init (&iter, surface_container);
-      while (clutter_actor_iter_next (&iter, &child_actor))
-        {
-          if (!clutter_actor_is_mapped (child_actor))
-            continue;
-
-          bg_surface_actor = META_SURFACE_ACTOR_WAYLAND (child_actor);
-          break;
-        }
-      g_assert (bg_surface_actor);
-
-      bg_surface = meta_surface_actor_wayland_get_surface (bg_surface_actor);
-      buffer = meta_wayland_surface_get_buffer (bg_surface);
-      if (buffer->type == META_WAYLAND_BUFFER_TYPE_SINGLE_PIXEL)
-        {
-          MetaWaylandSinglePixelBuffer *sp_buffer;
-
-          sp_buffer = meta_wayland_single_pixel_buffer_from_buffer (buffer);
-          if (sp_buffer &&
-              meta_wayland_single_pixel_buffer_is_opaque_black (sp_buffer))
-            return topmost_surface_actor;
-        }
-    }
-
-  if (meta_surface_actor_is_opaque (topmost_surface_actor) &&
-      clutter_actor_get_paint_box (CLUTTER_ACTOR (actor), &window_box) &&
-      clutter_actor_get_paint_box (CLUTTER_ACTOR (topmost_surface_actor),
-                                   &surface_box) &&
-      G_APPROX_VALUE (window_box.x1, surface_box.x1, CLUTTER_COORDINATE_EPSILON) &&
-      G_APPROX_VALUE (window_box.y1, surface_box.y1, CLUTTER_COORDINATE_EPSILON) &&
-      G_APPROX_VALUE (window_box.x2, surface_box.x2, CLUTTER_COORDINATE_EPSILON) &&
-      G_APPROX_VALUE (window_box.y2, surface_box.y2, CLUTTER_COORDINATE_EPSILON))
-    return topmost_surface_actor;
-
-  meta_topic (META_DEBUG_RENDER,
-              "Could not find suitable scanout candidate for window-actor");
-  return NULL;
+  return topmost_surface_actor;
 }
 
 static void

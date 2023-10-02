@@ -113,3 +113,10 @@ CoglOffscreen * cogl_scanout_get_fbo (CoglScanout *scanout);
 COGL_EXPORT
 void cogl_scanout_set_fbo (CoglScanout   *scanout,
                            CoglOffscreen *fbo);
+
+COGL_EXPORT
+uint32_t cogl_scanout_get_plane_id (CoglScanout *scanout);
+
+COGL_EXPORT
+void cogl_scanout_set_plane_id (CoglScanout *scanout,
+                                uint32_t     plane_id);

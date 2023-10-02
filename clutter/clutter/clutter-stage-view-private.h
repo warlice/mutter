@@ -55,6 +55,9 @@ gboolean clutter_stage_view_has_full_redraw_clip (ClutterStageView *view);
 gboolean clutter_stage_view_has_redraw_clip (ClutterStageView *view);
 
 CLUTTER_EXPORT
+const MtkRegion * clutter_stage_view_peek_redraw_clip (ClutterStageView *view);
+
+CLUTTER_EXPORT
 MtkRegion * clutter_stage_view_take_accumulated_redraw_clip (ClutterStageView *view);
 
 CLUTTER_EXPORT

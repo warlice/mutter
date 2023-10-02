@@ -46,6 +46,7 @@ struct _CoglScanout
 
   CoglScanoutBuffer *scanout_buffer;
   CoglOffscreen *fbo;
+  uint32_t plane_id;
 
   gboolean has_src_rect;
   graphene_rect_t src_rect;
@@ -177,6 +178,19 @@ cogl_scanout_set_fbo (CoglScanout   *scanout,
                       CoglOffscreen *fbo)
 {
   scanout->fbo = fbo;
+}
+
+uint32_t
+cogl_scanout_get_plane_id (CoglScanout *scanout)
+{
+  return scanout->plane_id;
+}
+
+void
+cogl_scanout_set_plane_id (CoglScanout *scanout,
+                           uint32_t     plane_id)
+{
+  scanout->plane_id = plane_id;
 }
 
 static void

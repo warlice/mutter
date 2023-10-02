@@ -144,29 +144,28 @@ init_secondary_gpu_state (MetaRendererNative  *renderer_native,
                           GError             **error);
 
 static void
-free_current_bo (CoglOnscreen *onscreen)
-{
-  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
-
-  g_clear_object (&onscreen_native->gbm.current_fb);
-  g_clear_object (&onscreen_native->gbm.current_scanout);
-}
-
-static void
 meta_onscreen_native_swap_drm_fb (CoglOnscreen *onscreen)
 {
   MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
 
-  if (!onscreen_native->gbm.next_fb)
-    return;
+  if (onscreen_native->gbm.next_fb)
+    {
+      g_clear_object (&onscreen_native->gbm.current_fb);
+      g_clear_object (&onscreen_native->gbm.current_scanout);
 
-  free_current_bo (onscreen);
+      g_set_object (&onscreen_native->gbm.current_fb,
+                    onscreen_native->gbm.next_fb);
+      g_clear_object (&onscreen_native->gbm.next_fb);
+    }
 
-  g_set_object (&onscreen_native->gbm.current_fb, onscreen_native->gbm.next_fb);
-  g_clear_object (&onscreen_native->gbm.next_fb);
-  g_set_object (&onscreen_native->gbm.current_scanout,
-                onscreen_native->gbm.next_scanout);
-  g_clear_object (&onscreen_native->gbm.next_scanout);
+  if (onscreen_native->gbm.next_scanout)
+    {
+      g_clear_object (&onscreen_native->gbm.current_scanout);
+
+      g_set_object (&onscreen_native->gbm.current_scanout,
+                    onscreen_native->gbm.next_scanout);
+      g_clear_object (&onscreen_native->gbm.next_scanout);
+    }
 }
 
 static void
@@ -452,17 +451,17 @@ apply_transform (MetaCrtcKms            *crtc_kms,
 }
 
 static MetaKmsPlaneAssignment *
-assign_primary_plane (MetaCrtcKms            *crtc_kms,
-                      MetaDrmBuffer          *buffer,
-                      MetaKmsUpdate          *kms_update,
-                      MetaKmsAssignPlaneFlag  flags,
-                      const graphene_rect_t  *src_rect,
-                      const MtkRectangle     *dst_rect)
+assign_plane (MetaCrtcKms            *crtc_kms,
+              MetaKmsPlane           *kms_plane,
+              MetaDrmBuffer          *buffer,
+              MetaKmsUpdate          *kms_update,
+              MetaKmsAssignPlaneFlag  flags,
+              const graphene_rect_t  *src_rect,
+              const MtkRectangle     *dst_rect)
 {
   MetaCrtc *crtc = META_CRTC (crtc_kms);
   MetaFixed16Rectangle src_rect_fixed16;
   MetaKmsCrtc *kms_crtc;
-  MetaKmsPlane *primary_kms_plane;
   MetaKmsPlaneAssignment *plane_assignment;
 
   src_rect_fixed16 = (MetaFixed16Rectangle) {
@@ -481,17 +480,74 @@ assign_primary_plane (MetaCrtcKms            *crtc_kms,
               dst_rect->x, dst_rect->y, dst_rect->width, dst_rect->height);
 
   kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
-  primary_kms_plane = meta_crtc_kms_get_assigned_primary_plane (crtc_kms);
   plane_assignment = meta_kms_update_assign_plane (kms_update,
                                                    kms_crtc,
-                                                   primary_kms_plane,
+                                                   kms_plane,
                                                    buffer,
                                                    src_rect_fixed16,
                                                    *dst_rect,
                                                    flags);
-  apply_transform (crtc_kms, plane_assignment, primary_kms_plane);
+  apply_transform (crtc_kms, plane_assignment, kms_plane);
 
   return plane_assignment;
+}
+
+static MetaKmsPlaneAssignment *
+assign_primary_plane (MetaCrtcKms            *crtc_kms,
+                      MetaDrmBuffer          *buffer,
+                      MetaKmsUpdate          *kms_update,
+                      MetaKmsAssignPlaneFlag  flags,
+                      const graphene_rect_t  *src_rect,
+                      const MtkRectangle     *dst_rect)
+{
+  MetaKmsPlane *primary_kms_plane;
+
+  primary_kms_plane = meta_crtc_kms_get_assigned_primary_plane (crtc_kms);
+
+  return assign_plane (crtc_kms,
+                       primary_kms_plane,
+                       buffer,
+                       kms_update,
+                       flags,
+                       src_rect,
+                       dst_rect);
+}
+
+static MetaKmsPlaneAssignment *
+assign_plane_by_id (MetaCrtcKms            *crtc_kms,
+                    uint32_t                plane_id,
+                    MetaDrmBuffer          *buffer,
+                    MetaKmsUpdate          *kms_update,
+                    MetaKmsAssignPlaneFlag  flags,
+                    const graphene_rect_t  *src_rect,
+                    const MtkRectangle     *dst_rect)
+{
+  MetaKmsCrtc *kms_crtc;
+  MetaKmsDevice *kms_device;
+  MetaKmsPlane *plane = NULL;
+  GList *l;
+
+  kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
+  kms_device = meta_kms_crtc_get_device (kms_crtc);
+
+  for (l = meta_kms_device_get_planes (kms_device); l; l = l->next)
+    {
+      MetaKmsPlane *current_plane = l->data;
+
+      if (meta_kms_plane_get_id (current_plane) == plane_id)
+        plane = current_plane;
+    }
+
+  if (!plane)
+    return NULL;
+
+  return assign_plane (crtc_kms,
+                       plane,
+                       buffer,
+                       kms_update,
+                       flags,
+                       src_rect,
+                       dst_rect);
 }
 
 static void
@@ -525,23 +581,62 @@ meta_onscreen_native_flip_crtc (CoglOnscreen           *onscreen,
   switch (renderer_gpu_data->mode)
     {
     case META_RENDERER_NATIVE_MODE_GBM:
-      graphene_rect_t src_rect;
-      MtkRectangle dst_rect;
+      graphene_rect_t src_rect = { 0 };
+      MtkRectangle dst_rect = { 0 };
 
-      buffer = onscreen_native->gbm.next_fb;
-
-      if (onscreen_native->gbm.next_scanout)
+      if (onscreen_native->gbm.current_scanout)
         {
-          cogl_scanout_get_src_rect (onscreen_native->gbm.next_scanout,
-                                     &src_rect);
-          cogl_scanout_get_dst_rect (onscreen_native->gbm.next_scanout,
-                                     &dst_rect);
+          uint32_t current_plane_id;
+          uint32_t next_plane_id = 0;
+
+          current_plane_id =
+            cogl_scanout_get_plane_id (onscreen_native->gbm.current_scanout);
+
+          if (onscreen_native->gbm.next_scanout)
+            next_plane_id =
+              cogl_scanout_get_plane_id (onscreen_native->gbm.next_scanout);
+
+          if (current_plane_id != next_plane_id)
+            {
+              plane_assignment = assign_plane_by_id (crtc_kms,
+                                                     current_plane_id,
+                                                     NULL,
+                                                     kms_update,
+                                                     0,
+                                                     &src_rect,
+                                                     &dst_rect);
+            }
+        }
+
+      if (flags & META_KMS_ASSIGN_PLANE_FLAG_DIRECT_SCANOUT &&
+          onscreen_native->gbm.next_scanout)
+        {
+          CoglScanout *scanout;
+          uint32_t plane_id;
+
+          scanout = onscreen_native->gbm.next_scanout;
+          buffer = META_DRM_BUFFER (cogl_scanout_get_buffer (scanout));
+          plane_id = cogl_scanout_get_plane_id (scanout);
+
+          cogl_scanout_get_src_rect (scanout, &src_rect);
+          cogl_scanout_get_dst_rect (scanout, &dst_rect);
+
+          plane_assignment = assign_plane_by_id (crtc_kms,
+                                                 plane_id,
+                                                 buffer,
+                                                 kms_update,
+                                                 flags,
+                                                 &src_rect,
+                                                 &dst_rect);
+          g_assert (plane_assignment);
         }
       else
         {
+          buffer = onscreen_native->gbm.next_fb;
+
           src_rect = (graphene_rect_t) {
-            .origin.x = 0,
-            .origin.y = 0,
+            .origin.x = 0.0,
+            .origin.y = 0.0,
             .size.width = meta_drm_buffer_get_width (buffer),
             .size.height = meta_drm_buffer_get_height (buffer)
           };
@@ -551,19 +646,19 @@ meta_onscreen_native_flip_crtc (CoglOnscreen           *onscreen,
             .width = meta_drm_buffer_get_width (buffer),
             .height = meta_drm_buffer_get_height (buffer)
           };
-        }
 
-      plane_assignment = assign_primary_plane (crtc_kms,
-                                               buffer,
-                                               kms_update,
-                                               flags,
-                                               &src_rect,
-                                               &dst_rect);
+          plane_assignment = assign_primary_plane (crtc_kms,
+                                                   buffer,
+                                                   kms_update,
+                                                   flags,
+                                                   &src_rect,
+                                                   &dst_rect);
 
-      if (rectangles != NULL && n_rectangles != 0)
-        {
-          meta_kms_plane_assignment_set_fb_damage (plane_assignment,
-                                                   rectangles, n_rectangles);
+          if (rectangles != NULL && n_rectangles != 0)
+            {
+              meta_kms_plane_assignment_set_fb_damage (plane_assignment,
+                                                       rectangles, n_rectangles);
+            }
         }
       break;
     case META_RENDERER_NATIVE_MODE_SURFACELESS:
@@ -1501,38 +1596,91 @@ meta_onscreen_native_is_buffer_scanout_compatible (CoglOnscreen *onscreen,
   MetaKmsUpdate *test_update;
   MetaDrmBuffer *buffer;
   g_autoptr (MetaKmsFeedback) kms_feedback = NULL;
-  MetaKmsFeedbackResult result;
+  MetaKmsFeedbackResult result = META_KMS_FEEDBACK_FAILED;
   graphene_rect_t src_rect;
   MtkRectangle dst_rect;
+  MetaKmsPlane *kms_plane;
+  GList *l;
 
   gpu_kms = META_GPU_KMS (meta_crtc_get_gpu (crtc));
   kms_device = meta_gpu_kms_get_kms_device (gpu_kms);
   kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
 
-  test_update = meta_kms_update_new (kms_device);
-
+  buffer = META_DRM_BUFFER (cogl_scanout_get_buffer (scanout));
   cogl_scanout_get_src_rect (scanout, &src_rect);
   cogl_scanout_get_dst_rect (scanout, &dst_rect);
 
-  buffer = META_DRM_BUFFER (cogl_scanout_get_buffer (scanout));
-  assign_primary_plane (crtc_kms,
-                        buffer,
-                        test_update,
-                        META_KMS_ASSIGN_PLANE_FLAG_DIRECT_SCANOUT,
-                        &src_rect,
-                        &dst_rect);
+  for (l = meta_kms_device_get_planes (kms_device); l; l = l->next)
+    {
+      kms_plane = l->data;
+      const GError *error;
 
-  meta_topic (META_DEBUG_KMS,
-              "Posting direct scanout test update for CRTC %u (%s) synchronously",
-              meta_kms_crtc_get_id (kms_crtc),
-              meta_kms_device_get_path (kms_device));
+      if (meta_kms_plane_get_plane_type (kms_plane) != META_KMS_PLANE_TYPE_OVERLAY)
+        continue;
 
-  kms_feedback =
-    meta_kms_device_process_update_sync (kms_device, test_update,
-                                         META_KMS_UPDATE_FLAG_TEST_ONLY);
+      if (!meta_kms_plane_is_usable_with (kms_plane, kms_crtc))
+        continue;
 
-  result = meta_kms_feedback_get_result (kms_feedback);
-  return result == META_KMS_FEEDBACK_PASSED;
+      test_update = meta_kms_update_new (kms_device);
+      assign_plane (crtc_kms,
+                    kms_plane,
+                    buffer,
+                    test_update,
+                    META_KMS_ASSIGN_PLANE_FLAG_DIRECT_SCANOUT,
+                    &src_rect,
+                    &dst_rect);
+      kms_feedback =
+        meta_kms_device_process_update_sync (kms_device, test_update,
+                                             META_KMS_UPDATE_FLAG_TEST_ONLY);
+
+      result = meta_kms_feedback_get_result (kms_feedback);
+      if (result == META_KMS_FEEDBACK_PASSED)
+        {
+          cogl_scanout_set_plane_id (scanout,
+                                     meta_kms_plane_get_id (kms_plane));
+          return TRUE;
+        }
+
+      error = meta_kms_feedback_get_error (kms_feedback);
+      meta_topic (META_DEBUG_KMS,
+                  "Test update for overlay plane %d failed: %s",
+                  meta_kms_plane_get_id (kms_plane),
+                  error ? error->message : NULL);
+    }
+
+  /*if (FALSE)
+    {
+      const GError *error;
+
+      kms_plane = meta_kms_device_get_primary_plane_for (kms_device, kms_crtc);
+
+      test_update = meta_kms_update_new (kms_device);
+      assign_primary_plane (crtc_kms,
+                            kms_plane,
+                            buffer,
+                            test_update,
+                            META_KMS_ASSIGN_PLANE_FLAG_DIRECT_SCANOUT,
+                            &src_rect,
+                            &dst_rect);
+      kms_feedback =
+        meta_kms_device_process_update_sync (kms_device, test_update,
+                                             META_KMS_UPDATE_FLAG_TEST_ONLY);
+
+      result = meta_kms_feedback_get_result (kms_feedback);
+      if (result == META_KMS_FEEDBACK_PASSED)
+        {
+          cogl_scanout_set_plane_id (scanout,
+                                     meta_kms_plane_get_id (kms_plane));
+          return TRUE;
+        }
+
+      error = meta_kms_feedback_get_error (kms_feedback);
+      meta_topic (META_DEBUG_KMS,
+                  "Test update for primary plane failed: %s",
+                  error ? error->message : NULL);
+    }*/
+
+  return FALSE;
 }
 
 static void
@@ -1622,12 +1770,9 @@ meta_onscreen_native_direct_scanout (CoglOnscreen   *onscreen,
                                                          render_gpu);
 
   g_warn_if_fail (renderer_gpu_data->mode == META_RENDERER_NATIVE_MODE_GBM);
-  g_warn_if_fail (!onscreen_native->gbm.next_fb);
   g_warn_if_fail (!onscreen_native->gbm.next_scanout);
 
   g_set_object (&onscreen_native->gbm.next_scanout, scanout);
-  g_set_object (&onscreen_native->gbm.next_fb,
-                META_DRM_BUFFER (cogl_scanout_get_buffer (scanout)));
 
   frame_info->cpu_time_before_buffer_swap_us = g_get_monotonic_time ();
 
@@ -2843,7 +2988,8 @@ meta_onscreen_native_dispose (GObject *object)
     case META_RENDERER_NATIVE_MODE_GBM:
       g_clear_object (&onscreen_native->gbm.next_fb);
       g_clear_object (&onscreen_native->gbm.next_scanout);
-      free_current_bo (onscreen);
+      g_clear_object (&onscreen_native->gbm.current_fb);
+      g_clear_object (&onscreen_native->gbm.current_scanout);
       break;
     case META_RENDERER_NATIVE_MODE_SURFACELESS:
       g_assert_not_reached ();
