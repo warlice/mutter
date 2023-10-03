@@ -504,22 +504,18 @@ maybe_configure_black_background (MetaWindowActorWayland *self,
 
       if (META_IS_SURFACE_ACTOR (child) &&
           meta_surface_actor_is_opaque (META_SURFACE_ACTOR (child)) &&
-          G_APPROX_VALUE (clutter_actor_get_x (child), 0,
-                          CLUTTER_COORDINATE_EPSILON) &&
-          G_APPROX_VALUE (clutter_actor_get_y (child), 0,
-                          CLUTTER_COORDINATE_EPSILON) &&
-          G_APPROX_VALUE (child_width, fullscreen_layout.width,
-                          CLUTTER_COORDINATE_EPSILON) &&
-          G_APPROX_VALUE (child_height, fullscreen_layout.height,
-                          CLUTTER_COORDINATE_EPSILON))
+          clutter_actor_get_x (child) < CLUTTER_COORDINATE_EPSILON &&
+          clutter_actor_get_y (child) < CLUTTER_COORDINATE_EPSILON &&
+          child_width > fullscreen_layout.width - CLUTTER_COORDINATE_EPSILON &&
+          child_height > fullscreen_layout.height - CLUTTER_COORDINATE_EPSILON)
         return FALSE;
 
       max_width = MAX (max_width, child_width);
       max_height = MAX (max_height, child_height);
     }
 
-  *surfaces_width = max_width;
-  *surfaces_height = max_height;
+  *surfaces_width = MIN (max_width, fullscreen_layout.width);
+  *surfaces_height = MIN (max_height, fullscreen_layout.height);
   *background_width = window->rect.width / geometry_scale;
   *background_height = window->rect.height / geometry_scale;
   return TRUE;
