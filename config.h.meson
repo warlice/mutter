@@ -84,6 +84,9 @@
 /* Building with Sysprof profiling support */
 #mesondefine HAVE_PROFILER
 
+/* Building with Tracy profiling support */
+#mesondefine HAVE_TRACY
+
 /* Path to Xwayland executable */
 #mesondefine XWAYLAND_PATH
 

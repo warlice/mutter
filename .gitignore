@@ -2,6 +2,7 @@
 *~
 **/tags.*
 subprojects/sysprof/
+subprojects/tracy/
 __pycache__/
 .buildconfig
 .vscode
