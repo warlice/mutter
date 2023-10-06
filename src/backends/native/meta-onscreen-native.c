@@ -892,6 +892,9 @@ copy_shared_framebuffer_gpu (CoglOnscreen                         *onscreen,
       goto done;
     }
 
+  if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_SYNC_FRAME)))
+    meta_gles3_finish (gles3);
+
   if (!meta_egl_swap_buffers (egl,
                               egl_display,
                               secondary_gpu_state->egl_surface,
