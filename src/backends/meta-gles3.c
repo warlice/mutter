@@ -139,6 +139,12 @@ meta_gles3_has_extensions (MetaGles3    *gles3,
   return has_extensions;
 }
 
+void
+meta_gles3_finish (MetaGles3 *gles3)
+{
+  glFinish ();
+}
+
 MetaGles3 *
 meta_gles3_new (MetaEgl *egl)
 {

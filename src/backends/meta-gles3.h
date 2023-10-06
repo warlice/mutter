@@ -45,6 +45,8 @@ gboolean meta_gles3_has_extensions (MetaGles3    *gles3,
                                     const char   *first_extension,
                                     ...);
 
+void meta_gles3_finish (MetaGles3 *gles3);
+
 MetaGles3 * meta_gles3_new (MetaEgl *egl);
 
 #define GLBAS(gles3, func, args)                                               \
