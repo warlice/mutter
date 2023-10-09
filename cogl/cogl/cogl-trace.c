@@ -27,6 +27,11 @@
 
 #include "config.h"
 
+// Must come before cogl-trace.h.
+#ifdef HAVE_TRACY
+#include <tracy/TracyC.h>
+#endif
+
 #include "cogl/cogl-trace.h"
 
 #ifdef HAVE_PROFILER
@@ -385,6 +390,46 @@ cogl_trace_describe (CoglTraceHead *head,
     head->description = g_strdup (description);
 }
 
+#ifdef HAVE_TRACY
+
+void
+cogl_trace_tracy_begin (CoglTraceTracyHead *head, const CoglTraceTracyLocation *location)
+{
+  head->ctx = ___tracy_emit_zone_begin (location, TracyCIsStarted);
+}
+
+void
+cogl_trace_tracy_end (CoglTraceTracyHead *head)
+{
+  ___tracy_emit_zone_end (head->ctx);
+}
+
+void
+cogl_trace_tracy_describe (CoglTraceTracyHead *head, const char *description, size_t size)
+{
+  ___tracy_emit_zone_text (head->ctx, description, size);
+}
+
+void
+cogl_trace_tracy_emit_message (const char *message, size_t size)
+{
+  if (!TracyCIsStarted)
+    return;
+
+  ___tracy_emit_message (message, size, 0);
+}
+
+void
+cogl_trace_tracy_emit_plot_double (const char *name, double val)
+{
+  if (!TracyCIsStarted)
+    return;
+
+  ___tracy_emit_plot (name, val);
+}
+
+#endif /* HAVE_TRACY */
+
 #else
 
 #include <string.h>
@@ -428,3 +473,22 @@ cogl_set_tracing_disabled_on_thread (void *data)
 }
 
 #endif /* HAVE_PROFILER */
+
+void
+cogl_trace_tracy_start (void)
+{
+#ifdef TRACY_MANUAL_LIFETIME
+  if (!TracyCIsStarted)
+    ___tracy_startup_profiler ();
+#endif
+}
+
+gboolean
+cogl_trace_tracy_is_active (void)
+{
+#ifdef HAVE_TRACY
+  return TracyCIsStarted && TracyCIsConnected;
+#else
+  return FALSE;
+#endif
+}

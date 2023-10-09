@@ -715,6 +715,8 @@ meta_context_main_add_option_entries (MetaContextMain *context_main)
 MetaContext *
 meta_create_context (const char *name)
 {
+  cogl_trace_tracy_start ();
+
   return g_object_new (META_TYPE_CONTEXT_MAIN,
                        "name", name,
                        NULL);
