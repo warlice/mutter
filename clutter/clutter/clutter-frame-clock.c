@@ -121,6 +121,9 @@ struct _ClutterFrameClock
 
 #ifdef HAVE_TRACY
   const char *leaked_dispatch_lateness_plot_name;
+  const char *leaked_time_since_presentation_plot_name;
+  const char *leaked_presentation_misprediction_plot_name;
+  const char *leaked_gpu_work_plot_name;
 #endif
 };
 
@@ -339,6 +342,47 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
         }
 
       COGL_TRACE_DESCRIBE (ClutterFrameClockNotifyPresented, description->str);
+    }
+#endif
+
+#ifdef HAVE_TRACY
+  if (G_UNLIKELY (cogl_trace_tracy_is_active ()))
+    {
+      if (frame_info->presentation_time != 0)
+        {
+          int64_t current_time_us;
+          double since_us;
+          int64_t misprediction_us;
+
+          current_time_us = g_get_monotonic_time ();
+          since_us = current_time_us - frame_info->presentation_time;
+          misprediction_us =
+            frame_info->presentation_time - frame_clock->next_presentation_time_us;
+
+          if (!frame_clock->leaked_time_since_presentation_plot_name)
+            frame_clock->leaked_time_since_presentation_plot_name =
+              g_strdup_printf ("%s time since presentation, ms", frame_clock->output_name);
+          if (!frame_clock->leaked_presentation_misprediction_plot_name)
+            frame_clock->leaked_presentation_misprediction_plot_name =
+              g_strdup_printf ("%s presentation misprediction, ms", frame_clock->output_name);
+
+          COGL_TRACE_PLOT_DOUBLE (frame_clock->leaked_time_since_presentation_plot_name,
+                                  since_us / 1000.);
+          COGL_TRACE_PLOT_DOUBLE (frame_clock->leaked_presentation_misprediction_plot_name,
+                                  misprediction_us / 1000.);
+        }
+
+      if (frame_info->gpu_rendering_duration_ns != 0)
+        {
+          double value = frame_info->gpu_rendering_duration_ns / 1000000.;
+
+          if (!frame_clock->leaked_gpu_work_plot_name)
+            frame_clock->leaked_gpu_work_plot_name =
+              g_strdup_printf ("%s GPU work, ms", frame_clock->output_name);
+
+          COGL_TRACE_PLOT_DOUBLE (frame_clock->leaked_gpu_work_plot_name,
+                                  MAX (value, -1.));
+        }
     }
 #endif
 
