@@ -640,6 +640,15 @@ meta_output_peek_hdr_metadata (MetaOutput *output)
   return &priv->hdr_metadata;
 }
 
+gboolean
+meta_output_is_hdr_enabled (MetaOutput *output)
+{
+  MetaOutputPrivate *priv = meta_output_get_instance_private (output);
+
+  meta_verbose ("\nTRACE: File: %s, Function: %s, is_hdr enabled=%d\n", __FILE__, __FUNCTION__, priv->hdr_metadata.active);
+  return priv->hdr_metadata.active == TRUE;
+}
+
 static void
 meta_output_init (MetaOutput *output)
 {

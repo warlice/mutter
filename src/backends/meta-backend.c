@@ -65,6 +65,7 @@
 #include "backends/meta-remote-access-controller-private.h"
 #include "backends/meta-settings-private.h"
 #include "backends/meta-stage-private.h"
+#include "backends/meta-hdr.h"
 #include "backends/x11/meta-backend-x11.h"
 #include "clutter/clutter-mutter.h"
 #include "clutter/clutter-seat-private.h"
@@ -149,6 +150,8 @@ struct _MetaBackendPrivate
   GnomePnpIds *pnp_ids;
 #endif
 
+  MetaHdr *hdr;
+
   ClutterContext *clutter_context;
   ClutterSeat *default_seat;
   ClutterActor *stage;
@@ -205,6 +208,7 @@ meta_backend_dispose (GObject *object)
   g_clear_object (&priv->color_manager);
   g_clear_object (&priv->monitor_manager);
   g_clear_object (&priv->orientation_manager);
+  g_clear_object (&priv->hdr);
 #ifdef HAVE_REMOTE_DESKTOP
   g_clear_object (&priv->remote_desktop);
   g_clear_object (&priv->screen_cast);
@@ -1229,6 +1233,7 @@ meta_backend_initable_init (GInitable     *initable,
     META_BACKEND_GET_CLASS (backend)->create_cursor_tracker (backend);
 
   priv->dnd = meta_dnd_new (backend);
+  priv->hdr = meta_hdr_new (backend);
 
   priv->cancellable = g_cancellable_new ();
   g_bus_get (G_BUS_TYPE_SYSTEM,
@@ -1796,4 +1801,12 @@ meta_backend_get_vendor_name (MetaBackend *backend,
 #else
   return g_strdup (pnp_id);
 #endif
+}
+
+MetaHdr *
+meta_backend_get_hdr (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  return priv->hdr;
 }

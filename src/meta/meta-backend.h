@@ -69,6 +69,9 @@ META_EXPORT
 MetaMonitorManager * meta_backend_get_monitor_manager (MetaBackend *backend);
 
 META_EXPORT
+MetaHdr *meta_backend_get_hdr (MetaBackend *backend);
+
+META_EXPORT
 MetaRemoteAccessController * meta_backend_get_remote_access_controller (MetaBackend *backend);
 
 META_EXPORT

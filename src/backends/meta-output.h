@@ -28,8 +28,14 @@
 typedef enum _MetaOutputColorspace
 {
   META_OUTPUT_COLORSPACE_UNKNOWN = 0,
-  META_OUTPUT_COLORSPACE_DEFAULT,
+  META_OUTPUT_COLORSPACE_BT601_525_LINE,
+  META_OUTPUT_COLORSPACE_BT601_625_LINE,
+  META_OUTPUT_COLORSPACE_SMPTE170M,
+  META_OUTPUT_COLORSPACE_BT709,
   META_OUTPUT_COLORSPACE_BT2020,
+  META_OUTPUT_COLORSPACE_DEFAULT,
+  META_OUTPUT_COLORSPACE_DISPLAYP3,
+  META_OUTPUT_COLORSPACE_ADOBERGB,
 } MetaOutputColorspace;
 
 typedef enum
@@ -262,6 +268,8 @@ void meta_output_set_hdr_metadata (MetaOutput            *output,
                                    MetaOutputHdrMetadata *metadata);
 
 MetaOutputHdrMetadata * meta_output_peek_hdr_metadata (MetaOutput *output);
+
+gboolean meta_output_is_hdr_enabled (MetaOutput *output);
 
 void meta_output_add_possible_clone (MetaOutput *output,
                                      MetaOutput *possible_clone);

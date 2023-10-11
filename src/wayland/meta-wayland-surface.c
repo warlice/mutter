@@ -418,6 +418,8 @@ meta_wayland_surface_state_set_default (MetaWaylandSurfaceState *state)
 
   state->subsurface_placement_ops = NULL;
 
+  state->colorspace = META_OUTPUT_COLORSPACE_DEFAULT;
+
   wl_list_init (&state->presentation_feedback_list);
 
   state->xdg_popup_reposition_token = 0;
@@ -463,6 +465,8 @@ meta_wayland_surface_state_clear (MetaWaylandSurfaceState *state)
 
   if (state->subsurface_placement_ops)
     g_slist_free_full (state->subsurface_placement_ops, g_free);
+
+  state->colorspace = META_OUTPUT_COLORSPACE_UNKNOWN;
 
   meta_wayland_surface_state_discard_presentation_feedback (state);
 }
@@ -811,6 +815,8 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
 
   surface->offset_x += state->dx;
   surface->offset_y += state->dy;
+
+  surface->colorspace = state->colorspace;
 
   if (state->opaque_region_set)
     {
@@ -1557,10 +1563,11 @@ meta_wayland_surface_create (MetaWaylandCompositor *compositor,
 
   wl_list_init (&surface->presentation_time.feedback_list);
 
+  surface->colorspace = META_OUTPUT_COLORSPACE_DEFAULT;
+
 #ifdef HAVE_XWAYLAND
   meta_wayland_compositor_notify_surface_id (compositor, id, surface);
 #endif
-
   return surface;
 }
 

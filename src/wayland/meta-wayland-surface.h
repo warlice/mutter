@@ -23,6 +23,7 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "backends/meta-monitor-manager-private.h"
+#include "backends/meta-output.h"
 #include "clutter/clutter.h"
 #include "compositor/meta-shaped-texture-private.h"
 #include "compositor/meta-surface-actor.h"
@@ -134,6 +135,8 @@ struct _MetaWaylandSurfaceState
   /* xdg_popup */
   MetaWaylandXdgPositioner *xdg_positioner;
   uint32_t xdg_popup_reposition_token;
+  MetaOutputHdrMetadata *hdr_metadata;
+  MetaOutputColorspace colorspace;
 };
 
 struct _MetaWaylandDragDestFuncs
@@ -268,6 +271,9 @@ struct _MetaWaylandSurface
     MetaWaylandTransaction *first_committed;
     MetaWaylandTransaction *last_committed;
   } transaction;
+  struct wl_resource *hdr_surface_resource;
+  MetaOutputHdrMetadata *hdr_metadata;
+  MetaOutputColorspace colorspace;
 };
 
 void                meta_wayland_shell_init     (MetaWaylandCompositor *compositor);
