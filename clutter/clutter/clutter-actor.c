@@ -3446,7 +3446,7 @@ clutter_actor_paint (ClutterActor        *self,
 #ifdef HAVE_PROFILER
   COGL_TRACE_SCOPED_ANCHOR (ClutterActorPaint);
 
-  if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_DETAILED_TRACE))
+  // if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_DETAILED_TRACE))
     {
       COGL_TRACE_BEGIN_ANCHORED (ClutterActorPaint,
                                  "Clutter::Actor::paint()");
@@ -8661,7 +8661,7 @@ clutter_actor_allocate (ClutterActor          *self,
 #ifdef HAVE_PROFILER
   COGL_TRACE_SCOPED_ANCHOR (ClutterActorAllocate);
 
-  if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_DETAILED_TRACE))
+  // if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_DETAILED_TRACE))
     {
       COGL_TRACE_BEGIN_ANCHORED (ClutterActorAllocate,
                                  "Clutter::Actor::allocate()");
