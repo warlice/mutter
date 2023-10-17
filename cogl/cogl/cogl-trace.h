@@ -158,6 +158,9 @@ COGL_EXPORT void
 cogl_trace_tracy_describe (CoglTraceTracyHead *head, const char *description, size_t size);
 
 COGL_EXPORT void
+cogl_trace_tracy_name_dynamic (CoglTraceTracyHead *head, const char *name, size_t size);
+
+COGL_EXPORT void
 cogl_trace_tracy_emit_message (const char *message, size_t size);
 
 COGL_EXPORT void
@@ -199,6 +202,14 @@ cogl_auto_trace_end_helper_tracy (CoglTraceTracyHead *head)
 #define COGL_TRACE_PLOT_DOUBLE(name, val) \
   cogl_trace_tracy_emit_plot_double (name, val)
 
+#define COGL_TRACE_NAME_DYNAMIC(Name, ...)\
+  G_STMT_START \
+    { \
+      g_autofree char *_name = g_strdup_printf (__VA_ARGS__); \
+      cogl_trace_tracy_name_dynamic (&CoglTraceTracy##Name, _name, strlen (_name)); \
+    } \
+  G_STMT_END
+
 #else /* HAVE_TRACY */
 
 #define COGL_TRACE_TRACY_BEGIN_SCOPED(Name, name) (void) 0
@@ -209,6 +220,7 @@ cogl_auto_trace_end_helper_tracy (CoglTraceTracyHead *head)
 #define COGL_TRACE_TRACY_MESSAGE(message) (void) 0
 
 #define COGL_TRACE_PLOT_DOUBLE(name, val) (void) 0
+#define COGL_TRACE_NAME_DYNAMIC(Name, ...) (void) 0
 
 #endif /* HAVE_TRACY */
 
@@ -275,6 +287,7 @@ cogl_auto_trace_end_helper_tracy (CoglTraceTracyHead *head)
 #define COGL_TRACE_BEGIN_ANCHORED(Name, name) (void) 0
 #define COGL_TRACE_MESSAGE(name, ...) (void) 0
 #define COGL_TRACE_PLOT_DOUBLE(name, val) (void) 0
+#define COGL_TRACE_NAME_DYNAMIC(Name, ...) (void) 0
 
 COGL_EXPORT
 gboolean cogl_start_tracing_with_path (const char  *filename,

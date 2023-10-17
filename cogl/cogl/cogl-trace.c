@@ -411,6 +411,12 @@ cogl_trace_tracy_describe (CoglTraceTracyHead *head, const char *description, si
 }
 
 void
+cogl_trace_tracy_name_dynamic (CoglTraceTracyHead *head, const char *name, size_t size)
+{
+  ___tracy_emit_zone_name (head->ctx, name, size);
+}
+
+void
 cogl_trace_tracy_emit_message (const char *message, size_t size)
 {
   if (!TracyCIsStarted)
