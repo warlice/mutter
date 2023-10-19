@@ -434,6 +434,79 @@ cogl_trace_tracy_emit_plot_double (const char *name, double val)
   ___tracy_emit_plot (name, val);
 }
 
+uint8_t
+cogl_trace_tracy_create_gpu_context (int64_t current_gpu_time_ns)
+{
+  static int context_id_counter = 1;
+  int context_id;
+
+  if (!TracyCIsStarted)
+    return 0;
+
+  context_id = g_atomic_int_add (&context_id_counter, 1);
+  g_return_val_if_fail (context_id <= 255, 0);
+
+  ___tracy_emit_gpu_new_context ((struct ___tracy_gpu_new_context_data) {
+    .gpuTime = current_gpu_time_ns,
+    .period = 1.,
+    .context = context_id,
+    .flags = 0,
+    .type = 1, // OpenGL
+  });
+
+  return context_id;
+}
+
+void
+cogl_trace_tracy_emit_gpu_time (uint8_t context_id, unsigned int query_id, int64_t gpu_time_ns)
+{
+  if (context_id == 0)
+    return;
+
+  ___tracy_emit_gpu_time ((struct ___tracy_gpu_time_data) {
+    .gpuTime = gpu_time_ns,
+    .queryId = query_id,
+    .context = context_id,
+  });
+}
+
+void
+cogl_trace_tracy_emit_gpu_time_sync (uint8_t context_id, int64_t current_gpu_time_ns)
+{
+  if (context_id == 0)
+    return;
+
+  ___tracy_emit_gpu_time_sync ((struct ___tracy_gpu_time_sync_data) {
+    .gpuTime = current_gpu_time_ns,
+    .context = context_id,
+  });
+}
+
+void
+cogl_trace_tracy_begin_gpu_zone (uint8_t context_id, unsigned int query_id, const CoglTraceTracyLocation *location)
+{
+  if (context_id == 0)
+    return;
+
+  ___tracy_emit_gpu_zone_begin ((struct ___tracy_gpu_zone_begin_data) {
+    .srcloc = (uint64_t) location,
+    .queryId = query_id,
+    .context = context_id,
+  });
+}
+
+void
+cogl_trace_tracy_end_gpu_zone (uint8_t context_id, unsigned int query_id)
+{
+  if (context_id == 0)
+    return;
+
+  ___tracy_emit_gpu_zone_end ((struct ___tracy_gpu_zone_end_data) {
+    .queryId = query_id,
+    .context = context_id,
+  });
+}
+
 #endif /* HAVE_TRACY */
 
 #else

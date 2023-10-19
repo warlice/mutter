@@ -2629,3 +2629,85 @@ cogl_framebuffer_create_timestamp_query (CoglFramebuffer *framebuffer)
 
   return driver_vtable->create_timestamp_query (priv->context);
 }
+
+#ifdef HAVE_TRACY
+gboolean
+cogl_framebuffer_begin_gpu_span (CoglFramebuffer *framebuffer,
+                                 const CoglTraceTracyLocation *location)
+{
+  unsigned int query_id;
+
+  CoglFramebufferPrivate *priv =
+    cogl_framebuffer_get_instance_private (framebuffer);
+  const CoglDriverVtable *driver_vtable = priv->context->driver_vtable;
+
+  if (!cogl_has_feature (priv->context, COGL_FEATURE_ID_TIMESTAMP_QUERY))
+    return FALSE;
+
+  if (priv->context->tracy_context_id == 0)
+    return FALSE;
+
+  if (!cogl_trace_tracy_is_active ())
+    return FALSE;
+
+  COGL_TRACE_BEGIN_SCOPED (BeginGpuSpan, "Cogl::Framebuffer::begin_gpu_span()");
+
+  /* The timestamp query completes upon completion of all previously submitted
+   * GL commands. So make sure those commands are indeed submitted by flushing
+   * the journal. This way, the GPU span will not include any previous commands
+   * that have not been submitted yet.
+   */
+  _cogl_framebuffer_flush_journal (framebuffer);
+
+  cogl_context_flush_framebuffer_state (priv->context,
+                                        framebuffer,
+                                        framebuffer,
+                                        COGL_FRAMEBUFFER_STATE_BIND);
+
+  query_id = driver_vtable->create_trace_timestamp_query (priv->context);
+
+  g_return_val_if_fail (query_id != 0, FALSE);
+
+  cogl_trace_tracy_begin_gpu_zone (priv->context->tracy_context_id,
+                                   query_id, location);
+
+  return TRUE;
+}
+
+void
+cogl_framebuffer_end_gpu_span (CoglFramebuffer *framebuffer)
+{
+  CoglFramebufferPrivate *priv =
+    cogl_framebuffer_get_instance_private (framebuffer);
+  const CoglDriverVtable *driver_vtable = priv->context->driver_vtable;
+  unsigned int query_id;
+
+  g_return_if_fail (cogl_has_feature (priv->context,
+                                      COGL_FEATURE_ID_TIMESTAMP_QUERY));
+
+  g_return_if_fail (priv->context->tracy_context_id != 0);
+
+  COGL_TRACE_BEGIN_SCOPED (BeginGpuSpan, "Cogl::Framebuffer::end_gpu_span()");
+
+  /* The timestamp query completes upon completion of all previously submitted
+   * GL commands. So make sure those commands are indeed submitted by flushing
+   * the journal.
+   */
+  _cogl_framebuffer_flush_journal (framebuffer);
+
+  cogl_context_flush_framebuffer_state (priv->context,
+                                        framebuffer,
+                                        framebuffer,
+                                        COGL_FRAMEBUFFER_STATE_BIND);
+
+  query_id = driver_vtable->create_trace_timestamp_query (priv->context);
+
+  g_assert (query_id != 0);
+
+  cogl_trace_tracy_end_gpu_zone (priv->context->tracy_context_id, query_id);
+
+  /* Flush right away so GL knows about our timestamp query. */
+  COGL_TRACE_BEGIN_SCOPED (GlFlush, "Cogl::Framebuffer::end_gpu_span#glFlush()");
+  priv->context->glFlush ();
+}
+#endif /* HAVE_TRACY */

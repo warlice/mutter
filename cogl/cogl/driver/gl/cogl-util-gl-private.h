@@ -160,6 +160,18 @@ cogl_gl_timestamp_query_get_time_ns (CoglContext        *context,
 int64_t
 cogl_gl_get_gpu_time_ns (CoglContext *context);
 
+void
+cogl_gl_gen_trace_timestamp_queries (CoglContext *context);
+
+void
+cogl_gl_free_trace_timestamp_queries (CoglContext *context);
+
+void
+cogl_gl_collect_trace_timestamp_queries (CoglContext *context);
+
+unsigned int
+cogl_gl_create_trace_timestamp_query (CoglContext *context);
+
 #ifndef GL_FRAMEBUFFER
 #define GL_FRAMEBUFFER		0x8D40
 #endif
@@ -248,6 +260,9 @@ cogl_gl_get_gpu_time_ns (CoglContext *context);
 #endif
 #ifndef GL_QUERY_RESULT
 #define GL_QUERY_RESULT 0x8866
+#endif
+#ifndef GL_QUERY_RESULT_AVAILABLE
+#define GL_QUERY_RESULT_AVAILABLE 0x8867
 #endif
 
 #ifndef GL_TEXTURE_LOD_BIAS

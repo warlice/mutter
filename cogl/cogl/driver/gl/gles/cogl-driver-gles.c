@@ -801,4 +801,6 @@ _cogl_driver_gles =
     cogl_gl_free_timestamp_query,
     cogl_gl_timestamp_query_get_time_ns,
     cogl_gl_get_gpu_time_ns,
+    cogl_gl_collect_trace_timestamp_queries,
+    cogl_gl_create_trace_timestamp_query,
   };

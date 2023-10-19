@@ -362,4 +362,20 @@ cogl_context_timestamp_query_get_time_ns (CoglContext        *context,
 COGL_EXPORT int64_t
 cogl_context_get_gpu_time_ns (CoglContext *context);
 
+/**
+ * cogl_context_maybe_collect_trace_timestamp_queries:
+ * @context: a #CoglContext pointer
+ *
+ * Checks the trace timestamp queries created earlier with
+ * create_trace_timestamp_query() for completion, gets their timestamps and
+ * sends them over to the profiler.
+ *
+ * This function should be called periodically so that it can process the
+ * internal trace timestamp query queue and stop it from filling up.
+ *
+ * If the timestamp queries are unsupported, does nothing.
+ */
+COGL_EXPORT void
+cogl_context_maybe_collect_trace_timestamp_queries (CoglContext *context);
+
 G_END_DECLS

@@ -34,6 +34,7 @@
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-profile.h"
 #include "cogl/cogl-util.h"
+#include "cogl/cogl-trace.h"
 #include "cogl/cogl-context-private.h"
 #include "cogl/cogl-display-private.h"
 #include "cogl/cogl-renderer-private.h"
@@ -402,6 +403,15 @@ cogl_context_new (CoglDisplay *display,
   context->named_pipelines =
     g_hash_table_new_full (NULL, NULL, NULL, g_object_unref);
 
+#ifdef HAVE_TRACY
+  if (cogl_has_feature (context, COGL_FEATURE_ID_TIMESTAMP_QUERY))
+    {
+      int64_t gpu_time;
+      gpu_time = cogl_context_get_gpu_time_ns (context);
+      context->tracy_context_id = cogl_trace_tracy_create_gpu_context (gpu_time);
+    }
+#endif
+
   return context;
 }
 
@@ -535,4 +545,13 @@ cogl_context_get_gpu_time_ns (CoglContext *context)
                         0);
 
   return context->driver_vtable->get_gpu_time_ns (context);
+}
+
+void
+cogl_context_maybe_collect_trace_timestamp_queries (CoglContext *context)
+{
+  if (!cogl_has_feature (context, COGL_FEATURE_ID_TIMESTAMP_QUERY))
+    return;
+
+  context->driver_vtable->collect_trace_timestamp_queries (context);
 }

@@ -52,6 +52,8 @@ frame_cb (CoglOnscreen  *onscreen,
   if (frame_event == COGL_FRAME_EVENT_SYNC)
     return;
 
+  cogl_context_maybe_collect_trace_timestamp_queries (frame_info->context);
+
   if (cogl_frame_info_get_is_symbolic (frame_info))
     {
       clutter_stage_view_notify_ready (view);

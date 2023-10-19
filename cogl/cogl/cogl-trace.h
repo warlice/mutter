@@ -166,6 +166,21 @@ cogl_trace_tracy_emit_message (const char *message, size_t size);
 COGL_EXPORT void
 cogl_trace_tracy_emit_plot_double (const char *name, double val);
 
+COGL_EXPORT uint8_t
+cogl_trace_tracy_create_gpu_context (int64_t current_gpu_time_ns);
+
+COGL_EXPORT void
+cogl_trace_tracy_emit_gpu_time (uint8_t context_id, unsigned int query_id, int64_t gpu_time_ns);
+
+COGL_EXPORT void
+cogl_trace_tracy_emit_gpu_time_sync (uint8_t context_id, int64_t current_gpu_time_ns);
+
+COGL_EXPORT void
+cogl_trace_tracy_begin_gpu_zone (uint8_t context_id, unsigned int query_id, const CoglTraceTracyLocation *location);
+
+COGL_EXPORT void
+cogl_trace_tracy_end_gpu_zone (uint8_t context_id, unsigned int query_id);
+
 static inline void
 cogl_auto_trace_end_helper_tracy (CoglTraceTracyHead *head)
 {

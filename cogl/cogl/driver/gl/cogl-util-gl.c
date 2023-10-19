@@ -123,12 +123,18 @@ _cogl_driver_gl_context_init (CoglContext *context)
   gl_context->active_texture_unit = 1;
   GE (context, glActiveTexture (GL_TEXTURE1));
 
+  if (cogl_has_feature (context, COGL_FEATURE_ID_TIMESTAMP_QUERY))
+    cogl_gl_gen_trace_timestamp_queries (context);
+
   return TRUE;
 }
 
 void
 _cogl_driver_gl_context_deinit (CoglContext *context)
 {
+  if (cogl_has_feature (context, COGL_FEATURE_ID_TIMESTAMP_QUERY))
+    cogl_gl_free_trace_timestamp_queries (context);
+
   _cogl_destroy_texture_units (context);
   g_free (context->driver_context);
 }
@@ -563,4 +569,80 @@ cogl_gl_get_gpu_time_ns (CoglContext *context)
 
   GE (context, glGetInteger64v (GL_TIMESTAMP, &gpu_time_ns));
   return gpu_time_ns;
+}
+
+void
+cogl_gl_gen_trace_timestamp_queries (CoglContext *context)
+{
+  g_return_if_fail (cogl_has_feature (context,
+                                      COGL_FEATURE_ID_TIMESTAMP_QUERY));
+
+  GE (context, glGenQueries (COGL_N_TRACE_TIMESTAMP_QUERIES,
+                             context->trace_timestamp_queries));
+}
+
+void
+cogl_gl_free_trace_timestamp_queries (CoglContext *context)
+{
+  g_return_if_fail (cogl_has_feature (context,
+                                      COGL_FEATURE_ID_TIMESTAMP_QUERY));
+
+  GE (context, glDeleteQueries (COGL_N_TRACE_TIMESTAMP_QUERIES,
+                                context->trace_timestamp_queries));
+}
+
+void
+cogl_gl_collect_trace_timestamp_queries (CoglContext *context)
+{
+  g_return_if_fail (cogl_has_feature (context,
+                                      COGL_FEATURE_ID_TIMESTAMP_QUERY));
+
+  COGL_TRACE_BEGIN_SCOPED (CollectTraceTimestampQueries,
+                           "CoglGl::collect_trace_timestamp_queries()");
+
+  while (context->trace_timestamp_queries_tail != context->trace_timestamp_queries_head)
+    {
+      unsigned int query_id =
+        context->trace_timestamp_queries[context->trace_timestamp_queries_tail];
+      GLint available;
+      int64_t gpu_time;
+
+      GE (context, glGetQueryObjectiv (query_id, GL_QUERY_RESULT_AVAILABLE, &available));
+      if (!available)
+        return;
+
+      GE (context, glGetQueryObjecti64v (query_id, GL_QUERY_RESULT, &gpu_time));
+
+#ifdef HAVE_TRACY
+      cogl_trace_tracy_emit_gpu_time (context->tracy_context_id,
+                                      query_id, gpu_time);
+#endif
+
+      context->trace_timestamp_queries_tail =
+        (context->trace_timestamp_queries_tail + 1) % COGL_N_TRACE_TIMESTAMP_QUERIES;
+    }
+}
+
+unsigned int
+cogl_gl_create_trace_timestamp_query (CoglContext *context)
+{
+  unsigned int query_id;
+  unsigned short new_head;
+
+  g_return_val_if_fail (cogl_has_feature (context,
+                                          COGL_FEATURE_ID_TIMESTAMP_QUERY),
+                        0);
+
+  query_id =
+    context->trace_timestamp_queries[context->trace_timestamp_queries_head];
+
+  new_head =
+    (context->trace_timestamp_queries_head + 1) % COGL_N_TRACE_TIMESTAMP_QUERIES;
+  g_return_val_if_fail (new_head != context->trace_timestamp_queries_tail,
+                        0);
+  context->trace_timestamp_queries_head = new_head;
+
+  GE (context, glQueryCounter (query_id, GL_TIMESTAMP));
+
+  return query_id;
 }
