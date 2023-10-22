@@ -565,6 +565,7 @@ index_binding (MetaKeyBindingManager *keys,
     {
       MetaKeyBinding *existing;
       MetaKeyBinding *a11y_existing;
+      GHashTable *key_index_table = keys->key_bindings_index;
       guint32 index_key;
 
       index_key = key_combo_key (&binding->resolved_combo, i);
@@ -581,6 +582,7 @@ index_binding (MetaKeyBindingManager *keys,
 		       binding->combo.keysym,
 		       a11y_existing->combo.keysym,
 		       binding->resolved_combo.keycodes[i]);
+	  key_index_table = keys->a11y_key_bindings_index;
 	}
       else if (existing != NULL)
         {
@@ -597,7 +599,7 @@ index_binding (MetaKeyBindingManager *keys,
                         binding->resolved_combo.keycodes[i]);
         }
 
-      g_hash_table_replace (keys->key_bindings_index,
+      g_hash_table_replace (key_index_table,
                             GINT_TO_POINTER (index_key), binding);
     }
 }
