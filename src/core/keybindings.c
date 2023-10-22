@@ -942,6 +942,10 @@ get_keybinding (MetaKeyBindingManager *keys,
       guint32 key;
 
       key = key_combo_key (resolved_combo, i);
+      binding = g_hash_table_lookup (keys->a11y_key_bindings_index,
+                                     GINT_TO_POINTER (key));
+      if (binding != NULL)
+	break;
       binding = g_hash_table_lookup (keys->key_bindings_index,
                                      GINT_TO_POINTER (key));
 
@@ -1427,6 +1431,8 @@ meta_display_shutdown_keys (MetaDisplay *display)
 
   g_hash_table_destroy (keys->key_bindings_index);
   g_hash_table_destroy (keys->key_bindings);
+  g_hash_table_destroy (keys->a11y_key_bindings_index);
+  g_hash_table_destroy (keys->a11y_key_bindings);
 
   clear_active_keyboard_layouts (keys);
 }
