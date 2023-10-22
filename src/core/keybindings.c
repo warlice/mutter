@@ -564,13 +564,25 @@ index_binding (MetaKeyBindingManager *keys,
   for (i = 0; i < binding->resolved_combo.len; i++)
     {
       MetaKeyBinding *existing;
+      MetaKeyBinding *a11y_existing;
       guint32 index_key;
 
       index_key = key_combo_key (&binding->resolved_combo, i);
 
+      a11y_existing = g_hash_table_lookup (keys->a11y_key_bindings_index,
+                                      GINT_TO_POINTER (index_key));
       existing = g_hash_table_lookup (keys->key_bindings_index,
                                       GINT_TO_POINTER (index_key));
-      if (existing != NULL)
+      if (a11y_existing != NULL)
+      	{
+	  /* We allow overrides for ALL accessibility keybindings. */
+	  meta_warning("Overwriting exisitng a11y key binding with"
+		       " keysym %x with keysym %x (keycode %x).",
+		       binding->combo.keysym,
+		       a11y_existing->combo.keysym,
+		       binding->resolved_combo.keycodes[i]);
+	}
+      else if (existing != NULL)
         {
           /* Overwrite already indexed keycodes only for the first
            * keycode, i.e. we give those primary keycodes precedence
@@ -3892,6 +3904,8 @@ meta_display_init_keys (MetaDisplay *display)
 
   keys->key_bindings = g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify) meta_key_binding_free);
   keys->key_bindings_index = g_hash_table_new (NULL, NULL);
+  keys->a11y_key_bindings = g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify) meta_key_binding_free);
+  keys->a11y_key_bindings_index = g_hash_table_new (NULL, NULL);
 
   reload_modmap (keys);
 
