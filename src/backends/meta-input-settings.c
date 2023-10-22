@@ -946,8 +946,9 @@ update_touchpad_send_events (MetaInputSettings  *input_settings,
 }
 
 static void
-update_trackball_scroll_button (MetaInputSettings  *input_settings,
-                                ClutterInputDevice *device)
+update_scroll_button (MetaInputSettings  *input_settings,
+                      GSettings          *settings,
+                      ClutterInputDevice *device)
 {
   MetaInputSettingsClass *input_settings_class;
   MetaInputSettingsPrivate *priv;
@@ -957,19 +958,30 @@ update_trackball_scroll_button (MetaInputSettings  *input_settings,
 
   priv = meta_input_settings_get_instance_private (input_settings);
   input_settings_class = META_INPUT_SETTINGS_GET_CLASS (input_settings);
+  if (settings == priv->trackball_settings) {
+    if (device)
+      {
+        caps = clutter_input_device_get_capabilities (device);
 
-  if (device)
-    {
-      caps = clutter_input_device_get_capabilities (device);
+        if ((caps & CLUTTER_INPUT_CAPABILITY_TRACKBALL) == 0)
+          return;
+      }
+  } else if (settings == priv->mouse_settings) {
+    if (device)
+      {
+        caps = clutter_input_device_get_capabilities (device);
 
-      if ((caps & CLUTTER_INPUT_CAPABILITY_TRACKBALL) == 0)
-        return;
-    }
+        if ((caps & CLUTTER_INPUT_CAPABILITY_POINTER) == 0)
+          return;
+      }
+  } else {
+    return;
+  }
 
   /* This key is 'i' in the schema but it also specifies a minimum
    * range of 0 so the cast here is safe. */
-  button = (guint) g_settings_get_int (priv->trackball_settings, "scroll-wheel-emulation-button");
-  button_lock = g_settings_get_boolean (priv->trackball_settings, "scroll-wheel-emulation-button-lock");
+  button = (guint) g_settings_get_int (settings, "scroll-button");
+  button_lock = g_settings_get_boolean (settings, "scroll-button-lock");
 
   if (device)
     {
@@ -984,8 +996,13 @@ update_trackball_scroll_button (MetaInputSettings  *input_settings,
           device = l->data;
           caps = clutter_input_device_get_capabilities (device);
 
-          if ((caps & CLUTTER_INPUT_CAPABILITY_TRACKBALL) != 0)
-            input_settings_class->set_scroll_button (input_settings, device, button, button_lock);
+          if (settings == priv->trackball_settings) {
+            if ((caps & CLUTTER_INPUT_CAPABILITY_TRACKBALL) != 0)
+              input_settings_class->set_scroll_button (input_settings, device, button, button_lock);
+          } else if (settings == priv->mouse_settings) {
+            if ((caps & CLUTTER_INPUT_CAPABILITY_POINTER) != 0)
+              input_settings_class->set_scroll_button (input_settings, device, button, button_lock);
+          }
         }
     }
 }
@@ -1204,6 +1221,9 @@ meta_input_settings_changed_cb (GSettings  *settings,
         update_pointer_accel_profile (input_settings, settings, NULL);
       else if (strcmp (key, "middle-click-emulation") == 0)
         update_middle_click_emulation (input_settings, settings, NULL);
+      else if (strcmp (key, "scroll-button") == 0 ||
+               strcmp (key, "scroll-button-lock") == 0)
+        update_scroll_button (input_settings, settings, NULL);
     }
   else if (settings == priv->touchpad_settings)
     {
@@ -1238,9 +1258,9 @@ meta_input_settings_changed_cb (GSettings  *settings,
     }
   else if (settings == priv->trackball_settings)
     {
-      if (strcmp (key, "scroll-wheel-emulation-button") == 0 ||
-          strcmp (key, "scroll-wheel-emulation-button-lock") == 0)
-        update_trackball_scroll_button (input_settings, NULL);
+      if (strcmp (key, "scroll-button") == 0 ||
+          strcmp (key, "scroll-button-lock") == 0)
+        update_scroll_button (input_settings, settings, NULL);
       else if (strcmp (key, "accel-profile") == 0)
         update_pointer_accel_profile (input_settings, settings, NULL);
       else if (strcmp (key, "middle-click-emulation") == 0)
@@ -1533,7 +1553,8 @@ apply_device_settings (MetaInputSettings  *input_settings,
   update_touchpad_edge_scroll (input_settings, device);
   update_touchpad_click_method (input_settings, device);
 
-  update_trackball_scroll_button (input_settings, device);
+  update_scroll_button (input_settings, priv->mouse_settings, device);
+  update_scroll_button (input_settings, priv->trackball_settings, device);
   update_pointer_accel_profile (input_settings,
                                 priv->trackball_settings,
                                 device);
