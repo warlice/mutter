@@ -609,7 +609,6 @@ resolve_key_combo (MetaKeyBindingManager *keys,
                    MetaKeyCombo          *combo,
                    MetaResolvedKeyCombo  *resolved_combo)
 {
-
   resolved_key_combo_reset (resolved_combo);
 
   if (combo->keysym != 0)
@@ -787,6 +786,7 @@ static void
 reload_combos (MetaKeyBindingManager *keys)
 {
   g_hash_table_remove_all (keys->key_bindings_index);
+  g_hash_table_remove_all (keys->a11y_key_bindings_index);
 
   reload_active_keyboard_layouts (keys);
 
@@ -801,6 +801,7 @@ reload_combos (MetaKeyBindingManager *keys)
   reload_iso_next_group_combos (keys);
 
   g_hash_table_foreach (keys->key_bindings, binding_reload_combos_foreach, keys);
+  g_hash_table_foreach (keys->a11y_key_bindings, binding_reload_combos_foreach, keys);
 }
 
 static void
