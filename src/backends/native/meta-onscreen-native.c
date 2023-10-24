@@ -119,6 +119,7 @@ struct _MetaOnscreenNative
 #endif
 
   char *debug_name;
+  const char *copy_mode_name;
 
   gboolean frame_sync_requested;
   gboolean frame_sync_enabled;
@@ -1144,15 +1145,18 @@ update_secondary_gpu_state_pre_swap_buffers (CoglOnscreen *onscreen,
         {
         case META_SHARED_FRAMEBUFFER_COPY_MODE_SECONDARY_GPU:
           /* Done after eglSwapBuffers. */
+          onscreen_native->copy_mode_name = "secondary GPU copy";
           break;
         case META_SHARED_FRAMEBUFFER_COPY_MODE_ZERO:
           /* Done after eglSwapBuffers. */
+          onscreen_native->copy_mode_name = "zero copy";
           if (secondary_gpu_state->import_status ==
               META_SHARED_FRAMEBUFFER_IMPORT_STATUS_OK)
             break;
           /* prepare fallback */
           G_GNUC_FALLTHROUGH;
         case META_SHARED_FRAMEBUFFER_COPY_MODE_PRIMARY:
+          onscreen_native->copy_mode_name = "primary GPU copy";
           copy = copy_shared_framebuffer_primary_gpu (onscreen,
                                                       secondary_gpu_state,
                                                       rectangles,
@@ -1170,6 +1174,7 @@ update_secondary_gpu_state_pre_swap_buffers (CoglOnscreen *onscreen,
               copy = copy_shared_framebuffer_cpu (onscreen,
                                                   secondary_gpu_state,
                                                   renderer_gpu_data);
+              onscreen_native->copy_mode_name = "CPU copy";
             }
           else if (!secondary_gpu_state->noted_primary_gpu_copy_ok)
             {
@@ -1180,6 +1185,10 @@ update_secondary_gpu_state_pre_swap_buffers (CoglOnscreen *onscreen,
             }
           break;
         }
+    }
+  else
+    {
+      onscreen_native->copy_mode_name = "primary GPU swap";
     }
 
   return copy;
@@ -1220,6 +1229,7 @@ acquire_front_buffer (CoglOnscreen   *onscreen,
        */
       renderer_gpu_data->secondary.copy_mode =
         META_SHARED_FRAMEBUFFER_COPY_MODE_PRIMARY;
+      onscreen_native->copy_mode_name = "zero copy failed, fallback to primary GPU copy";
       G_GNUC_FALLTHROUGH;
     case META_SHARED_FRAMEBUFFER_COPY_MODE_PRIMARY:
       return g_object_ref (secondary_gpu_fb);
