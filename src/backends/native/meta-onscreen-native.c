@@ -32,6 +32,7 @@
 #include <drm_fourcc.h>
 
 #include "backends/meta-egl-ext.h"
+#include "backends/meta-monitor.h"
 #include "backends/native/meta-crtc-kms.h"
 #include "backends/native/meta-device-pool.h"
 #include "backends/native/meta-drm-buffer-dumb.h"
@@ -116,6 +117,8 @@ struct _MetaOnscreenNative
     MetaDrmBufferDumb *dumb_fb;
   } egl;
 #endif
+
+  char *debug_name;
 
   gboolean frame_sync_requested;
   gboolean frame_sync_enabled;
@@ -2756,6 +2759,10 @@ meta_onscreen_native_new (MetaRendererNative *renderer_native,
   MetaOnscreenNative *onscreen_native;
   CoglFramebufferDriverConfig driver_config;
   const MetaOutputInfo *output_info = meta_output_get_info (output);
+  MetaCrtcKms *crtc_kms;
+  MetaKmsCrtc *kms_crtc;
+  MetaKmsDevice *kms_device;
+  char tmp_name[256];
 
   driver_config = (CoglFramebufferDriverConfig) {
     .type = COGL_FRAMEBUFFER_DRIVER_TYPE_BACK,
@@ -2772,6 +2779,17 @@ meta_onscreen_native_new (MetaRendererNative *renderer_native,
 
   g_set_object (&onscreen_native->output, output);
   g_set_object (&onscreen_native->crtc, crtc);
+
+  crtc_kms = META_CRTC_KMS (crtc);
+  kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
+  kms_device = meta_kms_crtc_get_device (kms_crtc);
+  g_snprintf (tmp_name, sizeof tmp_name, "%s (%s) %s: %s",
+              meta_kms_device_get_path (kms_device),
+              meta_kms_device_get_driver_name (kms_device),
+              meta_output_get_name (output),
+              meta_monitor_get_display_name (meta_output_get_monitor (output)));
+
+  onscreen_native->debug_name = g_strdup (tmp_name);
 
   if (meta_crtc_get_gamma_lut_size (crtc) > 0)
     {
@@ -2873,6 +2891,8 @@ meta_onscreen_native_dispose (GObject *object)
     }
 
   G_OBJECT_CLASS (meta_onscreen_native_parent_class)->dispose (object);
+
+  g_clear_pointer (&onscreen_native->debug_name, g_free);
 
   g_clear_pointer (&onscreen_native->gbm.surface, gbm_surface_destroy);
   g_clear_pointer (&onscreen_native->secondary_gpu_state,
