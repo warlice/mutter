@@ -44,9 +44,12 @@
 #include "core/workspace-private.h"
 #include "meta/compositor.h"
 #include "meta/prefs.h"
+#include "meta/util.h"
 #include "mtk/mtk-x11.h"
 #include "x11/meta-x11-display-private.h"
 #include "x11/window-x11.h"
+#include <stdbool.h>
+#include <string.h>
 
 #ifdef HAVE_NATIVE_BACKEND
 #include "backends/native/meta-backend-native.h"
@@ -567,7 +570,9 @@ index_binding (MetaKeyBindingManager *keys,
       MetaKeyBinding *a11y_existing;
       GHashTable *key_index_table = keys->key_bindings_index;
       guint32 index_key;
-
+      if (binding->flags & META_KEY_BINDING_IS_A11Y)
+	key_index_table = keys->a11y_key_bindings_index;
+	
       index_key = key_combo_key (&binding->resolved_combo, i);
 
       a11y_existing = g_hash_table_lookup (keys->a11y_key_bindings_index,
@@ -582,7 +587,6 @@ index_binding (MetaKeyBindingManager *keys,
 		       binding->combo.keysym,
 		       a11y_existing->combo.keysym,
 		       binding->resolved_combo.keycodes[i]);
-	  key_index_table = keys->a11y_key_bindings_index;
 	}
       else if (existing != NULL)
         {
@@ -1737,6 +1741,77 @@ meta_display_grab_accelerator (MetaDisplay         *display,
   index_binding (keys, binding);
 
   return grab->action;
+}
+
+static void
+handle_accessibility_keys  (MetaDisplay           *display,
+                            MetaWindow            *event_window,
+                            const ClutterKeyEvent *event,
+                            MetaKeyBinding        *binding,
+                            gpointer               user_data)
+{
+  meta_topic(META_DEBUG_KEYBINDINGS, "TODO: handle accessibility key outputs");
+}
+
+bool
+create_a11y_binding_from_accelerator (MetaDisplay         *display,
+                                      const char          *accelerator,
+                                      MetaKeyBindingFlags  flags,
+				      const char *name)
+{
+  MetaKeyBindingManager *keys = &display->key_binding_manager;
+  MetaKeyBinding *binding;
+  MetaKeyCombo combo = { 0 };
+  MetaResolvedKeyCombo resolved_combo = { NULL, 0 };
+
+  if (!meta_parse_accelerator (accelerator, &combo))
+    {
+      meta_topic (META_DEBUG_KEYBINDINGS,
+                  "Failed to parse accelerator");
+      meta_warning ("\"%s\" is not a valid accelerator", accelerator);
+
+      return FALSE;
+    }
+  meta_topic(META_DEBUG_KEYBINDINGS, "Made combo");
+
+  resolve_key_combo (keys, &combo, &resolved_combo);
+
+  meta_topic(META_DEBUG_KEYBINDINGS, "made resolved");
+  // idk what this does, so I'm going to ignore it
+  //if (resolved_combo.len == 0)
+  //  return FALSE;
+  meta_topic(META_DEBUG_KEYBINDINGS, "is long enough");
+
+  if (get_keybinding (keys, &resolved_combo))
+    {
+      resolved_key_combo_reset (&resolved_combo);
+      return FALSE;
+    }
+  meta_topic(META_DEBUG_KEYBINDINGS, "no existing binding");
+  MetaKeyHandler *handler;
+
+  handler = g_new0 (MetaKeyHandler, 1);
+  handler->name = g_strdup (name);
+  handler->func = handle_accessibility_keys;
+  handler->default_func = handle_accessibility_keys;
+  handler->data = 0x0;
+  handler->flags = flags;
+  handler->user_data = 0x0;
+  handler->user_data_free_func = 0x0;
+
+  g_hash_table_insert (key_handlers, g_strdup (name), handler);
+
+  binding = g_new0 (MetaKeyBinding, 1);
+  binding->name = strdup(name);
+  binding->handler = handler;
+  binding->combo = combo;
+  binding->resolved_combo = resolved_combo;
+  binding->flags = flags & META_KEY_BINDING_IS_A11Y;
+
+  g_hash_table_add (keys->a11y_key_bindings, binding);
+  index_binding (keys, binding);
+
+  return TRUE;
 }
 
 gboolean
@@ -3127,6 +3202,8 @@ init_builtin_key_bindings (MetaDisplay *display)
   GSettings *mutter_keybindings = g_settings_new (SCHEMA_MUTTER_KEYBINDINGS);
   GSettings *mutter_wayland_keybindings = g_settings_new (SCHEMA_MUTTER_WAYLAND_KEYBINDINGS);
 
+  bool set_test_accessibility_binding = create_a11y_binding_from_accelerator (display, "<Super><Shift>a", META_KEY_BINDING_NONE | META_KEY_BINDING_IGNORE_AUTOREPEAT, "test-accessibility");
+  meta_topic(META_DEBUG_KEYBINDINGS, "The result of a11y_binding_from_accel is: %d", set_test_accessibility_binding);
   add_builtin_keybinding (display,
                           "switch-to-workspace-1",
                           common_keybindings,
