@@ -55,7 +55,7 @@ if have_gl
   ]
 endif
 
-if have_gles2
+if have_gles2 or have_gles3
   cogl_pkg_deps += [
     gles2_dep,
   ]
@@ -78,7 +78,7 @@ if have_gl
   ]
 endif
 
-if have_gles2
+if have_gles2 or have_gles3
   cogl_c_args += [
     '-DCOGL_GLES2_LIBNAME="@0@"'.format(gles2_libname)
   ]

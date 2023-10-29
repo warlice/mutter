@@ -204,6 +204,7 @@ static const struct {
   CoglDriver driver_id;
 } all_known_drivers[] = {
   { "gl3", "OpenGL 3.1 core profile", COGL_DRIVER_GL3 },
+  { "gles3", "OpenGL ES 3.0", COGL_DRIVER_GLES3 },
   { "gles2", "OpenGL ES 2.0", COGL_DRIVER_GLES2 },
   { "any", "Default Cogl driver", COGL_DRIVER_ANY },
 };

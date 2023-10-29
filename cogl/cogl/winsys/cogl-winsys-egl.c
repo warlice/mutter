@@ -141,6 +141,8 @@ _cogl_winsys_renderer_bind_api (CoglRenderer *renderer)
     eglBindAPI (EGL_OPENGL_API);
   else if (renderer->driver == COGL_DRIVER_GLES2)
     eglBindAPI (EGL_OPENGL_ES_API);
+  else if (renderer->driver == COGL_DRIVER_GLES3)
+    eglBindAPI (EGL_OPENGL_ES_API);
 }
 
 /* Updates all the function pointers */
@@ -417,6 +419,11 @@ try_create_context (CoglDisplay *display,
     {
       attribs[i++] = EGL_CONTEXT_CLIENT_VERSION;
       attribs[i++] = 2;
+    }
+  else if (display->renderer->driver == COGL_DRIVER_GLES3)
+    {
+      attribs[i++] = EGL_CONTEXT_MAJOR_VERSION_KHR;
+      attribs[i++] = 3;
     }
 
   if (egl_renderer->private_features &

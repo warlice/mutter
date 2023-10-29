@@ -22,6 +22,12 @@ option('gles2',
   description: 'Enable GLES2 support'
 )
 
+option('gles3',
+  type: 'boolean',
+  value: true,
+  description: 'Enable GLES3 support'
+)
+
 option('egl',
   type: 'boolean',
   value: true,

@@ -205,7 +205,8 @@ endif
 have_egl_xlib = have_egl and have_x11_client
 
 have_gles2 = get_option('gles2')
-if have_gles2
+have_gles3 = get_option('gles3')
+if have_gles2 or have_gles3
   gles2_dep = dependency('glesv2')
   gles2_libname = get_option('gles2_libname')
 
@@ -261,7 +262,7 @@ if have_native_backend
     error('The native backend requires EGL to be enabled')
   endif
 
-  if not have_gles2
+  if not have_gles2 and not have_gles3
     error('The native backend requires GLESv2 to be enabled')
   endif
 
@@ -531,6 +532,7 @@ cdata.set('HAVE_GLX', have_glx)
 cdata.set('HAVE_EGL_PLATFORM_XLIB', have_egl_xlib)
 cdata.set('HAVE_GL', have_gl)
 cdata.set('HAVE_GLES2', have_gles2)
+cdata.set('HAVE_GLES3', have_gles3)
 cdata.set('HAVE_WAYLAND', have_wayland)
 cdata.set('HAVE_XWAYLAND', have_xwayland)
 cdata.set('HAVE_X11', have_x11)
@@ -706,6 +708,7 @@ summary('debug', get_option('debug'), section: 'Build Configuration')
 
 summary('OpenGL', have_gl, section: 'Rendering APIs')
 summary('GLES2', have_gles2, section: 'Rendering APIs')
+summary('GLES3', have_gles3, section: 'Rendering APIs')
 summary('EGL', have_egl, section: 'Rendering APIs')
 summary('GLX', have_glx, section: 'Rendering APIs')
 

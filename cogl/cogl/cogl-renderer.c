@@ -65,6 +65,10 @@ extern const CoglDriverVtable _cogl_driver_gl;
 extern const CoglTextureDriver _cogl_texture_driver_gles2;
 extern const CoglDriverVtable _cogl_driver_gles2;
 #endif
+#ifdef HAVE_GLES3
+extern const CoglTextureDriver _cogl_texture_driver_gles3;
+extern const CoglDriverVtable _cogl_driver_gles3;
+#endif
 
 extern const CoglDriverVtable _cogl_driver_nop;
 
@@ -104,6 +108,17 @@ static CoglDriverDescription _cogl_drivers[] =
       -1 },
     &_cogl_driver_gles2,
     &_cogl_texture_driver_gles2,
+    COGL_GLES2_LIBNAME,
+  },
+#endif
+#ifdef HAVE_GLES3
+  {
+    COGL_DRIVER_GLES3,
+    "gles3",
+    { COGL_PRIVATE_FEATURE_ANY_GL,
+      -1 },
+    &_cogl_driver_gles3,
+    &_cogl_texture_driver_gles3,
     COGL_GLES2_LIBNAME,
   },
 #endif
@@ -349,6 +364,8 @@ driver_id_to_name (CoglDriver id)
         return "gl3";
       case COGL_DRIVER_GLES2:
         return "gles2";
+      case COGL_DRIVER_GLES3:
+        return "gles3";
       case COGL_DRIVER_NOP:
         return "nop";
       case COGL_DRIVER_ANY:

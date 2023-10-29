@@ -121,6 +121,11 @@ gles2_driver_sources = [
   'driver/gl/gles2/cogl-texture-driver-gles2.c',
 ]
 
+gles3_driver_sources = [
+  'driver/gl/gles3/cogl-driver-gles3.c',
+  'driver/gl/gles3/cogl-texture-driver-gles3.c',
+]
+
 cogl_driver_sources = [
   cogl_noop_driver_sources,
   cogl_common_driver_sources,
@@ -134,7 +139,11 @@ if have_gles2
   cogl_driver_sources += gles2_driver_sources
 endif
 
-if have_gl or have_gles2
+if have_gles3
+  cogl_driver_sources += gles3_driver_sources
+endif
+
+if have_gl or have_gles2 or have_gles3
   cogl_nonintrospected_headers += [
     'cogl-gl-header.h'
   ]
