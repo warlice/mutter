@@ -536,7 +536,7 @@ _cogl_texture_driver_find_best_gl_get_data_format
 }
 
 const CoglTextureDriver
-_cogl_texture_driver_gles =
+_cogl_texture_driver_gles2 =
   {
     _cogl_texture_driver_gen,
     _cogl_texture_driver_upload_subregion_to_gl,

@@ -116,9 +116,9 @@ gl_driver_sources = [
   'driver/gl/gl/cogl-texture-driver-gl.c',
 ]
 
-gles_driver_sources = [
-  'driver/gl/gles/cogl-driver-gles.c',
-  'driver/gl/gles/cogl-texture-driver-gles.c',
+gles2_driver_sources = [
+  'driver/gl/gles2/cogl-driver-gles2.c',
+  'driver/gl/gles2/cogl-texture-driver-gles2.c',
 ]
 
 cogl_driver_sources = [
@@ -131,7 +131,7 @@ if have_gl
 endif
 
 if have_gles2
-  cogl_driver_sources += gles_driver_sources
+  cogl_driver_sources += gles2_driver_sources
 endif
 
 if have_gl or have_gles2

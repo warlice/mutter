@@ -62,8 +62,8 @@ extern const CoglTextureDriver _cogl_texture_driver_gl;
 extern const CoglDriverVtable _cogl_driver_gl;
 #endif
 #ifdef HAVE_GLES2
-extern const CoglTextureDriver _cogl_texture_driver_gles;
-extern const CoglDriverVtable _cogl_driver_gles;
+extern const CoglTextureDriver _cogl_texture_driver_gles2;
+extern const CoglDriverVtable _cogl_driver_gles2;
 #endif
 
 extern const CoglDriverVtable _cogl_driver_nop;
@@ -102,8 +102,8 @@ static CoglDriverDescription _cogl_drivers[] =
     "gles2",
     { COGL_PRIVATE_FEATURE_ANY_GL,
       -1 },
-    &_cogl_driver_gles,
-    &_cogl_texture_driver_gles,
+    &_cogl_driver_gles2,
+    &_cogl_texture_driver_gles2,
     COGL_GLES2_LIBNAME,
   },
 #endif

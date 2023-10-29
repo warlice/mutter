@@ -495,7 +495,7 @@ _cogl_driver_texture_2d_is_get_data_supported (CoglTexture2D *tex_2d)
 }
 
 const CoglDriverVtable
-_cogl_driver_gles =
+_cogl_driver_gles2 =
   {
     _cogl_driver_gl_context_init,
     _cogl_driver_gl_context_deinit,
