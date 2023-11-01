@@ -242,6 +242,7 @@ has_dependencies (MetaWaylandTransaction *transaction)
 {
   GHashTableIter iter;
   MetaWaylandSurface *surface;
+  MetaWaylandTransactionEntry *entry;
 
   if (transaction->target_presentation_time_us)
     return TRUE;
@@ -251,9 +252,23 @@ has_dependencies (MetaWaylandTransaction *transaction)
     return TRUE;
 
   g_hash_table_iter_init (&iter, transaction->entries);
-  while (g_hash_table_iter_next (&iter, (gpointer *) &surface, NULL))
+  while (g_hash_table_iter_next (&iter, (gpointer *) &surface,
+                                        (gpointer *) &entry))
     {
+      MetaSurfaceActor *actor;
+
       if (surface->transaction.first_committed != transaction)
+        return TRUE;
+
+      if (!entry || !entry->state)
+        continue;
+
+      actor = meta_wayland_surface_get_actor (surface);
+      if (!actor || meta_surface_actor_is_effectively_obscured (actor))
+        continue;
+
+      if (entry->state->fifo_wait && surface->fifo_barrier &&
+          !meta_wayland_surface_is_synchronized (surface))
         return TRUE;
     }
 
@@ -311,6 +326,20 @@ meta_wayland_transaction_unblock_timed (MetaWaylandTransaction *transaction,
   meta_wayland_transaction_maybe_apply (transaction);
 
   return TRUE;
+}
+
+void
+meta_wayland_transaction_unblock_surface (MetaWaylandSurface *surface)
+{
+  if (!surface->fifo_barrier)
+    {
+      g_warning ("Attempting to unblock a surface with no fifo_barrier");
+      return;
+    }
+
+  surface->fifo_barrier = FALSE;
+
+  meta_wayland_transaction_consider_surface (surface);
 }
 
 static void
