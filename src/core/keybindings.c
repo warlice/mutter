@@ -1906,14 +1906,14 @@ process_event (MetaDisplay          *display,
     (xkb_keycode_t) clutter_event_get_key_code ((ClutterEvent *) event);
   MetaResolvedKeyCombo resolved_combo = { &keycode, 1 };
   MetaKeyBinding *binding;
+  ClutterModifierType modifiers;
 
   /* we used to have release-based bindings but no longer. */
   if (clutter_event_type ((ClutterEvent *) event) == CLUTTER_KEY_RELEASE)
     return FALSE;
 
-  resolved_combo.mask =
-    mask_from_event_params (keys,
-                            clutter_event_get_state ((ClutterEvent *) event));
+  clutter_event_get_key_state ((ClutterEvent *) event, &modifiers, NULL, NULL);
+  resolved_combo.mask = mask_from_event_params (keys, modifiers);
 
   binding = get_keybinding (keys, &resolved_combo);
 
@@ -1995,7 +1995,7 @@ process_special_modifier_key (MetaDisplay          *display,
   hardware_keycode = clutter_event_get_key_code ((ClutterEvent *) event);
   time_ms = clutter_event_get_time ((ClutterEvent *) event);
   device = clutter_event_get_device ((ClutterEvent *) event);
-  modifiers = clutter_event_get_state ((ClutterEvent *) event);
+  clutter_event_get_key_state ((ClutterEvent *) event, &modifiers, NULL, NULL);
 
   if (*modifier_press_only)
     {
@@ -2167,6 +2167,7 @@ process_iso_next_group (MetaDisplay *display,
   gboolean activate;
   xkb_keycode_t keycode =
     (xkb_keycode_t) clutter_event_get_key_code ((ClutterEvent *) event);
+  ClutterModifierType modifiers;
   xkb_mod_mask_t mask;
   int i, j;
 
@@ -2174,8 +2175,8 @@ process_iso_next_group (MetaDisplay *display,
     return FALSE;
 
   activate = FALSE;
-  mask = mask_from_event_params (keys,
-                                 clutter_event_get_state ((ClutterEvent *) event));
+  clutter_event_get_key_state ((ClutterEvent *) event, &modifiers, NULL, NULL);
+  mask = mask_from_event_params (keys, modifiers);
 
   for (i = 0; i < keys->n_iso_next_group_combos; ++i)
     {
@@ -3954,15 +3955,15 @@ process_keybinding_key_event (MetaDisplay           *display,
   MetaKeyBindingManager *keys = &display->key_binding_manager;
   xkb_keycode_t keycode =
     (xkb_keycode_t) clutter_event_get_key_code ((ClutterEvent *) event);
+  ClutterModifierType modifiers;
   MetaResolvedKeyCombo resolved_combo = { &keycode, 1 };
   MetaKeyBinding *binding;
 
   if (clutter_event_type ((ClutterEvent *) event) == CLUTTER_KEY_RELEASE)
     return FALSE;
 
-  resolved_combo.mask =
-    mask_from_event_params (keys,
-                            clutter_event_get_state ((ClutterEvent *) event));
+  clutter_event_get_key_state ((ClutterEvent *) event, &modifiers, NULL, NULL);
+  resolved_combo.mask = mask_from_event_params (keys, modifiers);
 
   binding = get_keybinding (keys, &resolved_combo);
   if (!binding)
