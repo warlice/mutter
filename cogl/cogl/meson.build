@@ -58,9 +58,9 @@ cogl_egl_defines_h = configure_file(
 )
 
 cogl_deprecated_headers = [
+  'deprecated/cogl-program.h',
   'deprecated/cogl-shader.h',
   'deprecated/cogl-clutter.h',
-  'deprecated/cogl-type-casts.h',
 ]
 
 cogl_headers = [
@@ -70,7 +70,6 @@ cogl_headers = [
   'cogl-context.h',
   'cogl-frame-info.h',
   'cogl-framebuffer.h',
-  'cogl-object.h',
   'cogl-offscreen.h',
   'cogl-onscreen.h',
   'cogl-pipeline.h',
@@ -109,7 +108,6 @@ cogl_nonintrospected_headers = [
   'cogl-pixel-buffer.h',
   'cogl-macros.h',
   'cogl-fence.h',
-  'cogl-gtype-private.h',
   'cogl-glib-source.h',
   'cogl-scanout.h',
   'cogl-graphene.h',
@@ -219,9 +217,6 @@ cogl_sources = [
   'cogl-driver.h',
   'cogl.c',
   'cogl-pixel-format.c',
-  'cogl-object-private.h',
-  'cogl-object.h',
-  'cogl-object.c',
   'cogl-util.h',
   'cogl-util.c',
   'cogl-bitmap-private.h',
@@ -230,7 +225,6 @@ cogl_sources = [
   'cogl-bitmap-packing.h',
   'cogl-primitives-private.h',
   'cogl-primitives.c',
-  'cogl-bitmap-pixbuf.c',
   'cogl-clip-stack.h',
   'cogl-clip-stack.c',
   'cogl-feature-private.h',
@@ -320,8 +314,6 @@ cogl_sources = [
   'cogl-flags.h',
   'cogl-bitmask.h',
   'cogl-bitmask.c',
-  'cogl-gtype.c',
-  'cogl-gtype-private.h',
   'cogl-point-in-poly-private.h',
   'cogl-point-in-poly.c',
   'cogl-list.c',
@@ -444,7 +436,13 @@ if have_introspection
     sources: cogl_introspected_headers,
     nsversion: libmutter_api_version,
     namespace: 'Cogl',
-    includes: ['cairo-1.0', 'GL-1.0', 'GObject-2.0', 'Graphene-1.0'],
+    includes: [
+      libmutter_mtk_gir[0],
+      'cairo-1.0',
+      'GL-1.0',
+      'GObject-2.0',
+      'Graphene-1.0', 
+    ],
     dependencies: [cogl_deps],
     export_packages: 'mutter-cogl-@0@'.format(libmutter_api_version),
     extra_args: introspection_args + [

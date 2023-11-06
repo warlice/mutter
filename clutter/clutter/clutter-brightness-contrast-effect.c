@@ -130,7 +130,7 @@ clutter_brightness_contrast_effect_create_pipeline (ClutterOffscreenEffect *effe
 
   cogl_pipeline_set_layer_texture (self->pipeline, 0, texture);
 
-  return cogl_object_ref (self->pipeline);
+  return g_object_ref (self->pipeline);
 }
 
 static gboolean
@@ -155,11 +155,7 @@ clutter_brightness_contrast_effect_dispose (GObject *gobject)
 {
   ClutterBrightnessContrastEffect *self = CLUTTER_BRIGHTNESS_CONTRAST_EFFECT (gobject);
 
-  if (self->pipeline != NULL)
-    {
-      cogl_object_unref (self->pipeline);
-      self->pipeline = NULL;
-    }
+  g_clear_object (&self->pipeline);
 
   G_OBJECT_CLASS (clutter_brightness_contrast_effect_parent_class)->dispose (gobject);
 }
@@ -381,7 +377,7 @@ clutter_brightness_contrast_effect_init (ClutterBrightnessContrastEffect *self)
                                   brightness_contrast_decls,
                                   brightness_contrast_source);
       cogl_pipeline_add_snippet (klass->base_pipeline, snippet);
-      cogl_object_unref (snippet);
+      g_object_unref (snippet);
 
       cogl_pipeline_set_layer_null_texture (klass->base_pipeline, 0);
     }

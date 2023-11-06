@@ -82,8 +82,8 @@ test_point_size (void)
       cogl_pipeline_set_color4ub (pipeline, 0, 255, 0, 255);
       cogl_primitive_draw (prim, test_fb, pipeline);
 
-      cogl_object_unref (prim);
-      cogl_object_unref (pipeline);
+      g_object_unref (prim);
+      g_object_unref (pipeline);
     }
 
   /* Verify all of the points where drawn at the right size */

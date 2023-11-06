@@ -37,7 +37,6 @@
 #include "cogl/cogl-context-private.h"
 #include "cogl/cogl-display-private.h"
 #include "cogl/cogl-renderer-private.h"
-#include "cogl/cogl-object-private.h"
 #include "cogl/cogl-util.h"
 #include "cogl/cogl-texture-private.h"
 #include "cogl/cogl-framebuffer-private.h"
@@ -50,7 +49,6 @@
 #include "cogl/cogl1-context.h"
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-primitives-private.h"
-#include "cogl/cogl-gtype-private.h"
 #include "cogl/winsys/cogl-winsys-private.h"
 
 enum
@@ -77,7 +75,7 @@ enum
 static guint signals[N_SIGNALS];
 
 #ifdef COGL_ENABLE_DEBUG
-static CoglUserDataKey wire_pipeline_key;
+static GQuark wire_pipeline_key = 0;
 #endif
 
 typedef struct _CoglFramebufferPrivate
@@ -173,7 +171,7 @@ cogl_framebuffer_get_property (GObject    *object,
   switch (prop_id)
     {
     case PROP_CONTEXT:
-      g_value_set_boxed (value, priv->context);
+      g_value_set_object (value, priv->context);
       break;
     case PROP_DRIVER_CONFIG:
       g_value_set_pointer (value, &priv->driver_config);
@@ -203,7 +201,7 @@ cogl_framebuffer_set_property (GObject      *object,
   switch (prop_id)
     {
     case PROP_CONTEXT:
-      priv->context = g_value_get_boxed (value);
+      priv->context = g_value_get_object (value);
       break;
     case PROP_DRIVER_CONFIG:
       driver_config = g_value_get_pointer (value);
@@ -323,7 +321,7 @@ cogl_framebuffer_init_config (CoglFramebuffer             *framebuffer,
     cogl_framebuffer_get_instance_private (framebuffer);
 
   priv->config = *config;
-  cogl_object_ref (priv->config.swap_chain);
+  g_object_ref (priv->config.swap_chain);
 }
 
 static void
@@ -344,9 +342,9 @@ cogl_framebuffer_dispose (GObject *object)
     }
 
   g_clear_pointer (&priv->clip_stack, _cogl_clip_stack_unref);
-  cogl_clear_object (&priv->modelview_stack);
-  cogl_clear_object (&priv->projection_stack);
-  g_clear_pointer (&priv->journal, _cogl_journal_free);
+  g_clear_object (&priv->modelview_stack);
+  g_clear_object (&priv->projection_stack);
+  g_clear_object (&priv->journal);
 
   ctx->framebuffers = g_list_remove (ctx->framebuffers, framebuffer);
 
@@ -381,11 +379,11 @@ cogl_framebuffer_class_init (CoglFramebufferClass *klass)
   object_class->set_property = cogl_framebuffer_set_property;
 
   obj_props[PROP_CONTEXT] =
-    g_param_spec_boxed ("context", NULL, NULL,
-                        COGL_TYPE_HANDLE,
-                        G_PARAM_READWRITE |
-                        G_PARAM_CONSTRUCT_ONLY |
-                        G_PARAM_STATIC_STRINGS);
+    g_param_spec_object ("context", NULL, NULL,
+                         COGL_TYPE_CONTEXT,
+                         G_PARAM_READWRITE |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
   obj_props[PROP_DRIVER_CONFIG] =
     g_param_spec_pointer ("driver-config", NULL, NULL,
                           G_PARAM_READWRITE |
@@ -414,15 +412,6 @@ cogl_framebuffer_class_init (CoglFramebufferClass *klass)
                   NULL, NULL, NULL,
                   G_TYPE_NONE,
                   0);
-}
-
-const CoglWinsysVtable *
-_cogl_framebuffer_get_winsys (CoglFramebuffer *framebuffer)
-{
-  CoglFramebufferPrivate *priv =
-    cogl_framebuffer_get_instance_private (framebuffer);
-
-  return priv->context->display->renderer->winsys_vtable;
 }
 
 /* This version of cogl_clear can be used internally as an alternative
@@ -878,7 +867,7 @@ _cogl_framebuffer_add_dependency (CoglFramebuffer *framebuffer,
     }
 
   /* TODO: generalize the primed-array type structure we e.g. use for
-   * cogl_object_set_user_data or for pipeline children as a way to
+   * g_object_set_qdata_full or for pipeline children as a way to
    * avoid quite a lot of mid-scene micro allocations here... */
   priv->deps =
     g_list_prepend (priv->deps, g_object_ref (dependency));
@@ -1568,7 +1557,7 @@ cogl_framebuffer_read_pixels (CoglFramebuffer *framebuffer,
                                                    COGL_READ_PIXELS_COLOR_BUFFER,
                                                    bitmap,
                                                    NULL);
-  cogl_object_unref (bitmap);
+  g_object_unref (bitmap);
 
   return ret;
 }
@@ -2081,7 +2070,7 @@ cogl_framebuffer_push_primitive_clip (CoglFramebuffer *framebuffer,
 
 void
 cogl_framebuffer_push_region_clip (CoglFramebuffer *framebuffer,
-                                   cairo_region_t  *region)
+                                   MtkRegion       *region)
 {
   CoglFramebufferPrivate *priv =
     cogl_framebuffer_get_instance_private (framebuffer);
@@ -2204,7 +2193,7 @@ get_wire_line_indices (CoglContext *ctx,
       indices = _cogl_buffer_map (COGL_BUFFER (index_buffer),
                                   COGL_BUFFER_ACCESS_READ, 0,
                                   NULL);
-      indices_type = cogl_indices_get_type (user_indices);
+      indices_type = cogl_indices_get_indices_type (user_indices);
     }
   else
     {
@@ -2297,7 +2286,7 @@ pipeline_destroyed_cb (CoglPipeline *weak_pipeline, void *user_data)
 
   /* XXX: I think we probably need to provide a custom unref function for
    * CoglPipeline because it's possible that we will reach this callback
-   * because original_pipeline is being freed which means cogl_object_unref
+   * because original_pipeline is being freed which means g_object_unref
    * will have already freed any associated user data.
    *
    * Setting more user data here will *probably* succeed but that may allocate
@@ -2307,10 +2296,10 @@ pipeline_destroyed_cb (CoglPipeline *weak_pipeline, void *user_data)
    * that a custom unref function could be written that can destroy weak
    * pipeline children before removing user data.
    */
-  cogl_object_set_user_data (COGL_OBJECT (original_pipeline),
-                             &wire_pipeline_key, NULL, NULL);
+  g_object_set_qdata_full (G_OBJECT (original_pipeline),
+                           wire_pipeline_key, NULL, NULL);
 
-  cogl_object_unref (weak_pipeline);
+  g_object_unref (weak_pipeline);
 }
 
 static void
@@ -2328,7 +2317,7 @@ draw_wireframe (CoglContext *ctx,
   CoglIndices *wire_indices;
   CoglPipeline *wire_pipeline;
   int n_indices;
-
+  wire_pipeline_key = g_quark_from_static_string ("framebuffer-wire-pipeline-key");
   wire_indices = get_wire_line_indices (ctx,
                                         mode,
                                         first_vertex,
@@ -2336,8 +2325,8 @@ draw_wireframe (CoglContext *ctx,
                                         indices,
                                         &n_indices);
 
-  wire_pipeline = cogl_object_get_user_data (COGL_OBJECT (pipeline),
-                                             &wire_pipeline_key);
+  wire_pipeline = g_object_get_qdata (G_OBJECT (pipeline),
+                                      wire_pipeline_key);
 
   if (!wire_pipeline)
     {
@@ -2346,9 +2335,9 @@ draw_wireframe (CoglContext *ctx,
       wire_pipeline =
         _cogl_pipeline_weak_copy (pipeline, pipeline_destroyed_cb, NULL);
 
-      cogl_object_set_user_data (COGL_OBJECT (pipeline),
-                                 &wire_pipeline_key, wire_pipeline,
-                                 NULL);
+      g_object_set_qdata_full (G_OBJECT (pipeline),
+                               wire_pipeline_key, wire_pipeline,
+                               NULL);
 
       /* If we have glsl then the pipeline may have an associated
        * vertex program and since we'd like to see the results of the
@@ -2384,7 +2373,7 @@ draw_wireframe (CoglContext *ctx,
                                            flags);
   COGL_DEBUG_SET_FLAG (COGL_DEBUG_WIREFRAME);
 
-  cogl_object_unref (wire_indices);
+  g_object_unref (wire_indices);
 }
 #endif
 

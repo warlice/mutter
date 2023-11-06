@@ -6,6 +6,7 @@
 /* Keep track of the number of textures that we've created and are
  * still alive */
 static int alive_texture_mask = 0;
+static GQuark texture_data_key = 0;
 
 #define N_LAYERS 3
 #define N_PIPELINES 4
@@ -28,8 +29,8 @@ create_texture (void)
 {
   static const guint8 data[] =
     { 0xff, 0xff, 0xff, 0xff };
-  static CoglUserDataKey texture_data_key;
-  CoglTexture2D *tex_2d;
+  texture_data_key = g_quark_from_static_string ("-cogl-test-copy-replace-texture");
+  CoglTexture *tex_2d;
   static int texture_num = 1;
 
   alive_texture_mask |= (1 << texture_num);
@@ -40,13 +41,12 @@ create_texture (void)
                                           4, /* rowstride */
                                           data,
                                           NULL);
-
   /* Set some user data on the texture so we can track when it has
    * been destroyed */
-  cogl_object_set_user_data (COGL_OBJECT (tex_2d),
-                             &texture_data_key,
-                             GINT_TO_POINTER (texture_num),
-                             free_texture_cb);
+  g_object_set_qdata_full (G_OBJECT (tex_2d),
+                           texture_data_key,
+                           GINT_TO_POINTER (texture_num),
+                           free_texture_cb);
 
   texture_num++;
 
@@ -77,13 +77,13 @@ test_copy_replace_texture (void)
           cogl_pipeline_set_layer_texture (pipelines[pipeline_num],
                                            layer_num,
                                            tex);
-          cogl_object_unref (tex);
+          g_object_unref (tex);
         }
     }
 
   /* Unref everything but the last pipeline */
   for (pipeline_num = 0; pipeline_num < N_PIPELINES - 1; pipeline_num++)
-    cogl_object_unref (pipelines[pipeline_num]);
+    g_object_unref (pipelines[pipeline_num]);
 
   if (alive_texture_mask && cogl_test_verbose ())
     {
@@ -110,7 +110,7 @@ test_copy_replace_texture (void)
                    LAST_PIPELINE_MASK);
 
   /* Clean up the last pipeline */
-  cogl_object_unref (pipelines[N_PIPELINES - 1]);
+  g_object_unref (pipelines[N_PIPELINES - 1]);
 
   /* That should get rid of the last of the textures */
   g_assert_cmpint (alive_texture_mask, ==, 0);

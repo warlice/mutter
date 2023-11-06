@@ -147,7 +147,7 @@ meta_wayland_buffer_realize (MetaWaylandBuffer *buffer)
   stream = meta_wayland_egl_stream_new (buffer, NULL);
   if (stream)
     {
-      CoglTexture2D *texture;
+      CoglTexture *texture;
 
       texture = meta_wayland_egl_stream_create_texture (stream, NULL);
       if (!texture)
@@ -155,7 +155,7 @@ meta_wayland_buffer_realize (MetaWaylandBuffer *buffer)
 
       buffer->egl_stream.stream = stream;
       buffer->type = META_WAYLAND_BUFFER_TYPE_EGL_STREAM;
-      buffer->egl_stream.texture = meta_multi_texture_new_simple (COGL_TEXTURE (texture));
+      buffer->egl_stream.texture = meta_multi_texture_new_simple (texture);
       buffer->is_y_inverted = meta_wayland_egl_stream_is_y_inverted (stream);
 
       return TRUE;
@@ -382,28 +382,25 @@ shm_buffer_attach (MetaWaylandBuffer  *buffer,
                                      stride,
                                      wl_shm_buffer_get_data (shm_buffer));
 
-  new_cogl_tex = COGL_TEXTURE (cogl_texture_2d_new_from_bitmap (bitmap));
+  new_cogl_tex = cogl_texture_2d_new_from_bitmap (bitmap);
 
   if (!cogl_texture_allocate (new_cogl_tex, error))
     {
-      g_clear_pointer (&new_cogl_tex, cogl_object_unref);
+      g_clear_object (&new_cogl_tex);
       if (g_error_matches (*error, COGL_TEXTURE_ERROR, COGL_TEXTURE_ERROR_SIZE))
         {
-          CoglTexture2DSliced *texture_sliced;
-
           g_clear_error (error);
 
-          texture_sliced =
+          new_cogl_tex =
             cogl_texture_2d_sliced_new_from_bitmap (bitmap,
                                                     COGL_TEXTURE_MAX_WASTE);
-          new_cogl_tex = COGL_TEXTURE (texture_sliced);
 
           if (!cogl_texture_allocate (new_cogl_tex, error))
-            g_clear_pointer (&new_cogl_tex, cogl_object_unref);
+            g_clear_object (&new_cogl_tex);
         }
     }
 
-  cogl_object_unref (bitmap);
+  g_object_unref (bitmap);
 
   wl_shm_buffer_end_access (shm_buffer);
 
@@ -432,7 +429,7 @@ egl_image_buffer_attach (MetaWaylandBuffer  *buffer,
   CoglPixelFormat cogl_format;
   EGLImageKHR egl_image;
   CoglEglImageFlags flags;
-  CoglTexture2D *texture_2d;
+  CoglTexture *texture_2d;
 
   if (buffer->egl_image.texture)
     {
@@ -498,7 +495,7 @@ egl_image_buffer_attach (MetaWaylandBuffer  *buffer,
   if (!texture_2d)
     return FALSE;
 
-  buffer->egl_image.texture = meta_multi_texture_new_simple (COGL_TEXTURE (texture_2d));
+  buffer->egl_image.texture = meta_multi_texture_new_simple (texture_2d);
   buffer->is_y_inverted = !!y_inverted;
 
   g_clear_object (texture);
@@ -678,7 +675,7 @@ meta_wayland_buffer_is_y_inverted (MetaWaylandBuffer *buffer)
 static gboolean
 process_shm_buffer_damage (MetaWaylandBuffer *buffer,
                            MetaMultiTexture  *texture,
-                           cairo_region_t    *region,
+                           MtkRegion         *region,
                            GError           **error)
 {
   struct wl_shm_buffer *shm_buffer;
@@ -687,7 +684,7 @@ process_shm_buffer_damage (MetaWaylandBuffer *buffer,
   CoglPixelFormat format;
   CoglTexture *cogl_texture;
 
-  n_rectangles = cairo_region_num_rectangles (region);
+  n_rectangles = mtk_region_num_rectangles (region);
 
   shm_buffer = wl_shm_buffer_get (buffer->resource);
 
@@ -705,7 +702,7 @@ process_shm_buffer_damage (MetaWaylandBuffer *buffer,
       int bpp;
 
       bpp = cogl_pixel_format_get_bytes_per_pixel (format, 0);
-      cairo_region_get_rectangle (region, i, &rect);
+      rect = mtk_region_get_rectangle (region, i);
 
       if (!_cogl_texture_set_region (cogl_texture,
                                      rect.width, rect.height,
@@ -729,7 +726,7 @@ process_shm_buffer_damage (MetaWaylandBuffer *buffer,
 void
 meta_wayland_buffer_process_damage (MetaWaylandBuffer *buffer,
                                     MetaMultiTexture  *texture,
-                                    cairo_region_t    *region)
+                                    MtkRegion         *region)
 {
   gboolean res = FALSE;
   GError *error = NULL;

@@ -171,7 +171,7 @@ key_group_paint (ClutterActor        *actor,
       clutter_actor_paint (child, paint_context);
     }
 
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 }
 
 static void
@@ -235,6 +235,7 @@ send_keyval (KeyGroup *group, int keyval)
                                  CLUTTER_EVENT_FLAG_SYNTHETIC,
                                  CLUTTER_CURRENT_TIME,
                                  clutter_seat_get_keyboard (seat),
+                                 (ClutterModifierSet) { 0, },
                                  0,
                                  keyval,
                                  0, 0, 0);

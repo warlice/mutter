@@ -313,17 +313,10 @@ meta_window_finalize (GObject *object)
 {
   MetaWindow *window = META_WINDOW (object);
 
-  if (window->frame_bounds)
-    cairo_region_destroy (window->frame_bounds);
-
-  if (window->shape_region)
-    cairo_region_destroy (window->shape_region);
-
-  if (window->opaque_region)
-    cairo_region_destroy (window->opaque_region);
-
-  if (window->input_region)
-    cairo_region_destroy (window->input_region);
+  g_clear_pointer (&window->frame_bounds, mtk_region_unref);
+  g_clear_pointer (&window->shape_region, mtk_region_unref);
+  g_clear_pointer (&window->opaque_region, mtk_region_unref);
+  g_clear_pointer (&window->input_region, mtk_region_unref);
 
   if (window->transient_for)
     g_object_unref (window->transient_for);
@@ -3945,10 +3938,7 @@ meta_window_move_resize_internal (MetaWindow          *window,
     }
 
   if ((result & META_MOVE_RESIZE_RESULT_FRAME_SHAPE_CHANGED) && window->frame_bounds)
-    {
-      cairo_region_destroy (window->frame_bounds);
-      window->frame_bounds = NULL;
-    }
+    g_clear_pointer (&window->frame_bounds, mtk_region_unref);
 
   meta_window_foreach_transient (window, maybe_move_attached_window, NULL);
 
@@ -4556,10 +4546,17 @@ meta_window_transient_can_focus (MetaWindow *window)
 }
 
 static void
-meta_window_make_most_recent (MetaWindow *window)
+meta_window_make_most_recent (MetaWindow    *window,
+                              MetaWorkspace *target_workspace)
 {
   MetaWorkspaceManager *workspace_manager = window->display->workspace_manager;
   GList *l;
+
+  /* Marks the window as the most recently used window on a specific workspace.
+   * If the window exists on all workspaces, it will become the most recently
+   * used sticky window on all other workspaces. This ensures proper tracking
+   * among windows on all workspaces while not overriding MRU for other windows.
+   */
 
   for (l = workspace_manager->workspaces; l != NULL; l = l->next)
     {
@@ -4572,15 +4569,18 @@ meta_window_make_most_recent (MetaWindow *window)
 
       /*
        * Move to the front of the MRU list if the window is on the
-       * active workspace or was explicitly made sticky
+       * target_workspace or was explicitly made sticky
        */
-      if (workspace == workspace_manager->active_workspace ||
-          window->on_all_workspaces_requested)
+      if (workspace == target_workspace || window->on_all_workspaces_requested)
         {
           workspace->mru_list = g_list_delete_link (workspace->mru_list, self);
           workspace->mru_list = g_list_prepend (workspace->mru_list, window);
           continue;
         }
+
+      /* Not sticky and not on the target workspace: we're done here */
+      if (!window->on_all_workspaces)
+        continue;
 
       /* Otherwise move it before other sticky windows */
       for (link = workspace->mru_list; link; link = link->next)
@@ -4679,7 +4679,7 @@ meta_window_focus (MetaWindow  *window,
   if (workspace_manager->active_workspace &&
       meta_window_located_on_workspace (window,
                                         workspace_manager->active_workspace))
-    meta_window_make_most_recent (window);
+    meta_window_make_most_recent (window, workspace_manager->active_workspace);
 
   backend = backend_from_window (window);
   stage = CLUTTER_STAGE (meta_backend_get_stage (backend));
@@ -5026,13 +5026,26 @@ meta_window_raise (MetaWindow  *window)
   g_signal_emit (window, window_signals[RAISED], 0);
 }
 
+/**
+ * meta_window_raise_and_make_recent_on_workspace:
+ * @window: a #MetaWindow
+ * @workspace: the #MetaWorkspace to raise and make it most recent on
+ *
+ * Raises a window and marks it as the most recently used window on the
+ * workspace @target_workspace. If the window exists on all workspaces, it will
+ * become the most recently used sticky window on all other workspaces. This
+ * ensures proper tracking among windows on all workspaces while not overriding
+ * MRU for other windows.
+ */
 void
-meta_window_raise_and_make_recent (MetaWindow *window)
+meta_window_raise_and_make_recent_on_workspace (MetaWindow    *window,
+                                                MetaWorkspace *workspace)
 {
   g_return_if_fail (META_IS_WINDOW (window));
+  g_return_if_fail (META_IS_WORKSPACE (workspace));
 
   meta_window_raise (window);
-  meta_window_make_most_recent (window);
+  meta_window_make_most_recent (window, workspace);
 }
 
 void
@@ -5219,19 +5232,15 @@ meta_window_propagate_focus_appearance (MetaWindow *window,
   parent = meta_window_get_transient_for (child);
   while (parent && (!focused || should_propagate_focus_appearance (child)))
     {
-      gboolean child_focus_state_changed;
+      gboolean child_focus_state_changed = FALSE;
 
-      if (focused)
+      if (focused && parent->attached_focus_window != focus_window)
         {
-          if (parent->attached_focus_window == focus_window)
-            break;
           child_focus_state_changed = (parent->attached_focus_window == NULL);
           parent->attached_focus_window = focus_window;
         }
-      else
+      else if (parent->attached_focus_window == focus_window)
         {
-          if (parent->attached_focus_window != focus_window)
-            break;
           child_focus_state_changed = (parent->attached_focus_window != NULL);
           parent->attached_focus_window = NULL;
         }
@@ -5687,6 +5696,9 @@ meta_window_recalc_features (MetaWindow *window)
   if (old_skip_taskbar != window->skip_taskbar)
     g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_SKIP_TASKBAR]);
 
+  if (old_always_sticky != window->always_sticky)
+    meta_window_on_all_workspaces_changed (window);
+
   /* FIXME:
    * Lame workaround for recalc_features being used overzealously.
    * The fix is to only recalc_features when something has
@@ -6137,6 +6149,8 @@ meta_window_get_default_layer (MetaWindow *window)
     return META_LAYER_BOTTOM;
   else if (window->wm_state_above && !META_WINDOW_MAXIMIZED (window))
     return META_LAYER_TOP;
+  else if (window->type == META_WINDOW_DESKTOP)
+    return META_LAYER_DESKTOP;
   else
     return META_LAYER_NORMAL;
 }
@@ -6996,11 +7010,11 @@ meta_window_get_frame_type (MetaWindow *window)
  *
  * Gets a region representing the outer bounds of the window's frame.
  *
- * Return value: (transfer none) (nullable): a #cairo_region_t
+ * Return value: (transfer none) (nullable): a #MtkRegion
  *  holding the outer bounds of the window, or %NULL if the window
  *  doesn't have a frame.
  */
-cairo_region_t *
+MtkRegion *
 meta_window_get_frame_bounds (MetaWindow *window)
 {
   if (!window->frame_bounds)

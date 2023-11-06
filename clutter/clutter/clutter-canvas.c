@@ -48,7 +48,6 @@
 #include "clutter/clutter-canvas.h"
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-backend.h"
-#include "clutter/clutter-cairo.h"
 #include "clutter/clutter-color.h"
 #include "clutter/clutter-content-private.h"
 #include "clutter/clutter-debug.h"
@@ -128,13 +127,8 @@ clutter_canvas_finalize (GObject *gobject)
 {
   ClutterCanvasPrivate *priv = CLUTTER_CANVAS (gobject)->priv;
 
-  if (priv->buffer != NULL)
-    {
-      cogl_object_unref (priv->buffer);
-      priv->buffer = NULL;
-    }
-
-  g_clear_pointer (&priv->texture, cogl_object_unref);
+  g_clear_object (&priv->buffer);
+  g_clear_object (&priv->texture);
 
   G_OBJECT_CLASS (clutter_canvas_parent_class)->finalize (gobject);
 }
@@ -323,10 +317,10 @@ clutter_canvas_paint_content (ClutterContent      *content,
     return;
 
   if (priv->dirty)
-    g_clear_pointer (&priv->texture, cogl_object_unref);
+    g_clear_object (&priv->texture);
 
   if (priv->texture == NULL)
-    priv->texture = COGL_TEXTURE (cogl_texture_2d_new_from_bitmap (priv->buffer));
+    priv->texture = cogl_texture_2d_new_from_bitmap (priv->buffer);
 
   if (priv->texture == NULL)
     return;
@@ -369,7 +363,7 @@ clutter_canvas_emit_draw (ClutterCanvas *self)
       priv->buffer = cogl_bitmap_new_with_size (ctx,
                                                 real_width,
                                                 real_height,
-                                                CLUTTER_CAIRO_FORMAT_ARGB32);
+                                                COGL_PIXEL_FORMAT_CAIRO_ARGB32_COMPAT);
     }
 
   buffer = COGL_BUFFER (cogl_bitmap_get_buffer (priv->buffer));
@@ -444,11 +438,7 @@ clutter_canvas_invalidate (ClutterContent *content)
   ClutterCanvas *self = CLUTTER_CANVAS (content);
   ClutterCanvasPrivate *priv = self->priv;
 
-  if (priv->buffer != NULL)
-    {
-      cogl_object_unref (priv->buffer);
-      priv->buffer = NULL;
-    }
+  g_clear_object (&priv->buffer);
 
   if (priv->width <= 0 || priv->height <= 0)
     return;

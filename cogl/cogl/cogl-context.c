@@ -31,7 +31,6 @@
 #include "cogl-config.h"
 
 #include "cogl/cogl-mutter.h"
-#include "cogl/cogl-object.h"
 #include "cogl/cogl-private.h"
 #include "cogl/cogl-profile.h"
 #include "cogl/cogl-util.h"
@@ -46,29 +45,14 @@
 #include "cogl/cogl-onscreen-private.h"
 #include "cogl/cogl-attribute-private.h"
 #include "cogl/cogl1-context.h"
-#include "cogl/cogl-gtype-private.h"
 #include "cogl/winsys/cogl-winsys-private.h"
 
 #include <gio/gio.h>
 #include <string.h>
 #include <stdlib.h>
 
-static void _cogl_context_free (CoglContext *context);
+G_DEFINE_TYPE (CoglContext, cogl_context, G_TYPE_OBJECT);
 
-COGL_OBJECT_DEFINE (Context, context);
-COGL_GTYPE_DEFINE_CLASS (Context, context);
-
-extern void
-_cogl_create_context_driver (CoglContext *context);
-
-static CoglContext *_cogl_context = NULL;
-
-static void
-_cogl_init_feature_overrides (CoglContext *ctx)
-{
-  if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_DISABLE_PBOS)))
-    COGL_FLAGS_SET (ctx->private_features, COGL_PRIVATE_FEATURE_PBOS, FALSE);
-}
 
 const CoglWinsysVtable *
 _cogl_context_get_winsys (CoglContext *context)
@@ -80,6 +64,109 @@ static const CoglDriverVtable *
 _cogl_context_get_driver (CoglContext *context)
 {
   return context->driver_vtable;
+}
+
+static void
+cogl_context_dispose (GObject *object)
+{
+  CoglContext *context = COGL_CONTEXT (object);
+  const CoglWinsysVtable *winsys = _cogl_context_get_winsys (context);
+  const CoglDriverVtable *driver = _cogl_context_get_driver (context);
+
+  winsys->context_deinit (context);
+
+  if (context->default_gl_texture_2d_tex)
+    g_object_unref (context->default_gl_texture_2d_tex);
+
+  if (context->opaque_color_pipeline)
+    g_object_unref (context->opaque_color_pipeline);
+
+  if (context->blit_texture_pipeline)
+    g_object_unref (context->blit_texture_pipeline);
+
+  if (context->swap_callback_closures)
+    g_hash_table_destroy (context->swap_callback_closures);
+
+  if (context->journal_flush_attributes_array)
+    g_array_free (context->journal_flush_attributes_array, TRUE);
+  if (context->journal_clip_bounds)
+    g_array_free (context->journal_clip_bounds, TRUE);
+
+  if (context->rectangle_byte_indices)
+    g_object_unref (context->rectangle_byte_indices);
+  if (context->rectangle_short_indices)
+    g_object_unref (context->rectangle_short_indices);
+
+  if (context->default_pipeline)
+    g_object_unref (context->default_pipeline);
+
+  if (context->dummy_layer_dependant)
+    g_object_unref (context->dummy_layer_dependant);
+  if (context->default_layer_n)
+    g_object_unref (context->default_layer_n);
+  if (context->default_layer_0)
+    g_object_unref (context->default_layer_0);
+
+  if (context->current_clip_stack_valid)
+    _cogl_clip_stack_unref (context->current_clip_stack);
+
+  g_slist_free (context->atlases);
+  g_hook_list_clear (&context->atlas_reorganize_callbacks);
+
+  _cogl_bitmask_destroy (&context->enabled_custom_attributes);
+  _cogl_bitmask_destroy (&context->enable_custom_attributes_tmp);
+  _cogl_bitmask_destroy (&context->changed_bits_tmp);
+
+  if (context->current_modelview_entry)
+    cogl_matrix_entry_unref (context->current_modelview_entry);
+  if (context->current_projection_entry)
+    cogl_matrix_entry_unref (context->current_projection_entry);
+
+  _cogl_pipeline_cache_free (context->pipeline_cache);
+
+  _cogl_sampler_cache_free (context->sampler_cache);
+
+  g_ptr_array_free (context->uniform_names, TRUE);
+  g_hash_table_destroy (context->uniform_name_hash);
+
+  g_hash_table_destroy (context->attribute_name_states_hash);
+  g_array_free (context->attribute_name_index_map, TRUE);
+
+  g_byte_array_free (context->buffer_map_fallback_array, TRUE);
+
+  driver->context_deinit (context);
+
+  g_object_unref (context->display);
+
+  g_hash_table_remove_all (context->named_pipelines);
+  g_hash_table_destroy (context->named_pipelines);
+
+  G_OBJECT_CLASS (cogl_context_parent_class)->dispose (object);
+}
+
+static void
+cogl_context_init (CoglContext *info)
+{
+}
+
+static void
+cogl_context_class_init (CoglContextClass *class)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (class);
+
+  object_class->dispose = cogl_context_dispose;
+}
+
+extern void
+_cogl_create_context_driver (CoglContext *context);
+
+static CoglContext *_cogl_context = NULL;
+
+static void
+_cogl_init_feature_overrides (CoglContext *ctx)
+{
+  if (G_UNLIKELY (COGL_DEBUG_ENABLED (COGL_DEBUG_DISABLE_PBOS)))
+    COGL_FLAGS_SET (ctx->private_features, COGL_PRIVATE_FEATURE_PBOS, FALSE);
 }
 
 /* For reference: There was some deliberation over whether to have a
@@ -120,12 +207,7 @@ cogl_context_new (CoglDisplay *display,
 #endif
 
   /* Allocate context memory */
-  context = g_malloc0 (sizeof (CoglContext));
-
-  /* Convert the context into an object immediately in case any of the
-     code below wants to verify that the context pointer is a valid
-     object */
-  _cogl_context_object_new (context);
+  context = g_object_new (COGL_TYPE_CONTEXT, NULL);
 
   /* XXX: Gross hack!
    * Currently everything in Cogl just assumes there is a default
@@ -146,21 +228,21 @@ cogl_context_new (CoglDisplay *display,
       CoglRenderer *renderer = cogl_renderer_new ();
       if (!cogl_renderer_connect (renderer, error))
         {
-          cogl_object_unref (renderer);
-          g_free (context);
+          g_object_unref (renderer);
+          g_object_unref (context);
           return NULL;
         }
 
       display = cogl_display_new (renderer, NULL);
-      cogl_object_unref(renderer);
+      g_object_unref (renderer);
     }
   else
-    cogl_object_ref (display);
+    g_object_ref (display);
 
   if (!cogl_display_setup (display, error))
     {
-      cogl_object_unref (display);
-      g_free (context);
+      g_object_unref (display);
+      g_object_unref (context);
       return NULL;
     }
 
@@ -182,15 +264,15 @@ cogl_context_new (CoglDisplay *display,
   winsys = _cogl_context_get_winsys (context);
   if (!winsys->context_init (context, error))
     {
-      cogl_object_unref (display);
+      g_object_unref (display);
       g_free (context);
       return NULL;
     }
 
   if (!context->driver_vtable->context_init (context))
     {
-      cogl_object_unref (display);
-      g_free (context);
+      g_object_unref (display);
+      g_object_unref (context);
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Failed to initialize context");
       return NULL;
@@ -216,8 +298,8 @@ cogl_context_new (CoglDisplay *display,
 
   context->sampler_cache = _cogl_sampler_cache_new (context);
 
-  _cogl_pipeline_init_default_pipeline ();
-  _cogl_pipeline_init_default_layers ();
+  _cogl_pipeline_init_default_pipeline (context);
+  _cogl_pipeline_init_default_layers (context);
   _cogl_pipeline_init_state_hash_functions ();
   _cogl_pipeline_init_layer_state_hash_functions ();
 
@@ -275,7 +357,7 @@ cogl_context_new (CoglDisplay *display,
   context->depth_range_near_cache = 0;
   context->depth_range_far_cache = 1;
 
-  context->pipeline_cache = _cogl_pipeline_cache_new ();
+  context->pipeline_cache = _cogl_pipeline_cache_new (context);
 
   for (i = 0; i < COGL_BUFFER_BIND_TARGET_COUNT; i++)
     context->current_buffer[i] = NULL;
@@ -302,7 +384,7 @@ cogl_context_new (CoglDisplay *display,
                                    &local_error);
   if (!context->default_gl_texture_2d_tex)
     {
-      cogl_object_unref (display);
+      g_object_unref (display);
       g_free (context);
       g_propagate_prefixed_error (error, local_error,
                                   "Failed to create 1x1 fallback texture: ");
@@ -318,86 +400,9 @@ cogl_context_new (CoglDisplay *display,
   _cogl_list_init (&context->fences);
 
   context->named_pipelines =
-    g_hash_table_new_full (NULL, NULL, NULL, cogl_object_unref);
+    g_hash_table_new_full (NULL, NULL, NULL, g_object_unref);
 
   return context;
-}
-
-static void
-_cogl_context_free (CoglContext *context)
-{
-  const CoglWinsysVtable *winsys = _cogl_context_get_winsys (context);
-  const CoglDriverVtable *driver = _cogl_context_get_driver (context);
-
-  winsys->context_deinit (context);
-
-  if (context->default_gl_texture_2d_tex)
-    cogl_object_unref (context->default_gl_texture_2d_tex);
-
-  if (context->opaque_color_pipeline)
-    cogl_object_unref (context->opaque_color_pipeline);
-
-  if (context->blit_texture_pipeline)
-    cogl_object_unref (context->blit_texture_pipeline);
-
-  if (context->swap_callback_closures)
-    g_hash_table_destroy (context->swap_callback_closures);
-
-  if (context->journal_flush_attributes_array)
-    g_array_free (context->journal_flush_attributes_array, TRUE);
-  if (context->journal_clip_bounds)
-    g_array_free (context->journal_clip_bounds, TRUE);
-
-  if (context->rectangle_byte_indices)
-    cogl_object_unref (context->rectangle_byte_indices);
-  if (context->rectangle_short_indices)
-    cogl_object_unref (context->rectangle_short_indices);
-
-  if (context->default_pipeline)
-    cogl_object_unref (context->default_pipeline);
-
-  if (context->dummy_layer_dependant)
-    cogl_object_unref (context->dummy_layer_dependant);
-  if (context->default_layer_n)
-    cogl_object_unref (context->default_layer_n);
-  if (context->default_layer_0)
-    cogl_object_unref (context->default_layer_0);
-
-  if (context->current_clip_stack_valid)
-    _cogl_clip_stack_unref (context->current_clip_stack);
-
-  g_slist_free (context->atlases);
-  g_hook_list_clear (&context->atlas_reorganize_callbacks);
-
-  _cogl_bitmask_destroy (&context->enabled_custom_attributes);
-  _cogl_bitmask_destroy (&context->enable_custom_attributes_tmp);
-  _cogl_bitmask_destroy (&context->changed_bits_tmp);
-
-  if (context->current_modelview_entry)
-    cogl_matrix_entry_unref (context->current_modelview_entry);
-  if (context->current_projection_entry)
-    cogl_matrix_entry_unref (context->current_projection_entry);
-
-  _cogl_pipeline_cache_free (context->pipeline_cache);
-
-  _cogl_sampler_cache_free (context->sampler_cache);
-
-  g_ptr_array_free (context->uniform_names, TRUE);
-  g_hash_table_destroy (context->uniform_name_hash);
-
-  g_hash_table_destroy (context->attribute_name_states_hash);
-  g_array_free (context->attribute_name_index_map, TRUE);
-
-  g_byte_array_free (context->buffer_map_fallback_array, TRUE);
-
-  driver->context_deinit (context);
-
-  cogl_object_unref (context->display);
-
-  g_hash_table_remove_all (context->named_pipelines);
-  g_hash_table_destroy (context->named_pipelines);
-
-  g_free (context);
 }
 
 CoglContext *

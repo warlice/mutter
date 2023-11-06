@@ -33,10 +33,10 @@
 
 #pragma once
 
+#include "cogl/cogl-debug.h"
 #include "cogl/cogl-node-private.h"
 #include "cogl/cogl-pipeline-layer-private.h"
 #include "cogl/cogl-pipeline.h"
-#include "cogl/cogl-object-private.h"
 #include "cogl/cogl-profile.h"
 #include "cogl/cogl-list.h"
 #include "cogl/cogl-boxed-value.h"
@@ -181,13 +181,11 @@ typedef struct
 typedef struct
 {
   /* Determines how this pipeline is blended with other primitives */
-#if defined(HAVE_COGL_GLES2) || defined(HAVE_COGL_GL)
   GLenum    blend_equation_rgb;
   GLenum    blend_equation_alpha;
   GLint     blend_src_factor_alpha;
   GLint     blend_dst_factor_alpha;
   CoglColor blend_constant;
-#endif
   GLint     blend_src_factor_rgb;
   GLint     blend_dst_factor_rgb;
 } CoglPipelineBlendState;
@@ -216,7 +214,7 @@ typedef struct
 {
   CoglPipelineAlphaFuncState alpha_state;
   CoglPipelineBlendState blend_state;
-  CoglHandle user_program;
+  CoglProgram *user_program;
   CoglDepthState depth_state;
   float point_size;
   unsigned int non_zero_point_size : 1;
@@ -271,7 +269,7 @@ struct _CoglPipeline
    * the state relating to a given pipeline or layer may actually be
    * owned by one if is ancestors in the tree. We have a common data
    * type to track the tree hierarchy so we can share code... */
-  CoglNode _parent;
+  CoglNode parent_instance;
 
   /* When weak pipelines are destroyed the user is notified via this
    * callback */
@@ -375,6 +373,11 @@ struct _CoglPipeline
 #endif
 };
 
+struct _CoglPipelineClass
+{
+   CoglNodeClass parent_class;
+};
+
 typedef struct _CoglPipelineFragend
 {
   void (*start) (CoglPipeline *pipeline,
@@ -436,7 +439,7 @@ extern const CoglPipelineVertend *_cogl_pipeline_vertend;
 extern const CoglPipelineProgend *_cogl_pipeline_progend;
 
 void
-_cogl_pipeline_init_default_pipeline (void);
+_cogl_pipeline_init_default_pipeline (CoglContext *ctx);
 
 static inline CoglPipeline *
 _cogl_pipeline_get_parent (CoglPipeline *pipeline)
@@ -489,9 +492,6 @@ _cogl_pipeline_get_layer_with_flags (CoglPipeline *pipeline,
 
 #define _cogl_pipeline_get_layer(p, l) \
   _cogl_pipeline_get_layer_with_flags (p, l, 0)
-
-gboolean
-_cogl_is_pipeline_layer (void *object);
 
 void
 _cogl_pipeline_prune_empty_layer_difference (CoglPipeline *layers_authority,
@@ -625,7 +625,7 @@ _cogl_get_n_args_for_combine_func (CoglPipelineCombineFunc func);
  * This is the recommended coding pattern for validating an input
  * pipeline and caching a derived result:
  * |[
- * static CoglUserDataKey _cogl_my_cache_key;
+ * static GQuark _cogl_my_cache_key = 0;
  *
  * typedef struct {
  *   CoglPipeline *validated_source;
@@ -641,22 +641,24 @@ _cogl_get_n_args_for_combine_func (CoglPipelineCombineFunc func);
  * invalidate_cache_cb (CoglPipeline *destroyed, void *user_data)
  * {
  *   MyValidatedMaterialCache *cache = user_data;
- *   cogl_object_unref (cache->validated_source);
+ *   g_object_unref (cache->validated_source);
  *   cache->validated_source = NULL;
  * }
  *
  * static CoglPipeline *
  * get_validated_pipeline (CoglPipeline *source)
  * {
+ *   _cogl_my_cache_key = g_quark_from_static_string ("my-cache-key");
  *   MyValidatedMaterialCache *cache =
- *     cogl_object_get_user_data (COGL_OBJECT (source),
- *                                &_cogl_my_cache_key);
+ *     g_object_get_qdata (G_OBJECT (source),
+ *                         _cogl_my_cache_key);
  *   if (G_UNLIKELY (cache == NULL))
  *     {
  *       cache = g_new0 (MyValidatedMaterialCache, 1);
- *       cogl_object_set_user_data (COGL_OBJECT (source),
- *                                  &_cogl_my_cache_key,
- *                                  cache, destroy_cache_cb);
+ * 
+ *       g_object_set_qdata_full (G_OBJECT (source),
+ *                                _cogl_my_cache_key,
+ *                                cache, destroy_cache_cb);
  *       cache->validated_source = source;
  *     }
  *

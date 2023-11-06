@@ -107,7 +107,7 @@ struct _ClutterOffscreenEffectPrivate
 {
   CoglOffscreen *offscreen;
   CoglPipeline *pipeline;
-  CoglHandle texture;
+  CoglTexture *texture;
 
   ClutterActor *actor;
   ClutterActor *stage;
@@ -147,7 +147,7 @@ clutter_offscreen_effect_set_actor (ClutterActorMeta *meta,
   priv->actor = clutter_actor_meta_get_actor (meta);
 }
 
-static CoglHandle
+static CoglTexture*
 clutter_offscreen_effect_real_create_texture (ClutterOffscreenEffect *effect,
                                               gfloat                  width,
                                               gfloat                  height)
@@ -256,7 +256,7 @@ update_fbo (ClutterEffect *effect,
     return TRUE;
   }
 
-  g_clear_pointer (&priv->texture, cogl_object_unref);
+  g_clear_object (&priv->texture);
   g_clear_object (&priv->offscreen);
 
   priv->texture =
@@ -274,7 +274,7 @@ update_fbo (ClutterEffect *effect,
                  error->message);
 
       g_object_unref (offscreen);
-      cogl_clear_object (&priv->pipeline);
+      g_clear_object (&priv->pipeline);
 
       priv->target_width = 0;
       priv->target_height = 0;
@@ -284,7 +284,7 @@ update_fbo (ClutterEffect *effect,
 
   priv->offscreen = offscreen;
 
-  cogl_clear_object (&priv->pipeline);
+  g_clear_object (&priv->pipeline);
   priv->pipeline = offscreen_class->create_pipeline (self, priv->texture);
 
   return TRUE;
@@ -576,8 +576,8 @@ clutter_offscreen_effect_finalize (GObject *gobject)
   ClutterOffscreenEffectPrivate *priv = self->priv;
 
   g_clear_object (&priv->offscreen);
-  g_clear_pointer (&priv->texture, cogl_object_unref);
-  g_clear_pointer (&priv->pipeline, cogl_object_unref);
+  g_clear_object (&priv->texture);
+  g_clear_object (&priv->pipeline);
 
   G_OBJECT_CLASS (clutter_offscreen_effect_parent_class)->finalize (gobject);
 }
@@ -624,11 +624,11 @@ clutter_offscreen_effect_init (ClutterOffscreenEffect *self)
  * used instead of [method@OffscreenEffect.get_texture] when the
  * effect subclass wants to paint using its own material.
  *
- * Return value: (transfer none): a #CoglHandle or %NULL. The
+ * Return value: (transfer none): a #CoglTexture or %NULL. The
  *   returned texture is owned by Clutter and it should not be
  *   modified or freed
  */
-CoglHandle
+CoglTexture*
 clutter_offscreen_effect_get_texture (ClutterOffscreenEffect *effect)
 {
   g_return_val_if_fail (CLUTTER_IS_OFFSCREEN_EFFECT (effect),
@@ -692,7 +692,7 @@ clutter_offscreen_effect_paint_target (ClutterOffscreenEffect *effect,
  *   %NULL. The returned handle has its reference
  *   count increased.
  */
-CoglHandle
+CoglTexture*
 clutter_offscreen_effect_create_texture (ClutterOffscreenEffect *effect,
                                          gfloat                  width,
                                          gfloat                  height)

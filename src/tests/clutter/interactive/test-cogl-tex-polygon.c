@@ -4,6 +4,7 @@
 #include <clutter/clutter.h>
 #include <cogl/cogl.h>
 
+#include "clutter/test-utils.h"
 #include "tests/clutter-test-utils.h"
 
 /* Coglbox declaration
@@ -100,7 +101,7 @@ test_coglbox_fade_texture (CoglFramebuffer *framebuffer,
                                4,
                                vertices);
   cogl_primitive_draw (primitive, framebuffer, pipeline);
-  cogl_object_unref (primitive);
+  g_object_unref (primitive);
 }
 
 static void
@@ -143,7 +144,7 @@ test_coglbox_triangle_texture (CoglFramebuffer *framebuffer,
                                        3,
                                        vertices);
   cogl_primitive_draw (primitive, framebuffer, pipeline);
-  cogl_object_unref (primitive);
+  g_object_unref (primitive);
 }
 
 static void
@@ -210,7 +211,7 @@ test_coglbox_paint (ClutterActor        *self,
 
   cogl_framebuffer_pop_matrix (framebuffer);
 
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 }
 
 static void
@@ -218,8 +219,8 @@ test_coglbox_dispose (GObject *object)
 {
   TestCoglbox *coglbox = TEST_COGLBOX (object);
 
-  cogl_object_unref (coglbox->not_sliced_tex);
-  cogl_object_unref (coglbox->sliced_tex);
+  g_object_unref (coglbox->not_sliced_tex);
+  g_object_unref (coglbox->sliced_tex);
 
   G_OBJECT_CLASS (test_coglbox_parent_class)->dispose (object);
 }
@@ -237,9 +238,8 @@ test_coglbox_init (TestCoglbox *self)
 
   file = g_build_filename (TESTS_DATADIR, "redhand.png", NULL);
   self->sliced_tex =
-    cogl_texture_2d_sliced_new_from_file (ctx, file,
-                                          COGL_TEXTURE_MAX_WASTE,
-                                          &error);
+    clutter_test_texture_2d_sliced_new_from_file (ctx, file,
+                                                  &error);
   if (self->sliced_tex == NULL)
     {
       if (error)
@@ -252,7 +252,7 @@ test_coglbox_init (TestCoglbox *self)
         g_warning ("Texture loading failed: <unknown>");
     }
 
-  self->not_sliced_tex = cogl_texture_2d_new_from_file (ctx, file, &error);
+  self->not_sliced_tex = clutter_test_texture_2d_new_from_file (ctx, file, &error);
   if (self->not_sliced_tex == NULL)
     {
       if (error)

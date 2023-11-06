@@ -33,32 +33,37 @@
 
 #include "cogl-config.h"
 
-#include "cogl/cogl-object-private.h"
 #include "cogl/cogl-attribute-buffer.h"
 #include "cogl/cogl-attribute-buffer-private.h"
 #include "cogl/cogl-context-private.h"
-#include "cogl/cogl-gtype-private.h"
 
-static void _cogl_attribute_buffer_free (CoglAttributeBuffer *array);
+G_DEFINE_FINAL_TYPE (CoglAttributeBuffer, cogl_attribute_buffer, COGL_TYPE_BUFFER)
 
-COGL_BUFFER_DEFINE (AttributeBuffer, attribute_buffer);
-COGL_GTYPE_DEFINE_CLASS (AttributeBuffer, attribute_buffer);
+static void
+cogl_attribute_buffer_class_init (CoglAttributeBufferClass *klass)
+{
+}
+
+static void
+cogl_attribute_buffer_init (CoglAttributeBuffer *buffer)
+{
+}
 
 CoglAttributeBuffer *
 cogl_attribute_buffer_new_with_size (CoglContext *context,
                                      size_t bytes)
 {
-  CoglAttributeBuffer *buffer = g_new0 (CoglAttributeBuffer, 1);
+  CoglAttributeBuffer *buffer;
 
-  /* parent's constructor */
-  _cogl_buffer_initialize (COGL_BUFFER (buffer),
-                           context,
-                           bytes,
-                           COGL_BUFFER_BIND_TARGET_ATTRIBUTE_BUFFER,
-                           COGL_BUFFER_USAGE_HINT_ATTRIBUTE_BUFFER,
-                           COGL_BUFFER_UPDATE_HINT_STATIC);
+  buffer = g_object_new (COGL_TYPE_ATTRIBUTE_BUFFER,
+                         "context", context,
+                         "size", bytes,
+                         "default-target", COGL_BUFFER_BIND_TARGET_ATTRIBUTE_BUFFER,
+                         "usage-hint", COGL_BUFFER_USAGE_HINT_ATTRIBUTE_BUFFER,
+                         "update-hint", COGL_BUFFER_UPDATE_HINT_STATIC,
+                         NULL);
 
-  return _cogl_attribute_buffer_object_new (buffer);
+  return buffer;
 }
 
 CoglAttributeBuffer *
@@ -90,13 +95,3 @@ cogl_attribute_buffer_new (CoglContext *context,
 
   return buffer;
 }
-
-static void
-_cogl_attribute_buffer_free (CoglAttributeBuffer *array)
-{
-  /* parent's destructor */
-  _cogl_buffer_fini (COGL_BUFFER (array));
-
-  g_free (array);
-}
-

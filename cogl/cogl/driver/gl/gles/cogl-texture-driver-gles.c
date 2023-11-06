@@ -42,7 +42,6 @@
 #include "cogl/cogl-texture-private.h"
 #include "cogl/cogl-pipeline.h"
 #include "cogl/cogl-context-private.h"
-#include "cogl/cogl-object-private.h"
 #include "cogl/driver/gl/cogl-pipeline-opengl-private.h"
 #include "cogl/driver/gl/cogl-util-gl-private.h"
 #include "cogl/driver/gl/cogl-texture-gl-private.h"
@@ -164,7 +163,7 @@ prepare_bitmap_alignment_for_upload (CoglContext *ctx,
 
   if (_cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_UNPACK_SUBIMAGE) ||
       src_rowstride == 0)
-    return cogl_object_ref (src_bmp);
+    return g_object_ref (src_bmp);
 
   /* Work out the alignment of the source rowstride */
   alignment = 1 << (ffs (src_rowstride) - 1);
@@ -173,7 +172,7 @@ prepare_bitmap_alignment_for_upload (CoglContext *ctx,
   /* If the aligned data equals the rowstride then we can upload from
      the bitmap directly using GL_UNPACK_ALIGNMENT */
   if (((width * bpp + alignment - 1) & ~(alignment - 1)) == src_rowstride)
-    return cogl_object_ref (src_bmp);
+    return g_object_ref (src_bmp);
   /* Otherwise we need to copy the bitmap to pack the alignment
      because GLES has no GL_ROW_LENGTH */
   else
@@ -238,7 +237,7 @@ _cogl_texture_driver_upload_subregion_to_gl (CoglContext *ctx,
                                         width, height,
                                         error))
         {
-          cogl_object_unref (slice_bmp);
+          g_object_unref (slice_bmp);
           return FALSE;
         }
 
@@ -264,7 +263,7 @@ _cogl_texture_driver_upload_subregion_to_gl (CoglContext *ctx,
   if (internal_error)
     {
       g_propagate_error (error, internal_error);
-      cogl_object_unref (slice_bmp);
+      g_object_unref (slice_bmp);
       return FALSE;
     }
 
@@ -303,7 +302,7 @@ _cogl_texture_driver_upload_subregion_to_gl (CoglContext *ctx,
        * glTexImage2D first to assert that the storage for this
        * level exists.
        */
-      if (texture->max_level_set < level)
+      if (cogl_texture_get_max_level_set (texture) < level)
         {
           ctx->glTexImage2D (gl_target,
                              level,
@@ -330,7 +329,7 @@ _cogl_texture_driver_upload_subregion_to_gl (CoglContext *ctx,
 
   _cogl_bitmap_gl_unbind (slice_bmp);
 
-  cogl_object_unref (slice_bmp);
+  g_object_unref (slice_bmp);
 
   return status;
 }
@@ -382,7 +381,7 @@ _cogl_texture_driver_upload_to_gl (CoglContext *ctx,
    * problems... */
   if (internal_error)
     {
-      cogl_object_unref (bmp);
+      g_object_unref (bmp);
       g_propagate_error (error, internal_error);
       return FALSE;
     }
@@ -403,7 +402,7 @@ _cogl_texture_driver_upload_to_gl (CoglContext *ctx,
 
   _cogl_bitmap_gl_unbind (bmp);
 
-  cogl_object_unref (bmp);
+  g_object_unref (bmp);
 
   return status;
 }

@@ -34,7 +34,6 @@
 
 #pragma once
 
-#include "cogl/cogl-object-private.h"
 #include "cogl/cogl-buffer-private.h"
 
 #include <glib.h>
@@ -43,7 +42,12 @@ G_BEGIN_DECLS
 
 struct _CoglPixelBuffer
 {
-  CoglBuffer            _parent;
+  CoglBuffer parent_instance;
+};
+
+struct _CoglPixelBufferClass
+{
+  CoglBufferClass parent_class;
 };
 
 G_END_DECLS

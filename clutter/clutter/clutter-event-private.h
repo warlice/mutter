@@ -4,11 +4,21 @@
 
 G_BEGIN_DECLS
 
+typedef struct _ClutterModifierSet ClutterModifierSet;
+
+struct _ClutterModifierSet
+{
+  ClutterModifierType pressed;
+  ClutterModifierType latched;
+  ClutterModifierType locked;
+};
+
 CLUTTER_EXPORT
 ClutterEvent * clutter_event_key_new (ClutterEventType     type,
                                       ClutterEventFlags    flags,
                                       int64_t              timestamp_us,
                                       ClutterInputDevice  *source_device,
+                                      ClutterModifierSet   raw_modifiers,
                                       ClutterModifierType  modifiers,
                                       uint32_t             keyval,
                                       uint32_t             evcode,

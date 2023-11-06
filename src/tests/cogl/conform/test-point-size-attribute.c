@@ -92,7 +92,7 @@ create_primitive (const char *attribute_name)
                                              2 /* n_attributes */);
 
   for (i = 0; i < 2; i++)
-    cogl_object_unref (attributes[i]);
+    g_object_unref (attributes[i]);
 
   return prim;
 }
@@ -124,8 +124,8 @@ do_test (const char *attribute_name,
   if (pipeline_setup_func)
     pipeline_setup_func (pipeline);
   cogl_primitive_draw (primitive, test_fb, pipeline);
-  cogl_object_unref (pipeline);
-  cogl_object_unref (primitive);
+  g_object_unref (pipeline);
+  g_object_unref (primitive);
 
   /* Verify all of the points where drawn at the right size */
   for (i = 0; i < N_POINTS; i++)
@@ -157,7 +157,7 @@ setup_snippet (CoglPipeline *pipeline)
                             "cogl_point_size_out = "
                             "my_super_duper_point_size_attrib;\n");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 }
 
 static void

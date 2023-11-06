@@ -53,7 +53,7 @@ cogl_poll_renderer_get_info (CoglRenderer *renderer,
 {
   GList *l, *next;
 
-  g_return_val_if_fail (cogl_is_renderer (renderer), 0);
+  g_return_val_if_fail (COGL_IS_RENDERER (renderer), 0);
   g_return_val_if_fail (poll_fds != NULL, 0);
   g_return_val_if_fail (n_poll_fds != NULL, 0);
   g_return_val_if_fail (timeout != NULL, 0);
@@ -95,7 +95,7 @@ cogl_poll_renderer_dispatch (CoglRenderer *renderer,
 {
   GList *l, *next;
 
-  g_return_if_fail (cogl_is_renderer (renderer));
+  g_return_if_fail (COGL_IS_RENDERER (renderer));
 
   _cogl_closure_list_invoke_no_args (&renderer->idle_closures);
 
@@ -169,25 +169,6 @@ _cogl_poll_renderer_remove_fd (CoglRenderer *renderer, int fd)
 }
 
 void
-_cogl_poll_renderer_modify_fd (CoglRenderer *renderer,
-                               int fd,
-                               CoglPollFDEvent events)
-{
-  int fd_index = find_pollfd (renderer, fd);
-
-  if (fd_index == -1)
-    g_warn_if_reached ();
-  else
-    {
-      CoglPollFD *pollfd =
-        &g_array_index (renderer->poll_sources, CoglPollFD, fd_index);
-
-      pollfd->events = events;
-      renderer->poll_fds_age++;
-    }
-}
-
-void
 _cogl_poll_renderer_add_fd (CoglRenderer *renderer,
                             int fd,
                             CoglPollFDEvent events,
@@ -234,29 +215,11 @@ _cogl_poll_renderer_add_source (CoglRenderer *renderer,
   return source;
 }
 
-void
-_cogl_poll_renderer_remove_source (CoglRenderer *renderer,
-                                   CoglPollSource *source)
-{
-  GList *l;
-
-  for (l = renderer->poll_sources; l; l = l->next)
-    {
-      if (l->data == source)
-        {
-          renderer->poll_sources =
-            g_list_delete_link (renderer->poll_sources, l);
-          g_free (source);
-          break;
-        }
-    }
-}
-
 CoglClosure *
 _cogl_poll_renderer_add_idle (CoglRenderer *renderer,
                               CoglIdleCallback idle_cb,
                               void *user_data,
-                              CoglUserDataDestroyCallback destroy_cb)
+                              GDestroyNotify destroy_cb)
 {
   return _cogl_closure_list_add (&renderer->idle_closures,
                                 idle_cb,

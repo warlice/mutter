@@ -28,11 +28,11 @@ supported_mtk_debug_c_args = cc.get_supported_arguments(mtk_debug_c_args)
 mtk_c_args += mtk_debug_c_args
 
 mtk_pkg_deps = [
-  cairo_gobject_dep,
   glib_dep,
   gobject_dep,
   gio_dep,
   graphene_dep,
+  pixman_dep,
 ]
 
 if have_x11

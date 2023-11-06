@@ -11,7 +11,7 @@ test_pipeline_shader_state (void)
   CoglFramebuffer *fb;
   CoglPipeline *base_pipeline;
   CoglPipeline *draw_pipeline;
-  CoglTexture2D *tex;
+  CoglTexture *tex;
   CoglSnippet *snippet;
 
   float width = cogl_framebuffer_get_width (test_fb);
@@ -47,12 +47,12 @@ test_pipeline_shader_state (void)
                               NULL, /* declarations */
                               "cogl_color_out = vec4 (0.0, 1.0, 0.1, 1.1);");
   cogl_pipeline_add_snippet (draw_pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_rectangle (test_fb, draw_pipeline,
                                    0, 0, width, height);
 
-  cogl_object_unref (draw_pipeline);
+  g_object_unref (draw_pipeline);
 
   cogl_framebuffer_finish (test_fb);
 
@@ -80,12 +80,12 @@ test_pipeline_shader_state (void)
                               NULL, /* declarations */
                               "cogl_color_out = vec4 (0.0, 0.0, 1.1, 1.1);");
   cogl_pipeline_add_snippet (draw_pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_rectangle (test_fb, draw_pipeline,
                                    0, 0, width, height);
 
-  cogl_object_unref (draw_pipeline);
+  g_object_unref (draw_pipeline);
 
 
   test_utils_check_region (test_fb, 0, 0, width, height,

@@ -45,24 +45,16 @@
 #include "cogl/cogl-texture-2d-sliced-private.h"
 #include "cogl/cogl-texture-driver.h"
 #include "cogl/cogl-context-private.h"
-#include "cogl/cogl-object-private.h"
 #include "cogl/cogl-spans.h"
 #include "cogl/cogl-journal-private.h"
 #include "cogl/cogl-primitive-texture.h"
-#include "cogl/cogl-gtype-private.h"
 #include "cogl/driver/gl/cogl-texture-gl-private.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
 
-static void _cogl_texture_2d_sliced_free (CoglTexture2DSliced *tex_2ds);
-
-COGL_TEXTURE_DEFINE (Texture2DSliced, texture_2d_sliced);
-COGL_GTYPE_DEFINE_CLASS (Texture2DSliced, texture_2d_sliced,
-                         COGL_GTYPE_IMPLEMENT_INTERFACE (texture));
-
-static const CoglTextureVtable cogl_texture_2d_sliced_vtable;
+G_DEFINE_FINAL_TYPE (CoglTexture2DSliced, cogl_texture_2d_sliced, COGL_TYPE_TEXTURE)
 
 typedef struct _ForeachData
 {
@@ -72,485 +64,52 @@ typedef struct _ForeachData
   float y_normalize_factor;
 } ForeachData;
 
-static void
-re_normalize_sub_texture_coords_cb (CoglTexture *sub_texture,
-                                    const float *sub_texture_coords,
-                                    const float *meta_coords,
-                                    void *user_data)
-{
-  ForeachData *data = user_data;
-  /* The coordinates passed to the span iterating code were
-   * un-normalized so we need to renormalize them before passing them
-   * on */
-  float re_normalized_coords[4] =
-    {
-      meta_coords[0] * data->x_normalize_factor,
-      meta_coords[1] * data->y_normalize_factor,
-      meta_coords[2] * data->x_normalize_factor,
-      meta_coords[3] * data->y_normalize_factor
-    };
 
-  data->callback (sub_texture, sub_texture_coords, re_normalized_coords,
-                  data->user_data);
+static void
+free_spans (CoglTexture2DSliced *tex_2ds)
+{
+  if (tex_2ds->slice_x_spans != NULL)
+    {
+      g_array_free (tex_2ds->slice_x_spans, TRUE);
+      tex_2ds->slice_x_spans = NULL;
+    }
+
+  if (tex_2ds->slice_y_spans != NULL)
+    {
+      g_array_free (tex_2ds->slice_y_spans, TRUE);
+      tex_2ds->slice_y_spans = NULL;
+    }
 }
 
 static void
-_cogl_texture_2d_sliced_foreach_sub_texture_in_region (
-                                       CoglTexture *tex,
-                                       float virtual_tx_1,
-                                       float virtual_ty_1,
-                                       float virtual_tx_2,
-                                       float virtual_ty_2,
-                                       CoglMetaTextureCallback callback,
-                                       void *user_data)
+free_slices (CoglTexture2DSliced *tex_2ds)
 {
-  CoglTexture2DSliced *tex_2ds = COGL_TEXTURE_2D_SLICED (tex);
-  CoglSpan *x_spans = (CoglSpan *)tex_2ds->slice_x_spans->data;
-  CoglSpan *y_spans = (CoglSpan *)tex_2ds->slice_y_spans->data;
-  CoglTexture **textures = (CoglTexture **)tex_2ds->slice_textures->data;
-  float un_normalized_coords[4];
-  ForeachData data;
-
-  /* NB: its convenient for us to store non-normalized coordinates in
-   * our CoglSpans but that means we need to un-normalize the incoming
-   * virtual coordinates and make sure we re-normalize the coordinates
-   * before calling the given callback.
-   */
-
-  data.callback = callback;
-  data.user_data = user_data;
-  data.x_normalize_factor = 1.0f / tex->width;
-  data.y_normalize_factor = 1.0f / tex->height;
-
-  un_normalized_coords[0] = virtual_tx_1 * tex->width;
-  un_normalized_coords[1] = virtual_ty_1 * tex->height;
-  un_normalized_coords[2] = virtual_tx_2 * tex->width;
-  un_normalized_coords[3] = virtual_ty_2 * tex->height;
-
-  /* Note that the normalize factors passed here are the reciprocal of
-   * the factors calculated above because the span iterating code
-   * normalizes by dividing by the factor instead of multiplying */
-  _cogl_texture_spans_foreach_in_region (x_spans,
-                                         tex_2ds->slice_x_spans->len,
-                                         y_spans,
-                                         tex_2ds->slice_y_spans->len,
-                                         textures,
-                                         un_normalized_coords,
-                                         tex->width,
-                                         tex->height,
-                                         COGL_PIPELINE_WRAP_MODE_REPEAT,
-                                         COGL_PIPELINE_WRAP_MODE_REPEAT,
-                                         re_normalize_sub_texture_coords_cb,
-                                         &data);
-}
-
-static uint8_t *
-_cogl_texture_2d_sliced_allocate_waste_buffer (CoglTexture2DSliced *tex_2ds,
-                                               CoglPixelFormat format)
-{
-  CoglSpan *last_x_span;
-  CoglSpan *last_y_span;
-  uint8_t *waste_buf = NULL;
-
-  g_return_val_if_fail (format != COGL_PIXEL_FORMAT_ANY, NULL);
-  g_return_val_if_fail (cogl_pixel_format_get_n_planes (format) == 1, NULL);
-
-  /* If the texture has any waste then allocate a buffer big enough to
-     fill the gaps */
-  last_x_span = &g_array_index (tex_2ds->slice_x_spans, CoglSpan,
-                                tex_2ds->slice_x_spans->len - 1);
-  last_y_span = &g_array_index (tex_2ds->slice_y_spans, CoglSpan,
-                                tex_2ds->slice_y_spans->len - 1);
-  if (last_x_span->waste > 0 || last_y_span->waste > 0)
+  if (tex_2ds->slice_textures != NULL)
     {
-      int bpp = cogl_pixel_format_get_bytes_per_pixel (format, 0);
-      CoglSpan  *first_x_span
-        = &g_array_index (tex_2ds->slice_x_spans, CoglSpan, 0);
-      CoglSpan  *first_y_span
-        = &g_array_index (tex_2ds->slice_y_spans, CoglSpan, 0);
-      unsigned int right_size = first_y_span->size * last_x_span->waste;
-      unsigned int bottom_size = first_x_span->size * last_y_span->waste;
+      int i;
 
-      waste_buf = g_malloc (MAX (right_size, bottom_size) * bpp);
-    }
-
-  return waste_buf;
-}
-
-static gboolean
-_cogl_texture_2d_sliced_set_waste (CoglTexture2DSliced *tex_2ds,
-                                   CoglBitmap *source_bmp,
-                                   CoglTexture2D *slice_tex,
-                                   uint8_t *waste_buf,
-                                   CoglSpan *x_span,
-                                   CoglSpan *y_span,
-                                   CoglSpanIter *x_iter,
-                                   CoglSpanIter *y_iter,
-                                   int src_x,
-                                   int src_y,
-                                   int dst_x,
-                                   int dst_y,
-                                   GError **error)
-{
-  gboolean need_x, need_y;
-  CoglContext *ctx = COGL_TEXTURE (tex_2ds)->context;
-
-  /* If the x_span is sliced and the upload touches the
-     rightmost pixels then fill the waste with copies of the
-     pixels */
-  need_x = x_span->waste > 0 &&
-    x_iter->intersect_end - x_iter->pos >= x_span->size - x_span->waste;
-
-  /* same for the bottom-most pixels */
-  need_y = y_span->waste > 0 &&
-    y_iter->intersect_end - y_iter->pos >= y_span->size - y_span->waste;
-
-  if (need_x || need_y)
-    {
-      int bmp_rowstride = cogl_bitmap_get_rowstride (source_bmp);
-      CoglPixelFormat source_format = cogl_bitmap_get_format (source_bmp);
-      int bpp;
-      uint8_t *bmp_data;
-      const uint8_t *src;
-      uint8_t *dst;
-      unsigned int wy, wx;
-      CoglBitmap *waste_bmp;
-
-      /* We only support single plane formats here */
-      if (cogl_pixel_format_get_n_planes (source_format) == 1)
-        return FALSE;
-
-      bmp_data = _cogl_bitmap_map (source_bmp, COGL_BUFFER_ACCESS_READ, 0, error);
-      if (bmp_data == NULL)
-        return FALSE;
-
-      bpp = cogl_pixel_format_get_bytes_per_pixel (source_format, 0);
-
-      if (need_x)
+      for (i = 0; i < tex_2ds->slice_textures->len; i++)
         {
-          src = (bmp_data + ((src_y + (int) y_iter->intersect_start - dst_y) *
-                             bmp_rowstride) +
-                 (src_x + (int)x_span->start + (int)x_span->size -
-                  (int)x_span->waste - dst_x - 1) * bpp);
-
-          dst = waste_buf;
-
-          for (wy = 0;
-               wy < y_iter->intersect_end - y_iter->intersect_start;
-               wy++)
-            {
-              for (wx = 0; wx < x_span->waste; wx++)
-                {
-                  memcpy (dst, src, bpp);
-                  dst += bpp;
-                }
-              src += bmp_rowstride;
-            }
-
-          waste_bmp = cogl_bitmap_new_for_data (ctx,
-                                                x_span->waste,
-                                                y_iter->intersect_end -
-                                                y_iter->intersect_start,
-                                                source_format,
-                                                x_span->waste * bpp,
-                                                waste_buf);
-
-          if (!_cogl_texture_set_region_from_bitmap (COGL_TEXTURE (slice_tex),
-                                                     0, /* src_x */
-                                                     0, /* src_y */
-                                                     x_span->waste, /* width */
-                                                     /* height */
-                                                     y_iter->intersect_end -
-                                                     y_iter->intersect_start,
-                                                     waste_bmp,
-                                                     /* dst_x */
-                                                     x_span->size - x_span->waste,
-                                                     y_iter->intersect_start -
-                                                     y_span->start, /* dst_y */
-                                                     0, /* level */
-                                                     error))
-            {
-              cogl_object_unref (waste_bmp);
-              _cogl_bitmap_unmap (source_bmp);
-              return FALSE;
-            }
-
-          cogl_object_unref (waste_bmp);
+          CoglTexture2D *slice_tex =
+            g_array_index (tex_2ds->slice_textures, CoglTexture2D *, i);
+          g_object_unref (slice_tex);
         }
 
-      if (need_y)
-        {
-          unsigned int copy_width, intersect_width;
-
-          src = (bmp_data + ((src_x + (int) x_iter->intersect_start - dst_x) *
-                             bpp) +
-                 (src_y + (int)y_span->start + (int)y_span->size -
-                  (int)y_span->waste - dst_y - 1) * bmp_rowstride);
-
-          dst = waste_buf;
-
-          if (x_iter->intersect_end - x_iter->pos
-              >= x_span->size - x_span->waste)
-            copy_width = x_span->size + x_iter->pos - x_iter->intersect_start;
-          else
-            copy_width = x_iter->intersect_end - x_iter->intersect_start;
-
-          intersect_width = x_iter->intersect_end - x_iter->intersect_start;
-
-          for (wy = 0; wy < y_span->waste; wy++)
-            {
-              memcpy (dst, src, intersect_width * bpp);
-              dst += intersect_width * bpp;
-
-              for (wx = intersect_width; wx < copy_width; wx++)
-                {
-                  memcpy (dst, dst - bpp, bpp);
-                  dst += bpp;
-                }
-            }
-
-          waste_bmp = cogl_bitmap_new_for_data (ctx,
-                                                copy_width,
-                                                y_span->waste,
-                                                source_format,
-                                                copy_width * bpp,
-                                                waste_buf);
-
-          if (!_cogl_texture_set_region_from_bitmap (COGL_TEXTURE (slice_tex),
-                                                     0, /* src_x */
-                                                     0, /* src_y */
-                                                     copy_width, /* width */
-                                                     y_span->waste, /* height */
-                                                     waste_bmp,
-                                                     /* dst_x */
-                                                     x_iter->intersect_start -
-                                                     x_iter->pos,
-                                                     /* dst_y */
-                                                     y_span->size - y_span->waste,
-                                                     0, /* level */
-                                                     error))
-            {
-              cogl_object_unref (waste_bmp);
-              _cogl_bitmap_unmap (source_bmp);
-              return FALSE;
-            }
-
-          cogl_object_unref (waste_bmp);
-        }
-
-      _cogl_bitmap_unmap (source_bmp);
+      g_array_free (tex_2ds->slice_textures, TRUE);
+      tex_2ds->slice_textures = NULL;
     }
 
-  return TRUE;
+  free_spans (tex_2ds);
 }
 
-static gboolean
-_cogl_texture_2d_sliced_upload_bitmap (CoglTexture2DSliced *tex_2ds,
-                                       CoglBitmap *bmp,
-                                       GError **error)
+static void
+cogl_texture_2d_sliced_dispose (GObject *object)
 {
-  CoglSpan *x_span;
-  CoglSpan *y_span;
-  CoglTexture2D *slice_tex;
-  int x, y;
-  uint8_t *waste_buf;
-  CoglPixelFormat bmp_format;
+  CoglTexture2DSliced *tex_2ds = COGL_TEXTURE_2D_SLICED (object);
 
-  bmp_format = cogl_bitmap_get_format (bmp);
+  free_slices (tex_2ds);
 
-  waste_buf = _cogl_texture_2d_sliced_allocate_waste_buffer (tex_2ds,
-                                                             bmp_format);
-
-  /* Iterate vertical slices */
-  for (y = 0; y < tex_2ds->slice_y_spans->len; ++y)
-    {
-      y_span = &g_array_index (tex_2ds->slice_y_spans, CoglSpan, y);
-
-      /* Iterate horizontal slices */
-      for (x = 0; x < tex_2ds->slice_x_spans->len; ++x)
-        {
-          int slice_num = y * tex_2ds->slice_x_spans->len + x;
-          CoglSpanIter x_iter, y_iter;
-
-          x_span = &g_array_index (tex_2ds->slice_x_spans, CoglSpan, x);
-
-          /* Pick the gl texture object handle */
-          slice_tex = g_array_index (tex_2ds->slice_textures,
-                                     CoglTexture2D *, slice_num);
-
-          if (!_cogl_texture_set_region_from_bitmap (COGL_TEXTURE (slice_tex),
-                                                     x_span->start, /* src x */
-                                                     y_span->start, /* src y */
-                                                     x_span->size -
-                                                     x_span->waste, /* width */
-                                                     y_span->size -
-                                                     y_span->waste, /* height */
-                                                     bmp,
-                                                     0, /* dst x */
-                                                     0, /* dst y */
-                                                     0, /* level */
-                                                     error))
-            {
-              if (waste_buf)
-                g_free (waste_buf);
-              return FALSE;
-            }
-
-          /* Set up a fake iterator that covers the whole slice */
-          x_iter.intersect_start = x_span->start;
-          x_iter.intersect_end = (x_span->start +
-                                  x_span->size -
-                                  x_span->waste);
-          x_iter.pos = x_span->start;
-
-          y_iter.intersect_start = y_span->start;
-          y_iter.intersect_end = (y_span->start +
-                                  y_span->size -
-                                  y_span->waste);
-          y_iter.pos = y_span->start;
-
-          if (!_cogl_texture_2d_sliced_set_waste (tex_2ds,
-                                                  bmp,
-                                                  slice_tex,
-                                                  waste_buf,
-                                                  x_span, y_span,
-                                                  &x_iter, &y_iter,
-                                                  0, /* src_x */
-                                                  0, /* src_y */
-                                                  0, /* dst_x */
-                                                  0,
-                                                  error)) /* dst_y */
-            {
-              if (waste_buf)
-                g_free (waste_buf);
-              return FALSE;
-            }
-        }
-    }
-
-  if (waste_buf)
-    g_free (waste_buf);
-
-  return TRUE;
-}
-
-static gboolean
-_cogl_texture_2d_sliced_upload_subregion (CoglTexture2DSliced *tex_2ds,
-                                          int src_x,
-                                          int src_y,
-                                          int dst_x,
-                                          int dst_y,
-                                          int width,
-                                          int height,
-                                          CoglBitmap *source_bmp,
-                                          GError **error)
-{
-  CoglTexture *tex = COGL_TEXTURE (tex_2ds);
-  CoglSpan *x_span;
-  CoglSpan *y_span;
-  CoglSpanIter x_iter;
-  CoglSpanIter y_iter;
-  CoglTexture2D *slice_tex;
-  int source_x = 0, source_y = 0;
-  int inter_w = 0, inter_h = 0;
-  int local_x = 0, local_y = 0;
-  uint8_t *waste_buf;
-  CoglPixelFormat source_format;
-
-  source_format = cogl_bitmap_get_format (source_bmp);
-
-  waste_buf =
-    _cogl_texture_2d_sliced_allocate_waste_buffer (tex_2ds, source_format);
-
-  /* Iterate vertical spans */
-  for (source_y = src_y,
-       _cogl_span_iter_begin (&y_iter,
-                              (CoglSpan *)tex_2ds->slice_y_spans->data,
-                              tex_2ds->slice_y_spans->len,
-                              tex->height,
-                              dst_y,
-                              dst_y + height,
-                              COGL_PIPELINE_WRAP_MODE_REPEAT);
-
-       !_cogl_span_iter_end (&y_iter);
-
-       _cogl_span_iter_next (&y_iter),
-       source_y += inter_h )
-    {
-      y_span = &g_array_index (tex_2ds->slice_y_spans, CoglSpan,
-                               y_iter.index);
-
-      /* Iterate horizontal spans */
-      for (source_x = src_x,
-           _cogl_span_iter_begin (&x_iter,
-                                  (CoglSpan *)tex_2ds->slice_x_spans->data,
-                                  tex_2ds->slice_x_spans->len,
-                                  tex->width,
-                                  dst_x,
-                                  dst_x + width,
-                                  COGL_PIPELINE_WRAP_MODE_REPEAT);
-
-           !_cogl_span_iter_end (&x_iter);
-
-           _cogl_span_iter_next (&x_iter),
-           source_x += inter_w )
-        {
-          int slice_num;
-
-          x_span = &g_array_index (tex_2ds->slice_x_spans, CoglSpan,
-                                   x_iter.index);
-
-          /* Pick intersection width and height */
-          inter_w =  (x_iter.intersect_end - x_iter.intersect_start);
-          inter_h =  (y_iter.intersect_end - y_iter.intersect_start);
-
-          /* Localize intersection top-left corner to slice*/
-          local_x =  (x_iter.intersect_start - x_iter.pos);
-          local_y =  (y_iter.intersect_start - y_iter.pos);
-
-          slice_num = y_iter.index * tex_2ds->slice_x_spans->len + x_iter.index;
-
-          /* Pick slice texture */
-          slice_tex = g_array_index (tex_2ds->slice_textures,
-                                     CoglTexture2D *, slice_num);
-
-          if (!_cogl_texture_set_region_from_bitmap (COGL_TEXTURE (slice_tex),
-                                                     source_x,
-                                                     source_y,
-                                                     inter_w, /* width */
-                                                     inter_h, /* height */
-                                                     source_bmp,
-                                                     local_x, /* dst x */
-                                                     local_y, /* dst y */
-                                                     0, /* level */
-                                                     error))
-            {
-              if (waste_buf)
-                g_free (waste_buf);
-              return FALSE;
-            }
-
-          if (!_cogl_texture_2d_sliced_set_waste (tex_2ds,
-                                                  source_bmp,
-                                                  slice_tex,
-                                                  waste_buf,
-                                                  x_span, y_span,
-                                                  &x_iter, &y_iter,
-                                                  src_x, src_y,
-                                                  dst_x, dst_y,
-                                                  error))
-            {
-              if (waste_buf)
-                g_free (waste_buf);
-              return FALSE;
-            }
-        }
-    }
-
-  if (waste_buf)
-    g_free (waste_buf);
-
-  return TRUE;
+  G_OBJECT_CLASS (cogl_texture_2d_sliced_parent_class)->dispose (object);
 }
 
 static int
@@ -588,43 +147,6 @@ _cogl_rect_slices_for_size (int     size_to_fill,
     }
 
   return n_spans;
-}
-
-static void
-_cogl_texture_2d_sliced_gl_flush_legacy_texobj_wrap_modes (CoglTexture *tex,
-                                                           GLenum wrap_mode_s,
-                                                           GLenum wrap_mode_t)
-{
-  CoglTexture2DSliced *tex_2ds = COGL_TEXTURE_2D_SLICED (tex);
-  int i;
-
-  /* Pass the set wrap mode on to all of the child textures */
-  for (i = 0; i < tex_2ds->slice_textures->len; i++)
-    {
-      CoglTexture2D *slice_tex = g_array_index (tex_2ds->slice_textures,
-                                                CoglTexture2D *,
-                                                i);
-
-      _cogl_texture_gl_flush_legacy_texobj_wrap_modes (COGL_TEXTURE (slice_tex),
-                                                       wrap_mode_s,
-                                                       wrap_mode_t);
-    }
-}
-
-static void
-free_spans (CoglTexture2DSliced *tex_2ds)
-{
-  if (tex_2ds->slice_x_spans != NULL)
-    {
-      g_array_free (tex_2ds->slice_x_spans, TRUE);
-      tex_2ds->slice_x_spans = NULL;
-    }
-
-  if (tex_2ds->slice_y_spans != NULL)
-    {
-      g_array_free (tex_2ds->slice_y_spans, TRUE);
-      tex_2ds->slice_y_spans = NULL;
-    }
 }
 
 static gboolean
@@ -745,27 +267,6 @@ setup_spans (CoglContext *ctx,
   return TRUE;
 }
 
-static void
-free_slices (CoglTexture2DSliced *tex_2ds)
-{
-  if (tex_2ds->slice_textures != NULL)
-    {
-      int i;
-
-      for (i = 0; i < tex_2ds->slice_textures->len; i++)
-        {
-          CoglTexture2D *slice_tex =
-            g_array_index (tex_2ds->slice_textures, CoglTexture2D *, i);
-          cogl_object_unref (slice_tex);
-        }
-
-      g_array_free (tex_2ds->slice_textures, TRUE);
-      tex_2ds->slice_textures = NULL;
-    }
-
-  free_spans (tex_2ds);
-}
-
 static gboolean
 allocate_slices (CoglTexture2DSliced *tex_2ds,
                  int width,
@@ -775,7 +276,7 @@ allocate_slices (CoglTexture2DSliced *tex_2ds,
                  GError **error)
 {
   CoglTexture *tex = COGL_TEXTURE (tex_2ds);
-  CoglContext *ctx = tex->context;
+  CoglContext *ctx = cogl_texture_get_context (tex);
   int n_x_slices;
   int n_y_slices;
   int n_slices;
@@ -819,9 +320,9 @@ allocate_slices (CoglTexture2DSliced *tex_2ds,
                      (int)(x_span->size - x_span->waste),
                      (int)(y_span->size - y_span->waste));
 
-          slice = COGL_TEXTURE (
+          slice =
             cogl_texture_2d_new_with_size (ctx,
-                                           x_span->size, y_span->size));
+                                           x_span->size, y_span->size);
 
           _cogl_texture_copy_internal_format (tex, slice);
 
@@ -835,151 +336,6 @@ allocate_slices (CoglTexture2DSliced *tex_2ds,
     }
 
   return TRUE;
-}
-
-static void
-_cogl_texture_2d_sliced_free (CoglTexture2DSliced *tex_2ds)
-{
-  free_slices (tex_2ds);
-
-  /* Chain up */
-  _cogl_texture_free (COGL_TEXTURE (tex_2ds));
-}
-
-static CoglTexture2DSliced *
-_cogl_texture_2d_sliced_create_base (CoglContext *ctx,
-                                     int width,
-                                     int height,
-                                     int max_waste,
-                                     CoglPixelFormat internal_format,
-                                     CoglTextureLoader *loader)
-{
-  CoglTexture2DSliced *tex_2ds = g_new0 (CoglTexture2DSliced, 1);
-
-  _cogl_texture_init (COGL_TEXTURE (tex_2ds), ctx, width, height,
-                      internal_format, loader,
-                      &cogl_texture_2d_sliced_vtable);
-
-  tex_2ds->max_waste = max_waste;
-
-  return _cogl_texture_2d_sliced_object_new (tex_2ds);
-}
-
-CoglTexture2DSliced *
-cogl_texture_2d_sliced_new_with_size (CoglContext *ctx,
-                                      int width,
-                                      int height,
-                                      int max_waste)
-{
-  CoglTextureLoader *loader = _cogl_texture_create_loader ();
-  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_SIZE;
-  loader->src.sized.width = width;
-  loader->src.sized.height = height;
-  loader->src.sized.format = COGL_PIXEL_FORMAT_ANY;
-
-  return _cogl_texture_2d_sliced_create_base (ctx,
-                                              width,
-                                              height,
-                                              max_waste,
-                                              COGL_PIXEL_FORMAT_RGBA_8888_PRE,
-                                              loader);
-}
-
-CoglTexture2DSliced *
-_cogl_texture_2d_sliced_new_from_bitmap (CoglBitmap *bmp,
-                                         int max_waste,
-                                         gboolean can_convert_in_place)
-{
-  CoglTextureLoader *loader;
-
-  g_return_val_if_fail (cogl_is_bitmap (bmp), NULL);
-
-  loader = _cogl_texture_create_loader ();
-  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_BITMAP;
-  loader->src.bitmap.bitmap = cogl_object_ref (bmp);
-  loader->src.bitmap.can_convert_in_place = can_convert_in_place;
-
-  return _cogl_texture_2d_sliced_create_base (_cogl_bitmap_get_context (bmp),
-                                              cogl_bitmap_get_width (bmp),
-                                              cogl_bitmap_get_height (bmp),
-                                              max_waste,
-                                              cogl_bitmap_get_format (bmp),
-                                              loader);
-}
-
-CoglTexture2DSliced *
-cogl_texture_2d_sliced_new_from_bitmap (CoglBitmap *bmp,
-                                        int max_waste)
-{
-  return _cogl_texture_2d_sliced_new_from_bitmap (bmp,
-                                                  max_waste,
-                                                  FALSE);
-}
-
-CoglTexture2DSliced *
-cogl_texture_2d_sliced_new_from_data (CoglContext *ctx,
-                                      int width,
-                                      int height,
-                                      int max_waste,
-                                      CoglPixelFormat format,
-                                      int rowstride,
-                                      const uint8_t *data,
-                                      GError **error)
-{
-  CoglBitmap *bmp;
-  CoglTexture2DSliced *tex_2ds;
-
-  g_return_val_if_fail (format != COGL_PIXEL_FORMAT_ANY, NULL);
-  g_return_val_if_fail (cogl_pixel_format_get_n_planes (format) == 1, NULL);
-  g_return_val_if_fail (data != NULL, NULL);
-
-  /* Rowstride from width if not given */
-  if (rowstride == 0)
-    rowstride = width * cogl_pixel_format_get_bytes_per_pixel (format, 0);
-
-  /* Wrap the data into a bitmap */
-  bmp = cogl_bitmap_new_for_data (ctx,
-                                  width, height,
-                                  format,
-                                  rowstride,
-                                  (uint8_t *) data);
-
-  tex_2ds = cogl_texture_2d_sliced_new_from_bitmap (bmp, max_waste);
-
-  cogl_object_unref (bmp);
-
-  if (tex_2ds &&
-      !cogl_texture_allocate (COGL_TEXTURE (tex_2ds), error))
-    {
-      cogl_object_unref (tex_2ds);
-      return NULL;
-    }
-
-  return tex_2ds;
-}
-
-CoglTexture2DSliced *
-cogl_texture_2d_sliced_new_from_file (CoglContext *ctx,
-                                      const char *filename,
-                                      int max_waste,
-                                      GError **error)
-{
-  CoglBitmap *bmp;
-  CoglTexture2DSliced *tex_2ds = NULL;
-
-  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
-
-  bmp = _cogl_bitmap_from_file (ctx, filename, error);
-  if (bmp == NULL)
-    return NULL;
-
-  tex_2ds = _cogl_texture_2d_sliced_new_from_bitmap (bmp,
-                                           max_waste,
-                                           TRUE); /* can convert in-place */
-
-  cogl_object_unref (bmp);
-
-  return tex_2ds;
 }
 
 static gboolean
@@ -1002,7 +358,7 @@ allocate_with_size (CoglTexture2DSliced *tex_2ds,
                        internal_format,
                        error))
     {
-      _cogl_texture_set_allocated (COGL_TEXTURE (tex_2ds),
+      _cogl_texture_set_allocated (tex,
                                    internal_format,
                                    loader->src.sized.width,
                                    loader->src.sized.height);
@@ -1010,6 +366,296 @@ allocate_with_size (CoglTexture2DSliced *tex_2ds,
     }
   else
     return FALSE;
+}
+
+static uint8_t *
+_cogl_texture_2d_sliced_allocate_waste_buffer (CoglTexture2DSliced *tex_2ds,
+                                               CoglPixelFormat format)
+{
+  CoglSpan *last_x_span;
+  CoglSpan *last_y_span;
+  uint8_t *waste_buf = NULL;
+
+  g_return_val_if_fail (format != COGL_PIXEL_FORMAT_ANY, NULL);
+  g_return_val_if_fail (cogl_pixel_format_get_n_planes (format) == 1, NULL);
+
+  /* If the texture has any waste then allocate a buffer big enough to
+     fill the gaps */
+  last_x_span = &g_array_index (tex_2ds->slice_x_spans, CoglSpan,
+                                tex_2ds->slice_x_spans->len - 1);
+  last_y_span = &g_array_index (tex_2ds->slice_y_spans, CoglSpan,
+                                tex_2ds->slice_y_spans->len - 1);
+  if (last_x_span->waste > 0 || last_y_span->waste > 0)
+    {
+      int bpp = cogl_pixel_format_get_bytes_per_pixel (format, 0);
+      CoglSpan  *first_x_span
+        = &g_array_index (tex_2ds->slice_x_spans, CoglSpan, 0);
+      CoglSpan  *first_y_span
+        = &g_array_index (tex_2ds->slice_y_spans, CoglSpan, 0);
+      unsigned int right_size = first_y_span->size * last_x_span->waste;
+      unsigned int bottom_size = first_x_span->size * last_y_span->waste;
+
+      waste_buf = g_malloc (MAX (right_size, bottom_size) * bpp);
+    }
+
+  return waste_buf;
+}
+
+static gboolean
+_cogl_texture_2d_sliced_set_waste (CoglTexture2DSliced *tex_2ds,
+                                   CoglBitmap *source_bmp,
+                                   CoglTexture2D *slice_tex,
+                                   uint8_t *waste_buf,
+                                   CoglSpan *x_span,
+                                   CoglSpan *y_span,
+                                   CoglSpanIter *x_iter,
+                                   CoglSpanIter *y_iter,
+                                   int src_x,
+                                   int src_y,
+                                   int dst_x,
+                                   int dst_y,
+                                   GError **error)
+{
+  gboolean need_x, need_y;
+  CoglContext *ctx = cogl_texture_get_context (COGL_TEXTURE (tex_2ds));
+
+  /* If the x_span is sliced and the upload touches the
+     rightmost pixels then fill the waste with copies of the
+     pixels */
+  need_x = x_span->waste > 0 &&
+    x_iter->intersect_end - x_iter->pos >= x_span->size - x_span->waste;
+
+  /* same for the bottom-most pixels */
+  need_y = y_span->waste > 0 &&
+    y_iter->intersect_end - y_iter->pos >= y_span->size - y_span->waste;
+
+  if (need_x || need_y)
+    {
+      int bmp_rowstride = cogl_bitmap_get_rowstride (source_bmp);
+      CoglPixelFormat source_format = cogl_bitmap_get_format (source_bmp);
+      int bpp;
+      uint8_t *bmp_data;
+      const uint8_t *src;
+      uint8_t *dst;
+      unsigned int wy, wx;
+      CoglBitmap *waste_bmp;
+
+      /* We only support single plane formats here */
+      if (cogl_pixel_format_get_n_planes (source_format) == 1)
+        return FALSE;
+
+      bmp_data = _cogl_bitmap_map (source_bmp, COGL_BUFFER_ACCESS_READ, 0, error);
+      if (bmp_data == NULL)
+        return FALSE;
+
+      bpp = cogl_pixel_format_get_bytes_per_pixel (source_format, 0);
+
+      if (need_x)
+        {
+          src = (bmp_data + ((src_y + (int) y_iter->intersect_start - dst_y) *
+                             bmp_rowstride) +
+                 (src_x + (int)x_span->start + (int)x_span->size -
+                  (int)x_span->waste - dst_x - 1) * bpp);
+
+          dst = waste_buf;
+
+          for (wy = 0;
+               wy < y_iter->intersect_end - y_iter->intersect_start;
+               wy++)
+            {
+              for (wx = 0; wx < x_span->waste; wx++)
+                {
+                  memcpy (dst, src, bpp);
+                  dst += bpp;
+                }
+              src += bmp_rowstride;
+            }
+
+          waste_bmp = cogl_bitmap_new_for_data (ctx,
+                                                x_span->waste,
+                                                y_iter->intersect_end -
+                                                y_iter->intersect_start,
+                                                source_format,
+                                                x_span->waste * bpp,
+                                                waste_buf);
+
+          if (!_cogl_texture_set_region_from_bitmap (COGL_TEXTURE (slice_tex),
+                                                     0, /* src_x */
+                                                     0, /* src_y */
+                                                     x_span->waste, /* width */
+                                                     /* height */
+                                                     y_iter->intersect_end -
+                                                     y_iter->intersect_start,
+                                                     waste_bmp,
+                                                     /* dst_x */
+                                                     x_span->size - x_span->waste,
+                                                     y_iter->intersect_start -
+                                                     y_span->start, /* dst_y */
+                                                     0, /* level */
+                                                     error))
+            {
+              g_object_unref (waste_bmp);
+              _cogl_bitmap_unmap (source_bmp);
+              return FALSE;
+            }
+
+          g_object_unref (waste_bmp);
+        }
+
+      if (need_y)
+        {
+          unsigned int copy_width, intersect_width;
+
+          src = (bmp_data + ((src_x + (int) x_iter->intersect_start - dst_x) *
+                             bpp) +
+                 (src_y + (int)y_span->start + (int)y_span->size -
+                  (int)y_span->waste - dst_y - 1) * bmp_rowstride);
+
+          dst = waste_buf;
+
+          if (x_iter->intersect_end - x_iter->pos
+              >= x_span->size - x_span->waste)
+            copy_width = x_span->size + x_iter->pos - x_iter->intersect_start;
+          else
+            copy_width = x_iter->intersect_end - x_iter->intersect_start;
+
+          intersect_width = x_iter->intersect_end - x_iter->intersect_start;
+
+          for (wy = 0; wy < y_span->waste; wy++)
+            {
+              memcpy (dst, src, intersect_width * bpp);
+              dst += intersect_width * bpp;
+
+              for (wx = intersect_width; wx < copy_width; wx++)
+                {
+                  memcpy (dst, dst - bpp, bpp);
+                  dst += bpp;
+                }
+            }
+
+          waste_bmp = cogl_bitmap_new_for_data (ctx,
+                                                copy_width,
+                                                y_span->waste,
+                                                source_format,
+                                                copy_width * bpp,
+                                                waste_buf);
+
+          if (!_cogl_texture_set_region_from_bitmap (COGL_TEXTURE (slice_tex),
+                                                     0, /* src_x */
+                                                     0, /* src_y */
+                                                     copy_width, /* width */
+                                                     y_span->waste, /* height */
+                                                     waste_bmp,
+                                                     /* dst_x */
+                                                     x_iter->intersect_start -
+                                                     x_iter->pos,
+                                                     /* dst_y */
+                                                     y_span->size - y_span->waste,
+                                                     0, /* level */
+                                                     error))
+            {
+              g_object_unref (waste_bmp);
+              _cogl_bitmap_unmap (source_bmp);
+              return FALSE;
+            }
+
+          g_object_unref (waste_bmp);
+        }
+
+      _cogl_bitmap_unmap (source_bmp);
+    }
+
+  return TRUE;
+}
+
+static gboolean
+_cogl_texture_2d_sliced_upload_bitmap (CoglTexture2DSliced *tex_2ds,
+                                       CoglBitmap *bmp,
+                                       GError **error)
+{
+  CoglSpan *x_span;
+  CoglSpan *y_span;
+  CoglTexture2D *slice_tex;
+  int x, y;
+  uint8_t *waste_buf;
+  CoglPixelFormat bmp_format;
+
+  bmp_format = cogl_bitmap_get_format (bmp);
+
+  waste_buf = _cogl_texture_2d_sliced_allocate_waste_buffer (tex_2ds,
+                                                             bmp_format);
+
+  /* Iterate vertical slices */
+  for (y = 0; y < tex_2ds->slice_y_spans->len; ++y)
+    {
+      y_span = &g_array_index (tex_2ds->slice_y_spans, CoglSpan, y);
+
+      /* Iterate horizontal slices */
+      for (x = 0; x < tex_2ds->slice_x_spans->len; ++x)
+        {
+          int slice_num = y * tex_2ds->slice_x_spans->len + x;
+          CoglSpanIter x_iter, y_iter;
+
+          x_span = &g_array_index (tex_2ds->slice_x_spans, CoglSpan, x);
+
+          /* Pick the gl texture object handle */
+          slice_tex = g_array_index (tex_2ds->slice_textures,
+                                     CoglTexture2D *, slice_num);
+
+          if (!_cogl_texture_set_region_from_bitmap (COGL_TEXTURE (slice_tex),
+                                                     x_span->start, /* src x */
+                                                     y_span->start, /* src y */
+                                                     x_span->size -
+                                                     x_span->waste, /* width */
+                                                     y_span->size -
+                                                     y_span->waste, /* height */
+                                                     bmp,
+                                                     0, /* dst x */
+                                                     0, /* dst y */
+                                                     0, /* level */
+                                                     error))
+            {
+              if (waste_buf)
+                g_free (waste_buf);
+              return FALSE;
+            }
+
+          /* Set up a fake iterator that covers the whole slice */
+          x_iter.intersect_start = x_span->start;
+          x_iter.intersect_end = (x_span->start +
+                                  x_span->size -
+                                  x_span->waste);
+          x_iter.pos = x_span->start;
+
+          y_iter.intersect_start = y_span->start;
+          y_iter.intersect_end = (y_span->start +
+                                  y_span->size -
+                                  y_span->waste);
+          y_iter.pos = y_span->start;
+
+          if (!_cogl_texture_2d_sliced_set_waste (tex_2ds,
+                                                  bmp,
+                                                  slice_tex,
+                                                  waste_buf,
+                                                  x_span, y_span,
+                                                  &x_iter, &y_iter,
+                                                  0, /* src_x */
+                                                  0, /* src_y */
+                                                  0, /* dst_x */
+                                                  0,
+                                                  error)) /* dst_y */
+            {
+              if (waste_buf)
+                g_free (waste_buf);
+              return FALSE;
+            }
+        }
+    }
+
+  if (waste_buf)
+    g_free (waste_buf);
+
+  return TRUE;
 }
 
 static gboolean
@@ -1021,7 +667,6 @@ allocate_from_bitmap (CoglTexture2DSliced *tex_2ds,
   CoglBitmap *bmp = loader->src.bitmap.bitmap;
   int width = cogl_bitmap_get_width (bmp);
   int height = cogl_bitmap_get_height (bmp);
-  gboolean can_convert_in_place = loader->src.bitmap.can_convert_in_place;
   CoglPixelFormat internal_format;
   CoglBitmap *upload_bmp;
 
@@ -1033,7 +678,6 @@ allocate_from_bitmap (CoglTexture2DSliced *tex_2ds,
 
   upload_bmp = _cogl_bitmap_convert_for_upload (bmp,
                                                 internal_format,
-                                                can_convert_in_place,
                                                 error);
   if (upload_bmp == NULL)
     return FALSE;
@@ -1045,7 +689,7 @@ allocate_from_bitmap (CoglTexture2DSliced *tex_2ds,
                         internal_format,
                         error))
     {
-      cogl_object_unref (upload_bmp);
+      g_object_unref (upload_bmp);
       return FALSE;
     }
 
@@ -1054,11 +698,11 @@ allocate_from_bitmap (CoglTexture2DSliced *tex_2ds,
                                               error))
     {
       free_slices (tex_2ds);
-      cogl_object_unref (upload_bmp);
+      g_object_unref (upload_bmp);
       return FALSE;
     }
 
-  cogl_object_unref (upload_bmp);
+  g_object_unref (upload_bmp);
 
   _cogl_texture_set_allocated (tex, internal_format, width, height);
 
@@ -1070,7 +714,7 @@ _cogl_texture_2d_sliced_allocate (CoglTexture *tex,
                                   GError **error)
 {
   CoglTexture2DSliced *tex_2ds = COGL_TEXTURE_2D_SLICED (tex);
-  CoglTextureLoader *loader = tex->loader;
+  CoglTextureLoader *loader = cogl_texture_get_loader (tex);
 
   g_return_val_if_fail (loader, FALSE);
 
@@ -1151,8 +795,8 @@ _cogl_texture_2d_sliced_transform_coords_to_gl (CoglTexture *tex,
   x_span = &g_array_index (tex_2ds->slice_x_spans, CoglSpan, 0);
   y_span = &g_array_index (tex_2ds->slice_y_spans, CoglSpan, 0);
 
-  *s *= tex->width / (float)x_span->size;
-  *t *= tex->height / (float)y_span->size;
+  *s *= cogl_texture_get_width (tex) / (float)x_span->size;
+  *t *= cogl_texture_get_height (tex) / (float)y_span->size;
 
   /* Let the child texture further transform the coords */
   slice_tex = g_array_index (tex_2ds->slice_textures, CoglTexture2D *, 0);
@@ -1265,6 +909,160 @@ _cogl_texture_2d_sliced_ensure_non_quad_rendering (CoglTexture *tex)
     }
 }
 
+static void
+_cogl_texture_2d_sliced_gl_flush_legacy_texobj_wrap_modes (CoglTexture *tex,
+                                                           GLenum wrap_mode_s,
+                                                           GLenum wrap_mode_t)
+{
+  CoglTexture2DSliced *tex_2ds = COGL_TEXTURE_2D_SLICED (tex);
+  int i;
+
+  /* Pass the set wrap mode on to all of the child textures */
+  for (i = 0; i < tex_2ds->slice_textures->len; i++)
+    {
+      CoglTexture2D *slice_tex = g_array_index (tex_2ds->slice_textures,
+                                                CoglTexture2D *,
+                                                i);
+
+      _cogl_texture_gl_flush_legacy_texobj_wrap_modes (COGL_TEXTURE (slice_tex),
+                                                       wrap_mode_s,
+                                                       wrap_mode_t);
+    }
+}
+
+static GLenum
+_cogl_texture_2d_sliced_get_gl_format (CoglTexture *tex)
+{
+  CoglTexture2DSliced *tex_2ds = COGL_TEXTURE_2D_SLICED (tex);
+  CoglTexture2D *slice_tex;
+
+  /* Assert that we've allocated our slices at this point */
+  cogl_texture_allocate (tex, NULL); /* (abort on error) */
+
+  /* Pass the call on to the first slice */
+  slice_tex = g_array_index (tex_2ds->slice_textures, CoglTexture2D *, 0);
+  return _cogl_texture_gl_get_format (COGL_TEXTURE (slice_tex));
+}
+
+static gboolean
+_cogl_texture_2d_sliced_upload_subregion (CoglTexture2DSliced *tex_2ds,
+                                          int src_x,
+                                          int src_y,
+                                          int dst_x,
+                                          int dst_y,
+                                          int width,
+                                          int height,
+                                          CoglBitmap *source_bmp,
+                                          GError **error)
+{
+  CoglTexture *tex = COGL_TEXTURE (tex_2ds);
+  CoglSpan *x_span;
+  CoglSpan *y_span;
+  CoglSpanIter x_iter;
+  CoglSpanIter y_iter;
+  CoglTexture2D *slice_tex;
+  int source_x = 0, source_y = 0;
+  int inter_w = 0, inter_h = 0;
+  int local_x = 0, local_y = 0;
+  uint8_t *waste_buf;
+  CoglPixelFormat source_format;
+
+  source_format = cogl_bitmap_get_format (source_bmp);
+
+  waste_buf =
+    _cogl_texture_2d_sliced_allocate_waste_buffer (tex_2ds, source_format);
+
+  /* Iterate vertical spans */
+  for (source_y = src_y,
+       _cogl_span_iter_begin (&y_iter,
+                              (CoglSpan *)tex_2ds->slice_y_spans->data,
+                              tex_2ds->slice_y_spans->len,
+                              cogl_texture_get_height (tex),
+                              dst_y,
+                              dst_y + height,
+                              COGL_PIPELINE_WRAP_MODE_REPEAT);
+
+       !_cogl_span_iter_end (&y_iter);
+
+       _cogl_span_iter_next (&y_iter),
+       source_y += inter_h )
+    {
+      y_span = &g_array_index (tex_2ds->slice_y_spans, CoglSpan,
+                               y_iter.index);
+
+      /* Iterate horizontal spans */
+      for (source_x = src_x,
+           _cogl_span_iter_begin (&x_iter,
+                                  (CoglSpan *)tex_2ds->slice_x_spans->data,
+                                  tex_2ds->slice_x_spans->len,
+                                  cogl_texture_get_width (tex),
+                                  dst_x,
+                                  dst_x + width,
+                                  COGL_PIPELINE_WRAP_MODE_REPEAT);
+
+           !_cogl_span_iter_end (&x_iter);
+
+           _cogl_span_iter_next (&x_iter),
+           source_x += inter_w )
+        {
+          int slice_num;
+
+          x_span = &g_array_index (tex_2ds->slice_x_spans, CoglSpan,
+                                   x_iter.index);
+
+          /* Pick intersection width and height */
+          inter_w =  (x_iter.intersect_end - x_iter.intersect_start);
+          inter_h =  (y_iter.intersect_end - y_iter.intersect_start);
+
+          /* Localize intersection top-left corner to slice*/
+          local_x =  (x_iter.intersect_start - x_iter.pos);
+          local_y =  (y_iter.intersect_start - y_iter.pos);
+
+          slice_num = y_iter.index * tex_2ds->slice_x_spans->len + x_iter.index;
+
+          /* Pick slice texture */
+          slice_tex = g_array_index (tex_2ds->slice_textures,
+                                     CoglTexture2D *, slice_num);
+
+          if (!_cogl_texture_set_region_from_bitmap (COGL_TEXTURE (slice_tex),
+                                                     source_x,
+                                                     source_y,
+                                                     inter_w, /* width */
+                                                     inter_h, /* height */
+                                                     source_bmp,
+                                                     local_x, /* dst x */
+                                                     local_y, /* dst y */
+                                                     0, /* level */
+                                                     error))
+            {
+              if (waste_buf)
+                g_free (waste_buf);
+              return FALSE;
+            }
+
+          if (!_cogl_texture_2d_sliced_set_waste (tex_2ds,
+                                                  source_bmp,
+                                                  slice_tex,
+                                                  waste_buf,
+                                                  x_span, y_span,
+                                                  &x_iter, &y_iter,
+                                                  src_x, src_y,
+                                                  dst_x, dst_y,
+                                                  error))
+            {
+              if (waste_buf)
+                g_free (waste_buf);
+              return FALSE;
+            }
+        }
+    }
+
+  if (waste_buf)
+    g_free (waste_buf);
+
+  return TRUE;
+}
+
 static gboolean
 _cogl_texture_2d_sliced_set_region (CoglTexture *tex,
                                     int src_x,
@@ -1283,8 +1081,6 @@ _cogl_texture_2d_sliced_set_region (CoglTexture *tex,
 
   upload_bmp = _cogl_bitmap_convert_for_upload (bmp,
                                                 _cogl_texture_get_format (tex),
-                                                FALSE, /* can't convert in
-                                                          place */
                                                 error);
   if (!upload_bmp)
     return FALSE;
@@ -1295,9 +1091,81 @@ _cogl_texture_2d_sliced_set_region (CoglTexture *tex,
                                                      dst_width, dst_height,
                                                      upload_bmp,
                                                      error);
-  cogl_object_unref (upload_bmp);
+  g_object_unref (upload_bmp);
 
   return status;
+}
+
+static void
+re_normalize_sub_texture_coords_cb (CoglTexture *sub_texture,
+                                    const float *sub_texture_coords,
+                                    const float *meta_coords,
+                                    void *user_data)
+{
+  ForeachData *data = user_data;
+  /* The coordinates passed to the span iterating code were
+   * un-normalized so we need to renormalize them before passing them
+   * on */
+  float re_normalized_coords[4] =
+    {
+      meta_coords[0] * data->x_normalize_factor,
+      meta_coords[1] * data->y_normalize_factor,
+      meta_coords[2] * data->x_normalize_factor,
+      meta_coords[3] * data->y_normalize_factor
+    };
+
+  data->callback (sub_texture, sub_texture_coords, re_normalized_coords,
+                  data->user_data);
+}
+
+static void
+_cogl_texture_2d_sliced_foreach_sub_texture_in_region (
+                                       CoglTexture *tex,
+                                       float virtual_tx_1,
+                                       float virtual_ty_1,
+                                       float virtual_tx_2,
+                                       float virtual_ty_2,
+                                       CoglMetaTextureCallback callback,
+                                       void *user_data)
+{
+  CoglTexture2DSliced *tex_2ds = COGL_TEXTURE_2D_SLICED (tex);
+  CoglSpan *x_spans = (CoglSpan *)tex_2ds->slice_x_spans->data;
+  CoglSpan *y_spans = (CoglSpan *)tex_2ds->slice_y_spans->data;
+  CoglTexture **textures = (CoglTexture **)tex_2ds->slice_textures->data;
+  float un_normalized_coords[4];
+  ForeachData data;
+
+  /* NB: its convenient for us to store non-normalized coordinates in
+   * our CoglSpans but that means we need to un-normalize the incoming
+   * virtual coordinates and make sure we re-normalize the coordinates
+   * before calling the given callback.
+   */
+
+  data.callback = callback;
+  data.user_data = user_data;
+  data.x_normalize_factor = 1.0f / cogl_texture_get_width (tex);
+  data.y_normalize_factor = 1.0f / cogl_texture_get_height (tex);
+
+  un_normalized_coords[0] = virtual_tx_1 * cogl_texture_get_width (tex);
+  un_normalized_coords[1] = virtual_ty_1 * cogl_texture_get_height (tex);
+  un_normalized_coords[2] = virtual_tx_2 * cogl_texture_get_width (tex);
+  un_normalized_coords[3] = virtual_ty_2 * cogl_texture_get_height (tex);
+
+  /* Note that the normalize factors passed here are the reciprocal of
+   * the factors calculated above because the span iterating code
+   * normalizes by dividing by the factor instead of multiplying */
+  _cogl_texture_spans_foreach_in_region (x_spans,
+                                         tex_2ds->slice_x_spans->len,
+                                         y_spans,
+                                         tex_2ds->slice_y_spans->len,
+                                         textures,
+                                         un_normalized_coords,
+                                         cogl_texture_get_width (tex),
+                                         cogl_texture_get_height (tex),
+                                         COGL_PIPELINE_WRAP_MODE_REPEAT,
+                                         COGL_PIPELINE_WRAP_MODE_REPEAT,
+                                         re_normalize_sub_texture_coords_cb,
+                                         &data);
 }
 
 static CoglPixelFormat
@@ -1308,40 +1176,139 @@ _cogl_texture_2d_sliced_get_format (CoglTexture *tex)
   return tex_2ds->internal_format;
 }
 
-static GLenum
-_cogl_texture_2d_sliced_get_gl_format (CoglTexture *tex)
+static void
+cogl_texture_2d_sliced_class_init (CoglTexture2DSlicedClass *klass)
 {
-  CoglTexture2DSliced *tex_2ds = COGL_TEXTURE_2D_SLICED (tex);
-  CoglTexture2D *slice_tex;
+  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+  CoglTextureClass *texture_class = COGL_TEXTURE_CLASS (klass);
 
-  /* Assert that we've allocated our slices at this point */
-  cogl_texture_allocate (tex, NULL); /* (abort on error) */
+  gobject_class->dispose = cogl_texture_2d_sliced_dispose;
 
-  /* Pass the call on to the first slice */
-  slice_tex = g_array_index (tex_2ds->slice_textures, CoglTexture2D *, 0);
-  return _cogl_texture_gl_get_format (COGL_TEXTURE (slice_tex));
+  texture_class->allocate = _cogl_texture_2d_sliced_allocate;
+  texture_class->set_region = _cogl_texture_2d_sliced_set_region;
+  texture_class->foreach_sub_texture_in_region = _cogl_texture_2d_sliced_foreach_sub_texture_in_region;
+  texture_class->get_max_waste = _cogl_texture_2d_sliced_get_max_waste;
+  texture_class->is_sliced = _cogl_texture_2d_sliced_is_sliced;
+  texture_class->can_hardware_repeat = _cogl_texture_2d_sliced_can_hardware_repeat;
+  texture_class->transform_coords_to_gl = _cogl_texture_2d_sliced_transform_coords_to_gl;
+  texture_class->transform_quad_coords_to_gl = _cogl_texture_2d_sliced_transform_quad_coords_to_gl;
+  texture_class->get_gl_texture = _cogl_texture_2d_sliced_get_gl_texture;
+  texture_class->gl_flush_legacy_texobj_filters = _cogl_texture_2d_sliced_gl_flush_legacy_texobj_filters;
+  texture_class->pre_paint = _cogl_texture_2d_sliced_pre_paint;
+  texture_class->ensure_non_quad_rendering = _cogl_texture_2d_sliced_ensure_non_quad_rendering;
+  texture_class->gl_flush_legacy_texobj_wrap_modes = _cogl_texture_2d_sliced_gl_flush_legacy_texobj_wrap_modes;
+  texture_class->get_format = _cogl_texture_2d_sliced_get_format;
+  texture_class->get_gl_format = _cogl_texture_2d_sliced_get_gl_format;
 }
 
-static const CoglTextureVtable
-cogl_texture_2d_sliced_vtable =
-  {
-    FALSE, /* not primitive */
-    _cogl_texture_2d_sliced_allocate,
-    _cogl_texture_2d_sliced_set_region,
-    NULL, /* is_get_data_supported */
-    NULL, /* get_data */
-    _cogl_texture_2d_sliced_foreach_sub_texture_in_region,
-    _cogl_texture_2d_sliced_get_max_waste,
-    _cogl_texture_2d_sliced_is_sliced,
-    _cogl_texture_2d_sliced_can_hardware_repeat,
-    _cogl_texture_2d_sliced_transform_coords_to_gl,
-    _cogl_texture_2d_sliced_transform_quad_coords_to_gl,
-    _cogl_texture_2d_sliced_get_gl_texture,
-    _cogl_texture_2d_sliced_gl_flush_legacy_texobj_filters,
-    _cogl_texture_2d_sliced_pre_paint,
-    _cogl_texture_2d_sliced_ensure_non_quad_rendering,
-    _cogl_texture_2d_sliced_gl_flush_legacy_texobj_wrap_modes,
-    _cogl_texture_2d_sliced_get_format,
-    _cogl_texture_2d_sliced_get_gl_format,
-    NULL /* set_auto_mipmap */
-  };
+static void
+cogl_texture_2d_sliced_init (CoglTexture2DSliced *self)
+{
+  CoglTexture *texture = COGL_TEXTURE (self);
+
+  texture->is_primitive = FALSE;
+}
+
+static CoglTexture *
+_cogl_texture_2d_sliced_create_base (CoglContext *ctx,
+                                     int width,
+                                     int height,
+                                     int max_waste,
+                                     CoglPixelFormat internal_format,
+                                     CoglTextureLoader *loader)
+{
+  CoglTexture2DSliced *tex_2ds = g_object_new (COGL_TYPE_TEXTURE_2D_SLICED,
+                                               "context", ctx,
+                                               "width", width,
+                                               "height", height,
+                                               "loader", loader,
+                                               "format", internal_format,
+                                               NULL);
+
+  tex_2ds->max_waste = max_waste;
+
+  return COGL_TEXTURE (tex_2ds);
+}
+
+CoglTexture *
+cogl_texture_2d_sliced_new_with_size (CoglContext *ctx,
+                                      int width,
+                                      int height,
+                                      int max_waste)
+{
+  CoglTextureLoader *loader = _cogl_texture_create_loader ();
+  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_SIZE;
+  loader->src.sized.width = width;
+  loader->src.sized.height = height;
+  loader->src.sized.format = COGL_PIXEL_FORMAT_ANY;
+
+  return _cogl_texture_2d_sliced_create_base (ctx,
+                                              width,
+                                              height,
+                                              max_waste,
+                                              COGL_PIXEL_FORMAT_RGBA_8888_PRE,
+                                              loader);
+}
+
+CoglTexture *
+cogl_texture_2d_sliced_new_from_bitmap (CoglBitmap *bmp,
+                                        int max_waste)
+{
+  CoglTextureLoader *loader;
+
+  g_return_val_if_fail (COGL_IS_BITMAP (bmp), NULL);
+
+  loader = _cogl_texture_create_loader ();
+  loader->src_type = COGL_TEXTURE_SOURCE_TYPE_BITMAP;
+  loader->src.bitmap.bitmap = g_object_ref (bmp);
+
+  return _cogl_texture_2d_sliced_create_base (_cogl_bitmap_get_context (bmp),
+                                              cogl_bitmap_get_width (bmp),
+                                              cogl_bitmap_get_height (bmp),
+                                              max_waste,
+                                              cogl_bitmap_get_format (bmp),
+                                              loader);
+}
+
+CoglTexture *
+cogl_texture_2d_sliced_new_from_data (CoglContext *ctx,
+                                      int width,
+                                      int height,
+                                      int max_waste,
+                                      CoglPixelFormat format,
+                                      int rowstride,
+                                      const uint8_t *data,
+                                      GError **error)
+{
+  CoglBitmap *bmp;
+  CoglTexture *tex_2ds;
+
+  g_return_val_if_fail (format != COGL_PIXEL_FORMAT_ANY, NULL);
+  g_return_val_if_fail (cogl_pixel_format_get_n_planes (format) == 1, NULL);
+  g_return_val_if_fail (data != NULL, NULL);
+
+  /* Rowstride from width if not given */
+  if (rowstride == 0)
+    rowstride = width * cogl_pixel_format_get_bytes_per_pixel (format, 0);
+
+  /* Wrap the data into a bitmap */
+  bmp = cogl_bitmap_new_for_data (ctx,
+                                  width, height,
+                                  format,
+                                  rowstride,
+                                  (uint8_t *) data);
+
+  tex_2ds = cogl_texture_2d_sliced_new_from_bitmap (bmp, max_waste);
+
+  g_object_unref (bmp);
+
+  if (tex_2ds &&
+      !cogl_texture_allocate (COGL_TEXTURE (tex_2ds), error))
+    {
+      g_object_unref (tex_2ds);
+      return NULL;
+    }
+
+  return tex_2ds;
+}
+

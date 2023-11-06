@@ -34,17 +34,13 @@
 #include <string.h>
 
 #include "cogl/cogl-private.h"
-#include "cogl/cogl-object.h"
 
 #include "cogl/cogl-display-private.h"
 #include "cogl/cogl-renderer-private.h"
-#include "cogl/cogl-gtype-private.h"
 #include "cogl/winsys/cogl-winsys-private.h"
 
-static void _cogl_display_free (CoglDisplay *display);
 
-COGL_OBJECT_DEFINE (Display, display);
-COGL_GTYPE_DEFINE_CLASS (Display, display);
+G_DEFINE_TYPE (CoglDisplay, cogl_display, G_TYPE_OBJECT);
 
 static const CoglWinsysVtable *
 _cogl_display_get_winsys (CoglDisplay *display)
@@ -53,8 +49,10 @@ _cogl_display_get_winsys (CoglDisplay *display)
 }
 
 static void
-_cogl_display_free (CoglDisplay *display)
+cogl_display_dispose (GObject *object)
 {
+  CoglDisplay *display = COGL_DISPLAY (object);
+
   const CoglWinsysVtable *winsys;
 
   if (display->setup)
@@ -64,33 +62,37 @@ _cogl_display_free (CoglDisplay *display)
       display->setup = FALSE;
     }
 
-  if (display->renderer)
-    {
-      cogl_object_unref (display->renderer);
-      display->renderer = NULL;
-    }
+  g_clear_object (&display->renderer);
+  g_clear_object (&display->onscreen_template);
 
-  if (display->onscreen_template)
-    {
-      cogl_object_unref (display->onscreen_template);
-      display->onscreen_template = NULL;
-    }
+  G_OBJECT_CLASS (cogl_display_parent_class)->dispose (object);
+}
 
-  g_free (display);
+static void
+cogl_display_init (CoglDisplay *display)
+{
+}
+
+static void
+cogl_display_class_init (CoglDisplayClass *class)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (class);
+
+  object_class->dispose = cogl_display_dispose;
 }
 
 CoglDisplay *
-cogl_display_new (CoglRenderer *renderer,
+cogl_display_new (CoglRenderer         *renderer,
                   CoglOnscreenTemplate *onscreen_template)
 {
-  CoglDisplay *display = g_new0 (CoglDisplay, 1);
+  CoglDisplay *display = g_object_new (COGL_TYPE_DISPLAY, NULL);
   GError *error = NULL;
 
   _cogl_init ();
 
   display->renderer = renderer;
   if (renderer)
-    cogl_object_ref (renderer);
+    g_object_ref (renderer);
   else
     display->renderer = cogl_renderer_new ();
 
@@ -98,8 +100,6 @@ cogl_display_new (CoglRenderer *renderer,
     g_error ("Failed to connect to renderer: %s\n", error->message);
 
   display->setup = FALSE;
-
-  display = _cogl_display_object_new (display);
 
   cogl_display_set_onscreen_template (display, onscreen_template);
 
@@ -119,10 +119,10 @@ cogl_display_set_onscreen_template (CoglDisplay *display,
   g_return_if_fail (display->setup == FALSE);
 
   if (onscreen_template)
-    cogl_object_ref (onscreen_template);
+    g_object_ref (onscreen_template);
 
   if (display->onscreen_template)
-    cogl_object_unref (display->onscreen_template);
+    g_object_unref (display->onscreen_template);
 
   display->onscreen_template = onscreen_template;
 

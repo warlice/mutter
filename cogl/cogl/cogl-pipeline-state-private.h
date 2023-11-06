@@ -33,14 +33,8 @@
 
 #pragma once
 
-CoglPipeline *
-_cogl_pipeline_get_user_program (CoglPipeline *pipeline);
-
 gboolean
 _cogl_pipeline_has_vertex_snippets (CoglPipeline *pipeline);
-
-gboolean
-_cogl_pipeline_has_fragment_snippets (CoglPipeline *pipeline);
 
 gboolean
 _cogl_pipeline_has_non_layer_vertex_snippets (CoglPipeline *pipeline);

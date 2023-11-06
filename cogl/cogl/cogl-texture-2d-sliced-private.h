@@ -39,7 +39,7 @@
 
 struct _CoglTexture2DSliced
 {
-  CoglTexture _parent;
+  CoglTexture parent_instance;
 
   GArray *slice_x_spans;
   GArray *slice_y_spans;
@@ -48,7 +48,7 @@ struct _CoglTexture2DSliced
   CoglPixelFormat internal_format;
 };
 
-CoglTexture2DSliced *
-_cogl_texture_2d_sliced_new_from_bitmap (CoglBitmap *bmp,
-                                         int max_waste,
-                                         gboolean can_convert_in_place);
+struct _CoglTexture2DSlicedClass
+{
+   CoglTextureClass parent_class;
+};

@@ -40,10 +40,6 @@ ClutterBezier *_clutter_bezier_new (void);
 
 void           _clutter_bezier_free (ClutterBezier * b);
 
-ClutterBezier *_clutter_bezier_clone_and_move (const ClutterBezier *b,
-                                               gint           x,
-                                               gint           y);
-
 void           _clutter_bezier_advance (const ClutterBezier *b,
                                         gint           L,
                                         ClutterKnot   *knot);
@@ -53,10 +49,6 @@ void           _clutter_bezier_init (ClutterBezier *b,
                                      gint x_1, gint y_1,
                                      gint x_2, gint y_2,
                                      gint x_3, gint y_3);
-
-void           _clutter_bezier_adjust (ClutterBezier *b,
-                                       ClutterKnot   *knot,
-                                       guint          indx);
 
 guint          _clutter_bezier_get_length (const ClutterBezier *b);
 

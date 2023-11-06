@@ -135,8 +135,8 @@ struct _ClutterShaderEffectPrivate
 
   ClutterShaderType shader_type;
 
-  CoglHandle program;
-  CoglHandle shader;
+  CoglProgram *program;
+  CoglShader *shader;
 
   GHashTable *uniforms;
 };
@@ -147,8 +147,8 @@ typedef struct _ClutterShaderEffectClassPrivate
      used when the class implements get_static_shader_source without
      calling set_shader_source. They will be shared by all instances
      of this class */
-  CoglHandle program;
-  CoglHandle shader;
+  CoglProgram *program;
+  CoglShader *shader;
 } ClutterShaderEffectClassPrivate;
 
 enum
@@ -175,19 +175,8 @@ clutter_shader_effect_clear (ClutterShaderEffect *self,
 {
   ClutterShaderEffectPrivate *priv = self->priv;
 
-  if (priv->shader != NULL)
-    {
-      cogl_object_unref (priv->shader);
-
-      priv->shader = NULL;
-    }
-
-  if (priv->program != NULL)
-    {
-      cogl_object_unref (priv->program);
-
-      priv->program = NULL;
-    }
+  g_clear_object (&priv->shader);
+  g_clear_object (&priv->program);
 
   if (reset_uniforms && priv->uniforms != NULL)
     {
@@ -302,7 +291,7 @@ clutter_shader_effect_set_actor (ClutterActorMeta *meta,
                 G_OBJECT_TYPE_NAME (meta));
 }
 
-static CoglHandle
+static CoglShader*
 clutter_shader_effect_create_shader (ClutterShaderEffect *self)
 {
   ClutterShaderEffectPrivate *priv = self->priv;
@@ -361,10 +350,10 @@ clutter_shader_effect_try_static_source (ClutterShaderEffect *self)
           cogl_program_link (class_priv->program);
         }
 
-      priv->shader = cogl_object_ref (class_priv->shader);
+      priv->shader = g_object_ref (class_priv->shader);
 
       if (class_priv->program != NULL)
-        priv->program = cogl_object_ref (class_priv->program);
+        priv->program = g_object_ref (class_priv->program);
     }
 }
 
@@ -506,7 +495,7 @@ clutter_shader_effect_new (ClutterShaderType shader_type)
  * Return value: (transfer none): a pointer to the shader's handle,
  *   or %NULL
  */
-CoglHandle
+CoglShader*
 clutter_shader_effect_get_shader (ClutterShaderEffect *effect)
 {
   g_return_val_if_fail (CLUTTER_IS_SHADER_EFFECT (effect),
@@ -524,7 +513,7 @@ clutter_shader_effect_get_shader (ClutterShaderEffect *effect)
  * Return value: (transfer none): a pointer to the program's handle,
  *   or %NULL
  */
-CoglHandle
+CoglProgram*
 clutter_shader_effect_get_program (ClutterShaderEffect *effect)
 {
   g_return_val_if_fail (CLUTTER_IS_SHADER_EFFECT (effect),

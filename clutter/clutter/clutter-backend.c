@@ -237,7 +237,7 @@ clutter_backend_do_real_create_context (ClutterBackend  *backend,
       backend->cogl_display = cogl_display_new (backend->cogl_renderer, tmpl);
 
       /* the display owns the template */
-      cogl_object_unref (tmpl);
+      g_object_unref (tmpl);
     }
 
   if (backend->cogl_display == NULL)
@@ -253,26 +253,17 @@ clutter_backend_do_real_create_context (ClutterBackend  *backend,
     goto error;
 
   /* the display owns the renderer and the swap chain */
-  cogl_object_unref (backend->cogl_renderer);
-  cogl_object_unref (swap_chain);
+  g_object_unref (backend->cogl_renderer);
+  g_object_unref (swap_chain);
 
   return TRUE;
 
 error:
-  if (backend->cogl_display != NULL)
-    {
-      cogl_object_unref (backend->cogl_display);
-      backend->cogl_display = NULL;
-    }
-
-  if (backend->cogl_renderer != NULL)
-    {
-      cogl_object_unref (backend->cogl_renderer);
-      backend->cogl_renderer = NULL;
-    }
+  g_clear_object (&backend->cogl_display);
+  g_clear_object (&backend->cogl_renderer);
 
   if (swap_chain != NULL)
-    cogl_object_unref (swap_chain);
+    g_object_unref (swap_chain);
 
   return FALSE;
 }
@@ -287,8 +278,6 @@ static const struct {
   { "any", "Default Cogl driver", COGL_DRIVER_ANY },
 };
 
-static const char *allowed_drivers;
-
 static gboolean
 clutter_backend_real_create_context (ClutterBackend  *backend,
                                      GError         **error)
@@ -296,20 +285,14 @@ clutter_backend_real_create_context (ClutterBackend  *backend,
   GError *internal_error = NULL;
   const char *drivers_list;
   char **known_drivers;
-  gboolean allow_any;
   int i;
 
   if (backend->cogl_context != NULL)
     return TRUE;
 
-  if (allowed_drivers == NULL)
-    allowed_drivers = CLUTTER_DRIVERS;
-
-  allow_any = strstr (allowed_drivers, "*") != NULL;
-
   drivers_list = g_getenv ("CLUTTER_DRIVER");
   if (drivers_list == NULL)
-    drivers_list = allowed_drivers;
+    drivers_list = CLUTTER_DRIVERS;
 
   known_drivers = g_strsplit (drivers_list, ",", 0);
 
@@ -321,11 +304,7 @@ clutter_backend_real_create_context (ClutterBackend  *backend,
 
       for (j = 0; j < G_N_ELEMENTS (all_known_drivers); j++)
         {
-          if (!allow_any && !is_any && !strstr (driver_name, all_known_drivers[j].driver_name))
-            continue;
-
-          if ((allow_any && is_any) ||
-              (is_any && strstr (allowed_drivers, all_known_drivers[j].driver_name)) ||
+          if (is_any ||
               g_str_equal (all_known_drivers[j].driver_name, driver_name))
             {
               CLUTTER_NOTE (BACKEND, "Checking for the %s driver", all_known_drivers[j].driver_desc);
@@ -647,18 +626,6 @@ CoglContext *
 clutter_backend_get_cogl_context (ClutterBackend *backend)
 {
   return backend->cogl_context;
-}
-
-void
-clutter_set_allowed_drivers (const char *drivers)
-{
-  if (_clutter_context_is_initialized ())
-    {
-      g_warning ("Clutter has already been initialized.\n");
-      return;
-    }
-
-  allowed_drivers = g_strdup (drivers);
 }
 
 /**

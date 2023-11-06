@@ -30,14 +30,13 @@
 
 #pragma once
 
-#include "cogl/cogl-object-private.h"
 #include "cogl/cogl-pipeline-private.h"
 #include "cogl/cogl-texture-private.h"
 #include "cogl/cogl-texture-2d.h"
 
 struct _CoglTexture2D
 {
-  CoglTexture _parent;
+  CoglTexture parent_instance;
 
   /* The internal format of the GL texture represented as a
      CoglPixelFormat */
@@ -67,11 +66,12 @@ struct _CoglTexture2D
   } egl_image_external;
 };
 
-CoglTexture2D *
-_cogl_texture_2d_new_from_bitmap (CoglBitmap *bmp,
-                                  gboolean can_convert_in_place);
+struct _CoglTexture2DClass
+{
+   CoglTextureClass parent_class;
+};
 
-CoglTexture2D *
+CoglTexture *
 _cogl_texture_2d_create_base (CoglContext *ctx,
                               int width,
                               int height,

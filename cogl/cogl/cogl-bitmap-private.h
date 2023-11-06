@@ -32,13 +32,12 @@
 
 #include <glib.h>
 
-#include "cogl/cogl-object-private.h"
 #include "cogl/cogl-buffer.h"
 #include "cogl/cogl-bitmap.h"
 
 struct _CoglBitmap
 {
-  CoglObject _parent;
+  GObject parent_instance;
 
   /* Pointer back to the context that this bitmap was created with */
   CoglContext *context;
@@ -105,18 +104,12 @@ _cogl_bitmap_convert (CoglBitmap *bmp,
 CoglBitmap *
 _cogl_bitmap_convert_for_upload (CoglBitmap *src_bmp,
                                  CoglPixelFormat internal_format,
-                                 gboolean can_convert_in_place,
                                  GError **error);
 
 gboolean
 _cogl_bitmap_convert_into_bitmap (CoglBitmap *src_bmp,
                                   CoglBitmap *dst_bmp,
                                   GError **error);
-
-CoglBitmap *
-_cogl_bitmap_from_file (CoglContext *ctx,
-                        const char *filename,
-                        GError **error);
 
 gboolean
 _cogl_bitmap_unpremult (CoglBitmap *dst_bmp,
@@ -146,11 +139,6 @@ _cogl_bitmap_copy_subregion (CoglBitmap *src,
 CoglBitmap *
 _cogl_bitmap_copy (CoglBitmap *src_bmp,
                    GError **error);
-
-gboolean
-_cogl_bitmap_get_size_from_file (const char *filename,
-                                 int        *width,
-                                 int        *height);
 
 void
 _cogl_bitmap_set_format (CoglBitmap *bitmap,

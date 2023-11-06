@@ -42,7 +42,6 @@
 #include "cogl/cogl-texture-private.h"
 #include "cogl/cogl-pipeline.h"
 #include "cogl/cogl-context-private.h"
-#include "cogl/cogl-object-private.h"
 #include "cogl/driver/gl/cogl-pipeline-opengl-private.h"
 #include "cogl/driver/gl/cogl-util-gl-private.h"
 #include "cogl/driver/gl/cogl-texture-gl-private.h"
@@ -76,11 +75,7 @@ _cogl_texture_driver_gen (CoglContext *ctx,
        * level to 0 so OpenGL will consider the texture storage to be
        * "complete".
        */
-#ifdef HAVE_COGL_GL
-      if (_cogl_has_private_feature
-          (ctx, COGL_PRIVATE_FEATURE_TEXTURE_MAX_LEVEL))
-        GE( ctx, glTexParameteri (gl_target, GL_TEXTURE_MAX_LEVEL, 0));
-#endif
+      GE( ctx, glTexParameteri (gl_target, GL_TEXTURE_MAX_LEVEL, 0));
 
       /* GL_TEXTURE_MAG_FILTER defaults to GL_LINEAR, no need to set it */
       GE( ctx, glTexParameteri (gl_target,
@@ -97,10 +92,9 @@ _cogl_texture_driver_gen (CoglContext *ctx,
       g_assert_not_reached();
     }
 
-  /* If the driver doesn't support alpha textures directly then we'll
+  /* As the driver doesn't support alpha textures directly then we'll
    * fake them by setting the swizzle parameters */
   if (internal_format == COGL_PIXEL_FORMAT_A_8 &&
-      !_cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_ALPHA_TEXTURES) &&
       _cogl_has_private_feature (ctx, COGL_PRIVATE_FEATURE_TEXTURE_SWIZZLE))
     {
       static const GLint red_swizzle[] = { GL_ZERO, GL_ZERO, GL_ZERO, GL_RED };
@@ -255,7 +249,7 @@ _cogl_texture_driver_upload_subregion_to_gl (CoglContext *ctx,
        * glTexImage2D first to assert that the storage for this
        * level exists.
        */
-      if (texture->max_level_set < level)
+      if (cogl_texture_get_max_level_set (texture) < level)
         {
           ctx->glTexImage2D (gl_target,
                              level,
@@ -377,10 +371,8 @@ _cogl_texture_driver_size_supported (CoglContext *ctx,
 
   if (gl_target == GL_TEXTURE_2D)
     proxy_target = GL_PROXY_TEXTURE_2D;
-#ifdef HAVE_COGL_GL
   else if (gl_target == GL_TEXTURE_RECTANGLE_ARB)
     proxy_target = GL_PROXY_TEXTURE_RECTANGLE_ARB;
-#endif
   else
     /* Unknown target, assume it's not supported */
     return FALSE;
@@ -434,7 +426,6 @@ _cogl_texture_driver_upload_supported (CoglContext *ctx,
     case COGL_PIXEL_FORMAT_RGBA_4444_PRE:
     case COGL_PIXEL_FORMAT_RGBA_5551:
     case COGL_PIXEL_FORMAT_RGBA_5551_PRE:
-      return TRUE;
     case COGL_PIXEL_FORMAT_BGRX_FP_16161616:
     case COGL_PIXEL_FORMAT_BGRA_FP_16161616:
     case COGL_PIXEL_FORMAT_XRGB_FP_16161616:
@@ -447,11 +438,7 @@ _cogl_texture_driver_upload_supported (CoglContext *ctx,
     case COGL_PIXEL_FORMAT_RGBX_FP_16161616:
     case COGL_PIXEL_FORMAT_RGBA_FP_16161616:
     case COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE:
-      if (_cogl_has_private_feature
-          (ctx, COGL_PRIVATE_FEATURE_TEXTURE_FORMAT_HALF_FLOAT))
-        return TRUE;
-      else
-        return FALSE;
+      return TRUE;
     case COGL_PIXEL_FORMAT_G_16:
     case COGL_PIXEL_FORMAT_RG_1616:
     case COGL_PIXEL_FORMAT_DEPTH_16:

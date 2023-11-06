@@ -84,8 +84,8 @@ static void
 texture_unit_free (CoglTextureUnit *unit)
 {
   if (unit->layer)
-    cogl_object_unref (unit->layer);
-  cogl_object_unref (unit->matrix_stack);
+    g_object_unref (unit->layer);
+  g_object_unref (unit->matrix_stack);
 }
 
 CoglTextureUnit *
@@ -237,8 +237,6 @@ _cogl_pipeline_texture_storage_change_notify (CoglTexture *texture)
     }
 }
 
-#if defined(HAVE_COGL_GLES2) || defined(HAVE_COGL_GL)
-
 static gboolean
 blend_factor_uses_constant (GLenum blend_factor)
 {
@@ -247,8 +245,6 @@ blend_factor_uses_constant (GLenum blend_factor)
           blend_factor == GL_CONSTANT_ALPHA ||
           blend_factor == GL_ONE_MINUS_CONSTANT_ALPHA);
 }
-
-#endif
 
 static void
 flush_depth_state (CoglContext *ctx,
@@ -319,7 +315,6 @@ _cogl_pipeline_flush_color_blend_alpha_depth_state (
       CoglPipelineBlendState *blend_state =
         &authority->big_state->blend_state;
 
-#if defined(HAVE_COGL_GLES2) || defined(HAVE_COGL_GL)
       if (blend_factor_uses_constant (blend_state->blend_src_factor_rgb) ||
           blend_factor_uses_constant (blend_state
                                       ->blend_src_factor_alpha) ||
@@ -347,7 +342,6 @@ _cogl_pipeline_flush_color_blend_alpha_depth_state (
                                     blend_state->blend_src_factor_alpha,
                                     blend_state->blend_dst_factor_alpha));
     }
-#endif
 
   if (pipelines_difference & COGL_PIPELINE_STATE_DEPTH)
     {
@@ -509,7 +503,7 @@ flush_layers_common_gl_state_cb (CoglPipelineLayer *layer, void *user_data)
       GLenum gl_target;
 
       if (texture == NULL)
-        texture = COGL_TEXTURE (ctx->default_gl_texture_2d_tex);
+        texture = ctx->default_gl_texture_2d_tex;
 
       cogl_texture_get_gl_texture (texture,
                                    &gl_texture,
@@ -569,9 +563,9 @@ flush_layers_common_gl_state_cb (CoglPipelineLayer *layer, void *user_data)
       GE( ctx, glBindSampler (unit_index, sampler_state->sampler_object) );
     }
 
-  cogl_object_ref (layer);
+  g_object_ref (layer);
   if (unit->layer != NULL)
-    cogl_object_unref (unit->layer);
+    g_object_unref (unit->layer);
 
   unit->layer = layer;
   unit->layer_changes_since_flush = 0;
@@ -1094,9 +1088,9 @@ _cogl_pipeline_flush_gl_state (CoglContext *ctx,
    * XXX: The issue should largely go away when we switch to using
    * weak pipelines for overrides.
    */
-  cogl_object_ref (pipeline);
+  g_object_ref (pipeline);
   if (ctx->current_pipeline != NULL)
-    cogl_object_unref (ctx->current_pipeline);
+    g_object_unref (ctx->current_pipeline);
   ctx->current_pipeline = pipeline;
   ctx->current_pipeline_changes_since_flush = 0;
   ctx->current_pipeline_with_color_attrib = with_color_attrib;

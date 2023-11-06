@@ -36,8 +36,15 @@
 #include "cogl/cogl-util.h"
 #include "cogl/cogl-node-private.h"
 
-void
-_cogl_pipeline_node_init (CoglNode *node)
+G_DEFINE_ABSTRACT_TYPE (CoglNode, cogl_node, G_TYPE_OBJECT)
+
+static void
+cogl_node_class_init (CoglNodeClass *klass)
+{
+}
+
+static void
+cogl_node_init (CoglNode *node)
 {
   node->parent = NULL;
   _cogl_list_init (&node->children);
@@ -46,7 +53,6 @@ _cogl_pipeline_node_init (CoglNode *node)
 void
 _cogl_pipeline_node_set_parent_real (CoglNode *node,
                                      CoglNode *parent,
-                                     CoglNodeUnparentVFunc unparent,
                                      gboolean take_strong_reference)
 {
   /* NB: the old parent may indirectly be keeping the new parent alive
@@ -58,10 +64,10 @@ _cogl_pipeline_node_set_parent_real (CoglNode *node,
    * consistent link to all weak nodes. Once the node is linked to its
    * parent then we remove the reference at the end if
    * take_strong_reference == FALSE. */
-  cogl_object_ref (parent);
+  g_object_ref (parent);
 
   if (node->parent)
-    unparent (node);
+    _cogl_pipeline_node_unparent_real (node);
 
   _cogl_list_insert (&parent->children, &node->link);
 
@@ -73,7 +79,7 @@ _cogl_pipeline_node_set_parent_real (CoglNode *node,
    * out that the new parent was only being kept alive by the old
    * parent then it will be disposed of here. */
   if (!take_strong_reference)
-    cogl_object_unref (parent);
+    g_object_unref (parent);
 }
 
 void
@@ -89,7 +95,7 @@ _cogl_pipeline_node_unparent_real (CoglNode *node)
   _cogl_list_remove (&node->link);
 
   if (node->has_parent_reference)
-    cogl_object_unref (parent);
+    g_object_unref (parent);
 
   node->parent = NULL;
 }

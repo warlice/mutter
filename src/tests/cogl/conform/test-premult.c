@@ -49,8 +49,7 @@ make_texture (uint32_t color,
 	      CoglPixelFormat src_format,
               MakeTextureFlags flags)
 {
-  static CoglUserDataKey bitmap_free_key;
-  CoglTexture2D *tex_2d;
+  CoglTexture *tex;
   guchar *tex_data = gen_tex_data (color);
   CoglBitmap *bmp = cogl_bitmap_new_for_data (test_ctx,
                                               QUAD_WIDTH,
@@ -58,21 +57,17 @@ make_texture (uint32_t color,
                                               src_format,
                                               QUAD_WIDTH * 4,
                                               tex_data);
-  cogl_object_set_user_data (COGL_OBJECT (bmp),
-                             &bitmap_free_key,
-                             tex_data,
-                             g_free);
 
-  tex_2d = cogl_texture_2d_new_from_bitmap (bmp);
+  tex = cogl_texture_2d_new_from_bitmap (bmp);
 
   if (flags & TEXTURE_FLAG_SET_PREMULTIPLIED)
-    cogl_texture_set_premultiplied (tex_2d, TRUE);
+    cogl_texture_set_premultiplied (tex, TRUE);
   else if (flags & TEXTURE_FLAG_SET_UNPREMULTIPLIED)
-    cogl_texture_set_premultiplied (tex_2d, FALSE);
+    cogl_texture_set_premultiplied (tex, FALSE);
 
-  cogl_object_unref (bmp);
+  g_object_unref (bmp);
 
-  return tex_2d;
+  return tex;
 }
 
 static void

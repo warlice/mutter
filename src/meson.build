@@ -27,6 +27,7 @@ mutter_pkg_private_deps = [
   gnome_settings_daemon_dep,
   json_glib_dep,
   xkbcommon_dep,
+  gdk_pixbuf_dep,
   libeis_dep,
 ]
 
@@ -176,9 +177,6 @@ mutter_deps = [
 ]
 
 mutter_c_args = [
-  '-DCLUTTER_ENABLE_COMPOSITOR_API',
-  '-DCOGL_ENABLE_EXPERIMENTAL_API',
-  '-DCOGL_ENABLE_EXPERIMENTAL_2_0_API',
   '-DCOGL_ENABLE_MUTTER_API',
   '-DCLUTTER_DISABLE_DEPRECATION_WARNINGS',
   '-DCOGL_DISABLE_DEPRECATION_WARNINGS',

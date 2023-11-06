@@ -133,13 +133,14 @@
  */
 typedef struct _CoglMatrixStack CoglMatrixStack;
 
-/**
- * cogl_matrix_stack_get_gtype:
- *
- * Returns: a #GType that can be used with the GLib type system.
- */
+#define COGL_TYPE_MATRIX_STACK (cogl_matrix_stack_get_type ())
+
 COGL_EXPORT
-GType cogl_matrix_stack_get_gtype (void);
+G_DECLARE_FINAL_TYPE (CoglMatrixStack,
+                      cogl_matrix_stack,
+                      COGL,
+                      MATRIX_STACK,
+                      GObject)
 
 /**
  * CoglMatrixEntry:
@@ -173,17 +174,17 @@ GType cogl_matrix_stack_get_gtype (void);
  *
  * <note>#CoglMatrixEntry<!-- -->s are reference counted using
  * cogl_matrix_entry_ref() and cogl_matrix_entry_unref() not with
- * cogl_object_ref() and cogl_object_unref().</note>
+ * g_object_ref() and g_object_unref().</note>
  */
 typedef struct _CoglMatrixEntry CoglMatrixEntry;
 
 /**
- * cogl_matrix_entry_get_gtype:
+ * cogl_matrix_entry_get_type:
  *
  * Returns: a #GType that can be used with the GLib type system.
  */
 COGL_EXPORT
-GType cogl_matrix_entry_get_gtype (void);
+GType cogl_matrix_entry_get_type (void);
 
 
 /**
@@ -519,18 +520,6 @@ cogl_matrix_stack_set (CoglMatrixStack         *stack,
                        const graphene_matrix_t *matrix);
 
 /**
- * cogl_is_matrix_stack:
- * @object: a #CoglObject
- *
- * Determines if the given #CoglObject refers to a #CoglMatrixStack.
- *
- * Return value: %TRUE if @object is a #CoglMatrixStack, otherwise
- *               %FALSE.
- */
-COGL_EXPORT gboolean
-cogl_is_matrix_stack (void *object);
-
-/**
  * cogl_matrix_entry_calculate_translation:
  * @entry0: The first reference transform
  * @entry1: A second reference transform
@@ -609,9 +598,6 @@ cogl_debug_matrix_entry_print (CoglMatrixEntry *entry);
  * Takes a reference on the given @entry to ensure the @entry stays
  * alive and remains valid. When you are finished with the @entry then
  * you should call cogl_matrix_entry_unref().
- *
- * It is an error to pass an @entry pointer to cogl_object_ref() and
- * cogl_object_unref()
  */
 COGL_EXPORT CoglMatrixEntry *
 cogl_matrix_entry_ref (CoglMatrixEntry *entry);

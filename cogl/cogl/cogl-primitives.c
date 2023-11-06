@@ -272,7 +272,7 @@ _cogl_texture_quad_multiple_primitives (CoglFramebuffer *framebuffer,
   if (wrap_t == COGL_PIPELINE_WRAP_MODE_AUTOMATIC)
     wrap_t = COGL_PIPELINE_WRAP_MODE_REPEAT;
 
-  cogl_meta_texture_foreach_in_region (COGL_META_TEXTURE (texture),
+  cogl_meta_texture_foreach_in_region (texture,
                                        tx_1, ty_1, tx_2, ty_2,
                                        wrap_s,
                                        wrap_t,
@@ -280,7 +280,7 @@ _cogl_texture_quad_multiple_primitives (CoglFramebuffer *framebuffer,
                                        &state);
 
   if (validate_first_layer_state.override_pipeline)
-    cogl_object_unref (validate_first_layer_state.override_pipeline);
+    g_object_unref (validate_first_layer_state.override_pipeline);
 }
 
 typedef struct _ValidateTexCoordsState
@@ -364,7 +364,7 @@ validate_tex_coords_cb (CoglPipeline *pipeline,
             }
 
           if (state->override_pipeline)
-            cogl_object_unref (state->override_pipeline);
+            g_object_unref (state->override_pipeline);
           state->needs_multiple_primitives = TRUE;
           return FALSE;
         }
@@ -467,7 +467,7 @@ _cogl_multitexture_quad_single_primitive (CoglFramebuffer *framebuffer,
                           n_layers * 4);
 
   if (state.override_pipeline)
-    cogl_object_unref (state.override_pipeline);
+    g_object_unref (state.override_pipeline);
 
   return TRUE;
 }
@@ -580,7 +580,7 @@ _cogl_rectangles_validate_layer_cb (CoglPipeline *pipeline,
       else
         {
           static gboolean warning_seen = FALSE;
-          CoglTexture2D *tex_2d;
+          CoglTexture *tex_2d;
 
           if (!warning_seen)
             g_warning ("Skipping layer %d of your pipeline consisting of "
@@ -590,8 +590,7 @@ _cogl_rectangles_validate_layer_cb (CoglPipeline *pipeline,
 
           /* Note: currently only 2D textures can be sliced. */
           tex_2d = state->ctx->default_gl_texture_2d_tex;
-          cogl_pipeline_set_layer_texture (pipeline, layer_index,
-                                           COGL_TEXTURE (tex_2d));
+          cogl_pipeline_set_layer_texture (pipeline, layer_index, tex_2d);
           return TRUE;
         }
     }
@@ -704,7 +703,7 @@ _cogl_framebuffer_draw_multitextured_rectangles (
     }
 
   if (pipeline != original_pipeline)
-    cogl_object_unref (pipeline);
+    g_object_unref (pipeline);
 }
 
 void
@@ -740,8 +739,8 @@ cogl_2d_primitives_immediate (CoglFramebuffer *framebuffer,
                                      COGL_DRAW_SKIP_FRAMEBUFFER_FLUSH);
 
 
-  cogl_object_unref (attributes[0]);
-  cogl_object_unref (attribute_buffer);
+  g_object_unref (attributes[0]);
+  g_object_unref (attribute_buffer);
 }
 
 void

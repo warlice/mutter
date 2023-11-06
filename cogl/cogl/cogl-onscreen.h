@@ -40,7 +40,6 @@
 #include "cogl/cogl-context.h"
 #include "cogl/cogl-framebuffer.h"
 #include "cogl/cogl-frame-info.h"
-#include "cogl/cogl-object.h"
 
 #include <glib-object.h>
 
@@ -398,12 +397,12 @@ typedef void (*CoglFrameCallback) (CoglOnscreen *onscreen,
 typedef struct _CoglClosure CoglFrameClosure;
 
 /**
- * cogl_frame_closure_get_gtype:
+ * cogl_frame_closure_get_type:
  *
  * Returns: a #GType that can be used with the GLib type system.
  */
 COGL_EXPORT
-GType cogl_frame_closure_get_gtype (void);
+GType cogl_frame_closure_get_type (void);
 
 /**
  * cogl_onscreen_add_frame_callback:
@@ -444,7 +443,7 @@ COGL_EXPORT CoglFrameClosure *
 cogl_onscreen_add_frame_callback (CoglOnscreen *onscreen,
                                   CoglFrameCallback callback,
                                   void *user_data,
-                                  CoglUserDataDestroyCallback destroy);
+                                  GDestroyNotify destroy);
 
 /**
  * cogl_onscreen_remove_frame_callback:
@@ -510,12 +509,12 @@ typedef void (*CoglOnscreenDirtyCallback) (CoglOnscreen *onscreen,
 typedef struct _CoglClosure CoglOnscreenDirtyClosure;
 
 /**
- * cogl_onscreen_dirty_closure_get_gtype:
+ * cogl_onscreen_dirty_closure_get_type:
  *
  * Returns: a #GType that can be used with the GLib type system.
  */
 COGL_EXPORT
-GType cogl_onscreen_dirty_closure_get_gtype (void);
+GType cogl_onscreen_dirty_closure_get_type (void);
 
 /**
  * cogl_onscreen_add_dirty_callback:
@@ -549,7 +548,7 @@ COGL_EXPORT CoglOnscreenDirtyClosure *
 cogl_onscreen_add_dirty_callback (CoglOnscreen *onscreen,
                                   CoglOnscreenDirtyCallback callback,
                                   void *user_data,
-                                  CoglUserDataDestroyCallback destroy);
+                                  GDestroyNotify destroy);
 
 /**
  * cogl_onscreen_remove_dirty_callback:

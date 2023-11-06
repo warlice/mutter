@@ -48,11 +48,6 @@ _cogl_poll_renderer_add_fd (CoglRenderer *renderer,
                             CoglPollDispatchCallback dispatch,
                             void *user_data);
 
-void
-_cogl_poll_renderer_modify_fd (CoglRenderer *renderer,
-                               int fd,
-                               CoglPollFDEvent events);
-
 typedef struct _CoglPollSource CoglPollSource;
 
 CoglPollSource *
@@ -61,14 +56,10 @@ _cogl_poll_renderer_add_source (CoglRenderer *renderer,
                                 CoglPollDispatchCallback dispatch,
                                 void *user_data);
 
-void
-_cogl_poll_renderer_remove_source (CoglRenderer *renderer,
-                                   CoglPollSource *source);
-
 typedef void (*CoglIdleCallback) (void *user_data);
 
 COGL_EXPORT CoglClosure *
 _cogl_poll_renderer_add_idle (CoglRenderer *renderer,
                               CoglIdleCallback idle_cb,
                               void *user_data,
-                              CoglUserDataDestroyCallback destroy_cb);
+                              GDestroyNotify destroy_cb);

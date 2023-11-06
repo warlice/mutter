@@ -24,6 +24,7 @@
 #define __MTK_H_INSIDE__
 
 #include "mtk/mtk-rectangle.h"
+#include "mtk/mtk-region.h"
 #include "mtk/mtk-macros.h"
 
 #undef __MTK_H_INSIDE__

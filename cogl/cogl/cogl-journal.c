@@ -122,9 +122,12 @@ typedef void (*CoglJournalBatchCallback) (CoglJournalEntry *start,
 typedef gboolean (*CoglJournalBatchTest) (CoglJournalEntry *entry0,
                                           CoglJournalEntry *entry1);
 
-void
-_cogl_journal_free (CoglJournal *journal)
+G_DEFINE_TYPE (CoglJournal, cogl_journal, G_TYPE_OBJECT);
+
+static void
+cogl_journal_dispose (GObject *object)
 {
+  CoglJournal *journal = COGL_JOURNAL (object);
   int i;
 
   if (journal->entries)
@@ -134,15 +137,28 @@ _cogl_journal_free (CoglJournal *journal)
 
   for (i = 0; i < COGL_JOURNAL_VBO_POOL_SIZE; i++)
     if (journal->vbo_pool[i])
-      cogl_object_unref (journal->vbo_pool[i]);
+      g_object_unref (journal->vbo_pool[i]);
 
-  g_free (journal);
+  G_OBJECT_CLASS (cogl_journal_parent_class)->dispose (object);
+}
+
+static void
+cogl_journal_init (CoglJournal *journal)
+{
+}
+
+static void
+cogl_journal_class_init (CoglJournalClass *class)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (class);
+
+  object_class->dispose = cogl_journal_dispose;
 }
 
 CoglJournal *
 _cogl_journal_new (CoglFramebuffer *framebuffer)
 {
-  CoglJournal *journal = g_new0 (CoglJournal, 1);
+  CoglJournal *journal = g_object_new (COGL_TYPE_JOURNAL, NULL);
 
   journal->framebuffer = framebuffer;
   journal->entries = g_array_new (FALSE, FALSE, sizeof (CoglJournalEntry));
@@ -521,7 +537,7 @@ _cogl_journal_flush_texcoord_vbo_offsets_and_entries (
   /* NB: attributes 0 and 1 are position and color */
 
   for (i = 2; i < state->attributes->len; i++)
-    cogl_object_unref (g_array_index (state->attributes, CoglAttribute *, i));
+    g_object_unref (g_array_index (state->attributes, CoglAttribute *, i));
 
   g_array_set_size (state->attributes, batch_start->n_layers + 2);
 
@@ -589,7 +605,7 @@ _cogl_journal_flush_vbo_offsets_and_entries (CoglJournalEntry *batch_start,
   state->stride = stride;
 
   for (i = 0; i < state->attributes->len; i++)
-    cogl_object_unref (g_array_index (state->attributes, CoglAttribute *, i));
+    g_object_unref (g_array_index (state->attributes, CoglAttribute *, i));
 
   g_array_set_size (state->attributes, 2);
 
@@ -1129,7 +1145,7 @@ create_attribute_buffer (CoglJournal *journal,
   else if (cogl_buffer_get_size (COGL_BUFFER (vbo)) < n_bytes)
     {
       /* If the buffer is too small then we'll just recreate it */
-      cogl_object_unref (vbo);
+      g_object_unref (vbo);
       vbo = cogl_attribute_buffer_new_with_size (ctx, n_bytes);
       journal->vbo_pool[journal->next_vbo_in_pool] = vbo;
     }
@@ -1137,7 +1153,7 @@ create_attribute_buffer (CoglJournal *journal,
   journal->next_vbo_in_pool = ((journal->next_vbo_in_pool + 1) %
                                COGL_JOURNAL_VBO_POOL_SIZE);
 
-  return cogl_object_ref (vbo);
+  return g_object_ref (vbo);
 }
 
 static CoglAttributeBuffer *
@@ -1459,10 +1475,10 @@ _cogl_journal_flush (CoglJournal *journal)
                   &state);
 
   for (i = 0; i < state.attributes->len; i++)
-    cogl_object_unref (g_array_index (state.attributes, CoglAttribute *, i));
+    g_object_unref (g_array_index (state.attributes, CoglAttribute *, i));
   g_array_set_size (state.attributes, 0);
 
-  cogl_object_unref (state.attribute_buffer);
+  g_object_unref (state.attribute_buffer);
 
   COGL_TIMER_START (_cogl_uprof_context, discard_timer);
   _cogl_journal_discard (journal);
@@ -1602,7 +1618,7 @@ _cogl_journal_log_quad (CoglJournal  *journal,
   cogl_framebuffer_get_viewport4fv (framebuffer, entry->viewport);
 
   if (G_UNLIKELY (final_pipeline != pipeline))
-    cogl_object_unref (final_pipeline);
+    g_object_unref (final_pipeline);
 
   modelview_stack =
     _cogl_framebuffer_get_modelview_stack (framebuffer);

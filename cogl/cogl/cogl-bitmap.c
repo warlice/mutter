@@ -37,28 +37,41 @@
 #include "cogl/cogl-buffer-private.h"
 #include "cogl/cogl-pixel-buffer.h"
 #include "cogl/cogl-context-private.h"
-#include "cogl/cogl-gtype-private.h"
 
 #include <string.h>
 
-static void _cogl_bitmap_free (CoglBitmap *bmp);
+static GQuark bitmap_free_key = 0;
 
-COGL_OBJECT_DEFINE (Bitmap, bitmap);
-COGL_GTYPE_DEFINE_CLASS (Bitmap, bitmap);
+G_DEFINE_TYPE (CoglBitmap, cogl_bitmap, G_TYPE_OBJECT);
 
 static void
-_cogl_bitmap_free (CoglBitmap *bmp)
+cogl_bitmap_dispose (GObject *object)
 {
+  CoglBitmap *bmp = COGL_BITMAP (object);
+
   g_assert (!bmp->mapped);
   g_assert (!bmp->bound);
 
   if (bmp->shared_bmp)
-    cogl_object_unref (bmp->shared_bmp);
+    g_object_unref (bmp->shared_bmp);
 
   if (bmp->buffer)
-    cogl_object_unref (bmp->buffer);
+    g_object_unref (bmp->buffer);
 
-  g_free (bmp);
+  G_OBJECT_CLASS (cogl_bitmap_parent_class)->dispose (object);
+}
+
+static void
+cogl_bitmap_init (CoglBitmap *bitmap)
+{
+}
+
+static void
+cogl_bitmap_class_init (CoglBitmapClass *class)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (class);
+
+  object_class->dispose = cogl_bitmap_dispose;
 }
 
 gboolean
@@ -106,7 +119,7 @@ _cogl_bitmap_copy (CoglBitmap *src_bmp,
                                     width, height,
                                     error))
     {
-      cogl_object_unref (dst_bmp);
+      g_object_unref (dst_bmp);
       return NULL;
     }
 
@@ -165,32 +178,24 @@ _cogl_bitmap_copy_subregion (CoglBitmap *src,
   return succeeded;
 }
 
-gboolean
-cogl_bitmap_get_size_from_file (const char *filename,
-                                int        *width,
-                                int        *height)
-{
-  return _cogl_bitmap_get_size_from_file (filename, width, height);
-}
-
 CoglBitmap *
-cogl_bitmap_new_for_data (CoglContext *context,
-                          int width,
-                          int height,
+cogl_bitmap_new_for_data (CoglContext    *context,
+                          int             width,
+                          int             height,
                           CoglPixelFormat format,
-                          int rowstride,
-                          uint8_t *data)
+                          int             rowstride,
+                          uint8_t        *data)
 {
   CoglBitmap *bmp;
 
-  g_return_val_if_fail (cogl_is_context (context), NULL);
+  g_return_val_if_fail (COGL_IS_CONTEXT (context), NULL);
   g_return_val_if_fail (cogl_pixel_format_get_n_planes (format) == 1, NULL);
 
   /* Rowstride from width if not given */
   if (rowstride == 0)
     rowstride = width * cogl_pixel_format_get_bytes_per_pixel (format, 0);
 
-  bmp = g_new0 (CoglBitmap, 1);
+  bmp = g_object_new (COGL_TYPE_BITMAP, NULL);
   bmp->context = context;
   bmp->format = format;
   bmp->width = width;
@@ -202,7 +207,7 @@ cogl_bitmap_new_for_data (CoglContext *context,
   bmp->shared_bmp = NULL;
   bmp->buffer = NULL;
 
-  return _cogl_bitmap_object_new (bmp);
+  return bmp;
 }
 
 CoglBitmap *
@@ -212,7 +217,7 @@ _cogl_bitmap_new_with_malloc_buffer (CoglContext *context,
                                      CoglPixelFormat format,
                                      GError **error)
 {
-  static CoglUserDataKey bitmap_free_key;
+  bitmap_free_key = g_quark_from_static_string ("-cogl-bitmap-malloc-buffer-key");
   int bpp;
   int rowstride;
   uint8_t *data;
@@ -239,10 +244,10 @@ _cogl_bitmap_new_with_malloc_buffer (CoglContext *context,
                                      format,
                                      rowstride,
                                      data);
-  cogl_object_set_user_data (COGL_OBJECT (bitmap),
-                             &bitmap_free_key,
-                             data,
-                             g_free);
+  g_object_set_qdata_full (G_OBJECT (bitmap),
+                           bitmap_free_key,
+                           data,
+                           g_free);
 
   return bitmap;
 }
@@ -262,21 +267,9 @@ _cogl_bitmap_new_shared (CoglBitmap              *shared_bmp,
                                   rowstride,
                                   NULL /* data */);
 
-  bmp->shared_bmp = cogl_object_ref (shared_bmp);
+  bmp->shared_bmp = g_object_ref (shared_bmp);
 
   return bmp;
-}
-
-CoglBitmap *
-cogl_bitmap_new_from_file (const char *filename,
-                           GError **error)
-{
-  _COGL_GET_CONTEXT (ctx, NULL);
-
-  g_return_val_if_fail (filename != NULL, NULL);
-  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
-
-  return _cogl_bitmap_from_file (ctx, filename, error);
 }
 
 CoglBitmap *
@@ -289,7 +282,7 @@ cogl_bitmap_new_from_buffer (CoglBuffer *buffer,
 {
   CoglBitmap *bmp;
 
-  g_return_val_if_fail (cogl_is_buffer (buffer), NULL);
+  g_return_val_if_fail (COGL_IS_BUFFER (buffer), NULL);
 
   bmp = cogl_bitmap_new_for_data (buffer->context,
                                   width, height,
@@ -297,7 +290,7 @@ cogl_bitmap_new_from_buffer (CoglBuffer *buffer,
                                   rowstride,
                                   NULL /* data */);
 
-  bmp->buffer = cogl_object_ref (buffer);
+  bmp->buffer = g_object_ref (buffer);
   bmp->data = GINT_TO_POINTER (offset);
 
   return bmp;
@@ -334,7 +327,7 @@ cogl_bitmap_new_with_size (CoglContext *context,
                                         rowstride,
                                         0 /* offset */);
 
-  cogl_object_unref (pixel_buffer);
+  g_object_unref (pixel_buffer);
 
   return bitmap;
 }

@@ -147,11 +147,11 @@ maybe_record_frame_on_idle (gpointer user_data)
 }
 
 static void
-stage_painted (MetaStage            *stage,
-               ClutterStageView     *view,
-               const cairo_region_t *redraw_clip,
-               ClutterFrame         *frame,
-               gpointer              user_data)
+stage_painted (MetaStage        *stage,
+               ClutterStageView *view,
+               const MtkRegion  *redraw_clip,
+               ClutterFrame     *frame,
+               gpointer          user_data)
 {
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (user_data);
@@ -187,11 +187,11 @@ stage_painted (MetaStage            *stage,
 }
 
 static void
-before_stage_painted (MetaStage            *stage,
-                      ClutterStageView     *view,
-                      const cairo_region_t *redraw_clip,
-                      ClutterFrame         *frame,
-                      gpointer              user_data)
+before_stage_painted (MetaStage        *stage,
+                      ClutterStageView *view,
+                      const MtkRegion  *redraw_clip,
+                      ClutterFrame     *frame,
+                      gpointer          user_data)
 {
   MetaScreenCastMonitorStreamSrc *monitor_src =
     META_SCREEN_CAST_MONITOR_STREAM_SRC (user_data);
@@ -570,7 +570,7 @@ meta_screen_cast_monitor_stream_src_record_to_buffer (MetaScreenCastStreamSrc  *
   if (!clutter_stage_paint_to_buffer (stage, &logical_monitor->rect, scale,
                                       data,
                                       stride,
-                                      CLUTTER_CAIRO_FORMAT_ARGB32,
+                                      COGL_PIXEL_FORMAT_CAIRO_ARGB32_COMPAT,
                                       paint_flags,
                                       error))
     return FALSE;

@@ -383,9 +383,9 @@ cogl_gl_framebuffer_draw_indexed_attributes (CoglFramebufferDriver  *driver,
   base = _cogl_buffer_gl_bind (buffer,
                                COGL_BUFFER_BIND_TARGET_INDEX_BUFFER, NULL);
   buffer_offset = cogl_indices_get_offset (indices);
-  index_size = sizeof_index_type (cogl_indices_get_type (indices));
+  index_size = sizeof_index_type (cogl_indices_get_indices_type (indices));
 
-  switch (cogl_indices_get_type (indices))
+  switch (cogl_indices_get_indices_type (indices))
     {
     case COGL_INDICES_TYPE_UNSIGNED_BYTE:
       indices_gl_type = GL_UNSIGNED_BYTE;
@@ -547,7 +547,7 @@ cogl_gl_framebuffer_read_pixels_into_bitmap (CoglFramebufferDriver  *driver,
 
       _cogl_bitmap_set_format (bitmap, format);
 
-      cogl_object_unref (tmp_bmp);
+      g_object_unref (tmp_bmp);
 
       if (!succeeded)
         goto EXIT;
@@ -578,7 +578,7 @@ cogl_gl_framebuffer_read_pixels_into_bitmap (CoglFramebufferDriver  *driver,
                                               width, height,
                                               rowstride);
       else
-        shared_bmp = cogl_object_ref (bitmap);
+        shared_bmp = g_object_ref (bitmap);
 
       bpp = cogl_pixel_format_get_bytes_per_pixel (bmp_format, 0);
 
@@ -596,7 +596,7 @@ cogl_gl_framebuffer_read_pixels_into_bitmap (CoglFramebufferDriver  *driver,
        * to know if there was a problem */
       if (internal_error)
         {
-          cogl_object_unref (shared_bmp);
+          g_object_unref (shared_bmp);
           g_propagate_error (error, internal_error);
           goto EXIT;
         }
@@ -615,7 +615,7 @@ cogl_gl_framebuffer_read_pixels_into_bitmap (CoglFramebufferDriver  *driver,
           _cogl_bitmap_convert_premult_status (shared_bmp, format, error))
         succeeded = TRUE;
 
-      cogl_object_unref (shared_bmp);
+      g_object_unref (shared_bmp);
 
       if (!succeeded)
         goto EXIT;

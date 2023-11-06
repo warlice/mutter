@@ -68,7 +68,7 @@ meta_texture_mipmap_free (MetaTextureMipmap *mipmap)
 {
   g_return_if_fail (mipmap != NULL);
 
-  cogl_clear_object (&mipmap->pipeline);
+  g_clear_object (&mipmap->pipeline);
   g_clear_object (&mipmap->base_texture);
   g_clear_object (&mipmap->mipmap_texture);
   g_clear_object (&mipmap->fb);
@@ -165,16 +165,14 @@ ensure_mipmap_texture (MetaTextureMipmap *mipmap)
       meta_multi_texture_get_height (mipmap->mipmap_texture) != height)
     {
       CoglOffscreen *offscreen;
-      CoglTexture2D *tex2d;
       CoglTexture *tex;
 
       free_mipmaps (mipmap);
 
-      tex2d = cogl_texture_2d_new_with_size (ctx, width, height);
-      if (!tex2d)
+      tex = cogl_texture_2d_new_with_size (ctx, width, height);
+      if (!tex)
         return;
 
-      tex = COGL_TEXTURE (tex2d);
       mipmap->mipmap_texture = meta_multi_texture_new_simple (tex);
 
       offscreen = cogl_offscreen_new_with_texture (tex);
@@ -232,8 +230,8 @@ ensure_mipmap_texture (MetaTextureMipmap *mipmap)
           cogl_pipeline_add_snippet (mipmap->pipeline, fragment_globals_snippet);
           cogl_pipeline_add_snippet (mipmap->pipeline, fragment_snippet);
 
-          cogl_clear_object (&fragment_globals_snippet);
-          cogl_clear_object (&fragment_snippet);
+          g_clear_object (&fragment_globals_snippet);
+          g_clear_object (&fragment_snippet);
         }
 
       for (i = 0; i < n_planes; i++)

@@ -37,12 +37,14 @@
 #include "cogl/cogl-types.h"
 #include "cogl/cogl-defines.h"
 #include "cogl/cogl-macros.h"
+#include "cogl/deprecated/cogl-program.h"
 
 G_BEGIN_DECLS
 
 /**
- * SECTION:cogl-shaders
- * @short_description: Functions for accessing the programmable GL pipeline
+ * CoglShader:
+ *
+ * Functions for accessing the programmable GL pipeline
  *
  * Cogl allows accessing the GL programmable pipeline in order to create
  * vertex and fragment shaders.
@@ -219,6 +221,15 @@ G_BEGIN_DECLS
  * experimental #CoglShader API is the proposed replacement.
  */
 
+#define COGL_TYPE_SHADER (cogl_shader_get_type ())
+
+COGL_EXPORT
+G_DECLARE_FINAL_TYPE (CoglShader,
+                      cogl_shader,
+                      COGL,
+                      SHADER,
+                      GObject)
+
 /**
  * CoglShaderType:
  * @COGL_SHADER_TYPE_VERTEX: A program for processing vertices
@@ -239,30 +250,16 @@ typedef enum
  * Create a new shader handle, use cogl_shader_source() to set the
  * source code to be used on it.
  *
- * Returns: a new shader handle.
+ * Returns: (transfer full): a new shader handle.
  * Deprecated: 1.16: Use #CoglSnippet api
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
-COGL_EXPORT CoglHandle
+COGL_EXPORT CoglShader*
 cogl_create_shader (CoglShaderType shader_type);
 
 /**
- * cogl_is_shader:
- * @handle: A CoglHandle
- *
- * Gets whether the given handle references an existing shader object.
- *
- * Returns: %TRUE if the handle references a shader,
- *   %FALSE otherwise
- * Deprecated: 1.16: Use #CoglSnippet api
- */
-COGL_DEPRECATED_FOR (cogl_snippet_)
-COGL_EXPORT gboolean
-cogl_is_shader (CoglHandle handle);
-
-/**
  * cogl_shader_source:
- * @shader: #CoglHandle for a shader.
+ * @self: A shader.
  * @source: Shader source.
  *
  * Replaces the current source associated with a shader with a new
@@ -275,14 +272,14 @@ cogl_is_shader (CoglHandle handle);
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
 COGL_EXPORT void
-cogl_shader_source (CoglHandle  shader,
+cogl_shader_source (CoglShader *self,
                     const char *source);
 
 /**
- * cogl_shader_get_type:
- * @handle: #CoglHandle for a shader.
+ * cogl_shader_get_shader_type:
+ * @self: #CoglShader for a shader.
  *
- * Retrieves the type of a shader #CoglHandle
+ * Retrieves the type of a shader
  *
  * Return value: %COGL_SHADER_TYPE_VERTEX if the shader is a vertex processor
  *          or %COGL_SHADER_TYPE_FRAGMENT if the shader is a fragment processor
@@ -290,7 +287,7 @@ cogl_shader_source (CoglHandle  shader,
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
 COGL_EXPORT CoglShaderType
-cogl_shader_get_type (CoglHandle handle);
+cogl_shader_get_shader_type (CoglShader *self);
 
 /**
  * cogl_create_program:
@@ -298,32 +295,17 @@ cogl_shader_get_type (CoglHandle handle);
  * Create a new cogl program object that can be used to replace parts of the GL
  * rendering pipeline with custom code.
  *
- * Returns: a new cogl program.
+ * Returns: (transfer full): a new cogl program.
  * Deprecated: 1.16: Use #CoglSnippet api
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
-COGL_EXPORT CoglHandle
+COGL_EXPORT CoglProgram*
 cogl_create_program (void);
 
 /**
- * cogl_is_program:
- * @handle: A CoglHandle
- *
- * Gets whether the given handle references an existing program object.
- *
- * Returns: %TRUE if the handle references a program,
- *   %FALSE otherwise
- *
- * Deprecated: 1.16: Use #CoglSnippet api
- */
-COGL_DEPRECATED_FOR (cogl_snippet_)
-COGL_EXPORT gboolean
-cogl_is_program (CoglHandle handle);
-
-/**
  * cogl_program_attach_shader:
- * @program_handle: a #CoglHandle for a shdaer program.
- * @shader_handle: a #CoglHandle for a vertex of fragment shader.
+ * @program: a #CoglProgram for a shader program.
+ * @shader: a #CoglShader for a vertex of fragment shader.
  *
  * Attaches a shader to a program object. A program can have multiple
  * vertex or fragment shaders but only one of them may provide a
@@ -334,12 +316,12 @@ cogl_is_program (CoglHandle handle);
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
 COGL_EXPORT void
-cogl_program_attach_shader (CoglHandle program_handle,
-                            CoglHandle shader_handle);
+cogl_program_attach_shader (CoglProgram *program,
+                            CoglShader  *shader);
 
 /**
  * cogl_program_link:
- * @handle: a #CoglHandle for a shader program.
+ * @program: A shader program.
  *
  * Links a program making it ready for use. Note that calling this
  * function is optional. If it is not called the program will
@@ -349,11 +331,11 @@ cogl_program_attach_shader (CoglHandle program_handle,
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
 COGL_EXPORT void
-cogl_program_link (CoglHandle handle);
+cogl_program_link (CoglProgram *program);
 
 /**
  * cogl_program_get_uniform_location:
- * @handle: a #CoglHandle for a shader program.
+ * @program: A shader program.
  * @uniform_name: the name of a uniform.
  *
  * Retrieve the location (offset) of a uniform variable in a shader program,
@@ -365,12 +347,12 @@ cogl_program_link (CoglHandle handle);
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
 COGL_EXPORT int
-cogl_program_get_uniform_location (CoglHandle  handle,
-                                   const char *uniform_name);
+cogl_program_get_uniform_location (CoglProgram *program,
+                                   const char  *uniform_name);
 
 /**
  * cogl_program_set_uniform_1f:
- * @program: A #CoglHandle for a linked program
+ * @program: A linked program
  * @uniform_location: the uniform location retrieved from
  *    cogl_program_get_uniform_location().
  * @value: the new value of the uniform.
@@ -381,13 +363,13 @@ cogl_program_get_uniform_location (CoglHandle  handle,
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
 COGL_EXPORT void
-cogl_program_set_uniform_1f (CoglHandle program,
-                             int uniform_location,
-                             float value);
+cogl_program_set_uniform_1f (CoglProgram *program,
+                             int          uniform_location,
+                             float        value);
 
 /**
  * cogl_program_set_uniform_1i:
- * @program: A #CoglHandle for a linked program
+ * @program: A linked program
  * @uniform_location: the uniform location retrieved from
  *    cogl_program_get_uniform_location().
  * @value: the new value of the uniform.
@@ -398,13 +380,13 @@ cogl_program_set_uniform_1f (CoglHandle program,
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
 COGL_EXPORT void
-cogl_program_set_uniform_1i (CoglHandle program,
-                             int uniform_location,
-                             int value);
+cogl_program_set_uniform_1i (CoglProgram *program,
+                             int          uniform_location,
+                             int          value);
 
 /**
  * cogl_program_set_uniform_float:
- * @program: A #CoglHandle for a linked program
+ * @program: A linked program
  * @uniform_location: the uniform location retrieved from
  *    cogl_program_get_uniform_location().
  * @n_components: The number of components for the uniform. For
@@ -419,15 +401,15 @@ cogl_program_set_uniform_1i (CoglHandle program,
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
 COGL_EXPORT void
-cogl_program_set_uniform_float (CoglHandle program,
-                                int uniform_location,
-                                int n_components,
-                                int count,
+cogl_program_set_uniform_float (CoglProgram *program,
+                                int          uniform_location,
+                                int          n_components,
+                                int          count,
                                 const float *value);
 
 /**
  * cogl_program_set_uniform_int:
- * @program: A #CoglHandle for a linked program
+ * @program: A linked program
  * @uniform_location: the uniform location retrieved from
  *    cogl_program_get_uniform_location().
  * @n_components: The number of components for the uniform. For
@@ -442,15 +424,15 @@ cogl_program_set_uniform_float (CoglHandle program,
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
 COGL_EXPORT void
-cogl_program_set_uniform_int (CoglHandle program,
-                              int uniform_location,
-                              int n_components,
-                              int count,
-                              const int *value);
+cogl_program_set_uniform_int (CoglProgram *program,
+                              int          uniform_location,
+                              int          n_components,
+                              int          count,
+                              const int   *value);
 
 /**
  * cogl_program_set_uniform_matrix:
- * @program: A #CoglHandle for a linked program
+ * @program: A linked program
  * @uniform_location: the uniform location retrieved from
  *    cogl_program_get_uniform_location().
  * @dimensions: The dimensions of the matrix. So for for example pass
@@ -466,11 +448,11 @@ cogl_program_set_uniform_int (CoglHandle program,
  */
 COGL_DEPRECATED_FOR (cogl_snippet_)
 COGL_EXPORT void
-cogl_program_set_uniform_matrix (CoglHandle program,
-                                 int uniform_location,
-                                 int dimensions,
-                                 int count,
-                                 gboolean transpose,
+cogl_program_set_uniform_matrix (CoglProgram *program,
+                                 int          uniform_location,
+                                 int          dimensions,
+                                 int          count,
+                                 gboolean     transpose,
                                  const float *value);
 
 G_END_DECLS

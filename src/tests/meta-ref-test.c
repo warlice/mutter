@@ -245,7 +245,7 @@ capture_view_into (ClutterStageView *view,
   context = clutter_backend_get_cogl_context (backend);
   bitmap = cogl_bitmap_new_for_data (context,
                                      texture_width, texture_height,
-                                     CLUTTER_CAIRO_FORMAT_ARGB32,
+                                     COGL_PIXEL_FORMAT_CAIRO_ARGB32_COMPAT,
                                      stride,
                                      buffer);
 
@@ -258,7 +258,7 @@ capture_view_into (ClutterStageView *view,
                                             COGL_READ_PIXELS_COLOR_BUFFER,
                                             bitmap);
 
-  cogl_object_unref (bitmap);
+  g_object_unref (bitmap);
 }
 
 typedef struct
@@ -270,11 +270,11 @@ typedef struct
 } CaptureViewData;
 
 static void
-on_after_paint (MetaStage            *stage,
-                ClutterStageView     *view,
-                const cairo_region_t *redraw_clip,
-                ClutterFrame         *frame,
-                gpointer              user_data)
+on_after_paint (MetaStage        *stage,
+                ClutterStageView *view,
+                const MtkRegion  *redraw_clip,
+                ClutterFrame     *frame,
+                gpointer          user_data)
 {
   CaptureViewData *data = user_data;
   MtkRectangle rect;

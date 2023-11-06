@@ -197,7 +197,7 @@ meta_onscreen_native_notify_frame_complete (CoglOnscreen *onscreen)
 
   _cogl_onscreen_notify_frame_sync (onscreen, info);
   _cogl_onscreen_notify_complete (onscreen, info);
-  cogl_object_unref (info);
+  g_object_unref (info);
 }
 
 static void
@@ -865,7 +865,7 @@ copy_shared_framebuffer_cpu (CoglOnscreen                        *onscreen,
                                                  dumb_bitmap))
     g_warning ("Failed to CPU-copy to a secondary GPU output");
 
-  cogl_object_unref (dumb_bitmap);
+  g_object_unref (dumb_bitmap);
 
   secondary_gpu_state->cpu.current_dumb_fb = buffer_dumb;
 

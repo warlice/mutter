@@ -194,11 +194,11 @@ uninhibit_hw_cursor (MetaScreenCastVirtualStreamSrc *virtual_src)
 }
 
 static void
-actors_painted (MetaStage            *stage,
-                ClutterStageView     *view,
-                const cairo_region_t *redraw_clip,
-                ClutterFrame         *frame,
-                gpointer              user_data)
+actors_painted (MetaStage        *stage,
+                ClutterStageView *view,
+                const MtkRegion  *redraw_clip,
+                ClutterFrame     *frame,
+                gpointer          user_data)
 {
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (user_data);
   MetaScreenCastRecordFlag flags;
@@ -401,7 +401,7 @@ meta_screen_cast_virtual_stream_src_record_to_buffer (MetaScreenCastStreamSrc  *
                                       scale,
                                       data,
                                       stride,
-                                      CLUTTER_CAIRO_FORMAT_ARGB32,
+                                      COGL_PIXEL_FORMAT_CAIRO_ARGB32_COMPAT,
                                       paint_flags,
                                       error))
     return FALSE;

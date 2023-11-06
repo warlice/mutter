@@ -47,19 +47,6 @@
 #define GL_FUNC_ADD 0x8006
 #endif
 
-CoglPipeline *
-_cogl_pipeline_get_user_program (CoglPipeline *pipeline)
-{
-  CoglPipeline *authority;
-
-  g_return_val_if_fail (cogl_is_pipeline (pipeline), NULL);
-
-  authority =
-    _cogl_pipeline_get_authority (pipeline, COGL_PIPELINE_STATE_USER_SHADER);
-
-  return authority->big_state->user_program;
-}
-
 gboolean
 _cogl_pipeline_color_equal (CoglPipeline *authority0,
                             CoglPipeline *authority1)
@@ -333,7 +320,7 @@ cogl_pipeline_get_color (CoglPipeline *pipeline,
 {
   CoglPipeline *authority;
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
   authority =
     _cogl_pipeline_get_authority (pipeline, COGL_PIPELINE_STATE_COLOR);
@@ -359,7 +346,7 @@ cogl_pipeline_set_color (CoglPipeline    *pipeline,
   CoglPipelineState state = COGL_PIPELINE_STATE_COLOR;
   CoglPipeline *authority;
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
 
@@ -413,7 +400,7 @@ _cogl_pipeline_set_alpha_test_function (CoglPipeline *pipeline,
   CoglPipeline *authority;
   CoglPipelineAlphaFuncState *alpha_state;
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
 
@@ -443,7 +430,7 @@ _cogl_pipeline_set_alpha_test_function_reference (CoglPipeline *pipeline,
   CoglPipeline *authority;
   CoglPipelineAlphaFuncState *alpha_state;
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
 
@@ -480,7 +467,7 @@ cogl_pipeline_get_alpha_test_function (CoglPipeline *pipeline)
 {
   CoglPipeline *authority;
 
-  g_return_val_if_fail (cogl_is_pipeline (pipeline), 0);
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), 0);
 
   authority =
     _cogl_pipeline_get_authority (pipeline, COGL_PIPELINE_STATE_ALPHA_FUNC);
@@ -493,7 +480,7 @@ cogl_pipeline_get_alpha_test_reference (CoglPipeline *pipeline)
 {
   CoglPipeline *authority;
 
-  g_return_val_if_fail (cogl_is_pipeline (pipeline), 0.0f);
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), 0.0f);
 
   authority =
     _cogl_pipeline_get_authority (pipeline,
@@ -547,7 +534,6 @@ arg_to_gl_blend_factor (CoglBlendStringArgument *arg)
             return GL_DST_ALPHA;
         }
     }
-#if defined(HAVE_COGL_GLES2) || defined(HAVE_COGL_GL)
   else if (arg->factor.source.info->type ==
            COGL_BLEND_STRING_COLOR_SOURCE_CONSTANT)
     {
@@ -566,7 +552,6 @@ arg_to_gl_blend_factor (CoglBlendStringArgument *arg)
             return GL_CONSTANT_ALPHA;
         }
     }
-#endif
 
   g_warning ("Unable to determine valid blend factor from blend string\n");
   return GL_ONE;
@@ -608,7 +593,7 @@ cogl_pipeline_set_blend (CoglPipeline *pipeline,
 
   _COGL_GET_CONTEXT (ctx, FALSE);
 
-  g_return_val_if_fail (cogl_is_pipeline (pipeline), FALSE);
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), FALSE);
 
   count =
     _cogl_blend_string_compile (blend_description,
@@ -679,46 +664,42 @@ void
 cogl_pipeline_set_blend_constant (CoglPipeline *pipeline,
                                   const CoglColor *constant_color)
 {
+  CoglPipelineState state = COGL_PIPELINE_STATE_BLEND;
+  CoglPipeline *authority;
+  CoglPipelineBlendState *blend_state;
+
   _COGL_GET_CONTEXT (ctx, NO_RETVAL);
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
-#if defined(HAVE_COGL_GLES2) || defined(HAVE_COGL_GL)
-  {
-    CoglPipelineState state = COGL_PIPELINE_STATE_BLEND;
-    CoglPipeline *authority;
-    CoglPipelineBlendState *blend_state;
+  authority = _cogl_pipeline_get_authority (pipeline, state);
 
-    authority = _cogl_pipeline_get_authority (pipeline, state);
+  blend_state = &authority->big_state->blend_state;
+  if (cogl_color_equal (constant_color, &blend_state->blend_constant))
+    return;
 
-    blend_state = &authority->big_state->blend_state;
-    if (cogl_color_equal (constant_color, &blend_state->blend_constant))
-      return;
+  /* - Flush journal primitives referencing the current state.
+   * - Make sure the pipeline has no dependants so it may be modified.
+   * - If the pipeline isn't currently an authority for the state being
+   *   changed, then initialize that state from the current authority.
+   */
+  _cogl_pipeline_pre_change_notify (pipeline, state, NULL, FALSE);
 
-    /* - Flush journal primitives referencing the current state.
-     * - Make sure the pipeline has no dependants so it may be modified.
-     * - If the pipeline isn't currently an authority for the state being
-     *   changed, then initialize that state from the current authority.
-     */
-    _cogl_pipeline_pre_change_notify (pipeline, state, NULL, FALSE);
+  blend_state = &pipeline->big_state->blend_state;
+  blend_state->blend_constant = *constant_color;
 
-    blend_state = &pipeline->big_state->blend_state;
-    blend_state->blend_constant = *constant_color;
+  _cogl_pipeline_update_authority (pipeline, authority, state,
+                                   _cogl_pipeline_blend_state_equal);
 
-    _cogl_pipeline_update_authority (pipeline, authority, state,
-                                     _cogl_pipeline_blend_state_equal);
-
-    pipeline->dirty_real_blend_enable = TRUE;
-  }
-#endif
+  pipeline->dirty_real_blend_enable = TRUE;
 }
 
-CoglHandle
+CoglProgram*
 cogl_pipeline_get_user_program (CoglPipeline *pipeline)
 {
   CoglPipeline *authority;
 
-  g_return_val_if_fail (cogl_is_pipeline (pipeline), NULL);
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), NULL);
 
   authority =
     _cogl_pipeline_get_authority (pipeline, COGL_PIPELINE_STATE_USER_SHADER);
@@ -734,12 +715,12 @@ cogl_pipeline_get_user_program (CoglPipeline *pipeline)
  */
 void
 cogl_pipeline_set_user_program (CoglPipeline *pipeline,
-                                CoglHandle program)
+                                CoglProgram  *program)
 {
   CoglPipelineState state = COGL_PIPELINE_STATE_USER_SHADER;
   CoglPipeline *authority;
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
 
@@ -776,10 +757,10 @@ cogl_pipeline_set_user_program (CoglPipeline *pipeline,
     }
 
   if (program != NULL)
-    cogl_object_ref (program);
+    g_object_ref (program);
   if (authority == pipeline &&
       pipeline->big_state->user_program != NULL)
-    cogl_object_unref (pipeline->big_state->user_program);
+    g_object_unref (pipeline->big_state->user_program);
   pipeline->big_state->user_program = program;
 
   pipeline->dirty_real_blend_enable = TRUE;
@@ -796,7 +777,7 @@ cogl_pipeline_set_depth_state (CoglPipeline *pipeline,
 
   _COGL_GET_CONTEXT (ctx, FALSE);
 
-  g_return_val_if_fail (cogl_is_pipeline (pipeline), FALSE);
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), FALSE);
   g_return_val_if_fail (depth_state->magic == COGL_DEPTH_STATE_MAGIC, FALSE);
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
@@ -830,7 +811,7 @@ cogl_pipeline_get_depth_state (CoglPipeline *pipeline,
 {
   CoglPipeline *authority;
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
   authority =
     _cogl_pipeline_get_authority (pipeline, COGL_PIPELINE_STATE_DEPTH);
@@ -845,7 +826,7 @@ cogl_pipeline_set_cull_face_mode (CoglPipeline *pipeline,
   CoglPipeline *authority;
   CoglPipelineCullFaceState *cull_face_state;
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
 
@@ -875,7 +856,7 @@ cogl_pipeline_set_front_face_winding (CoglPipeline *pipeline,
   CoglPipeline *authority;
   CoglPipelineCullFaceState *cull_face_state;
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
 
@@ -903,7 +884,7 @@ cogl_pipeline_get_cull_face_mode (CoglPipeline *pipeline)
   CoglPipelineState state = COGL_PIPELINE_STATE_CULL_FACE;
   CoglPipeline *authority;
 
-  g_return_val_if_fail (cogl_is_pipeline (pipeline),
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline),
                         COGL_PIPELINE_CULL_FACE_MODE_NONE);
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
@@ -917,7 +898,7 @@ cogl_pipeline_get_front_face_winding (CoglPipeline *pipeline)
   CoglPipelineState state = COGL_PIPELINE_STATE_CULL_FACE;
   CoglPipeline *authority;
 
-  g_return_val_if_fail (cogl_is_pipeline (pipeline),
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline),
                         COGL_WINDING_CLOCKWISE);
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
@@ -930,7 +911,7 @@ cogl_pipeline_get_point_size (CoglPipeline *pipeline)
 {
   CoglPipeline *authority;
 
-  g_return_val_if_fail (cogl_is_pipeline (pipeline), FALSE);
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), FALSE);
 
   authority =
     _cogl_pipeline_get_authority (pipeline, COGL_PIPELINE_STATE_POINT_SIZE);
@@ -945,7 +926,7 @@ _cogl_pipeline_set_non_zero_point_size (CoglPipeline *pipeline,
   CoglPipelineState state = COGL_PIPELINE_STATE_NON_ZERO_POINT_SIZE;
   CoglPipeline *authority;
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
 
@@ -969,7 +950,7 @@ cogl_pipeline_set_point_size (CoglPipeline *pipeline,
   CoglPipelineState state = COGL_PIPELINE_STATE_POINT_SIZE;
   CoglPipeline *authority;
 
-  g_return_if_fail (cogl_is_pipeline (pipeline));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
 
@@ -1004,7 +985,7 @@ cogl_pipeline_set_per_vertex_point_size (CoglPipeline *pipeline,
   CoglPipeline *authority;
 
   _COGL_GET_CONTEXT (ctx, FALSE);
-  g_return_val_if_fail (cogl_is_pipeline (pipeline), FALSE);
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), FALSE);
 
   authority = _cogl_pipeline_get_authority (pipeline, state);
 
@@ -1033,7 +1014,7 @@ cogl_pipeline_get_per_vertex_point_size (CoglPipeline *pipeline)
 {
   CoglPipeline *authority;
 
-  g_return_val_if_fail (cogl_is_pipeline (pipeline), FALSE);
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), FALSE);
 
   authority =
     _cogl_pipeline_get_authority (pipeline,
@@ -1052,7 +1033,7 @@ _cogl_pipeline_override_uniform (CoglPipeline *pipeline,
 
   _COGL_GET_CONTEXT (ctx, NULL);
 
-  g_return_val_if_fail (cogl_is_pipeline (pipeline), NULL);
+  g_return_val_if_fail (COGL_IS_PIPELINE (pipeline), NULL);
   g_return_val_if_fail (location >= 0, NULL);
   g_return_val_if_fail (location < ctx->n_uniform_names, NULL);
 
@@ -1223,8 +1204,8 @@ void
 cogl_pipeline_add_snippet (CoglPipeline *pipeline,
                            CoglSnippet *snippet)
 {
-  g_return_if_fail (cogl_is_pipeline (pipeline));
-  g_return_if_fail (cogl_is_snippet (snippet));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
+  g_return_if_fail (COGL_IS_SNIPPET (snippet));
   g_return_if_fail (snippet->hook < COGL_SNIPPET_FIRST_LAYER_HOOK);
 
   if (snippet->hook < COGL_SNIPPET_FIRST_PIPELINE_FRAGMENT_HOOK)
@@ -1284,39 +1265,6 @@ _cogl_pipeline_has_non_layer_fragment_snippets (CoglPipeline *pipeline)
                                   COGL_PIPELINE_STATE_FRAGMENT_SNIPPETS);
 
   return authority->big_state->fragment_snippets.entries != NULL;
-}
-
-static gboolean
-check_layer_has_fragment_snippet (CoglPipelineLayer *layer,
-                                  void *user_data)
-{
-  unsigned long state = COGL_PIPELINE_LAYER_STATE_FRAGMENT_SNIPPETS;
-  CoglPipelineLayer *authority =
-    _cogl_pipeline_layer_get_authority (layer, state);
-  gboolean *found_fragment_snippet = user_data;
-
-  if (authority->big_state->fragment_snippets.entries)
-    {
-      *found_fragment_snippet = TRUE;
-      return FALSE;
-    }
-
-  return TRUE;
-}
-
-gboolean
-_cogl_pipeline_has_fragment_snippets (CoglPipeline *pipeline)
-{
-  gboolean found_fragment_snippet = FALSE;
-
-  if (_cogl_pipeline_has_non_layer_fragment_snippets (pipeline))
-    return TRUE;
-
-  _cogl_pipeline_foreach_layer_internal (pipeline,
-                                         check_layer_has_fragment_snippet,
-                                         &found_fragment_snippet);
-
-  return found_fragment_snippet;
 }
 
 void
@@ -1398,7 +1346,7 @@ void
 _cogl_pipeline_hash_user_shader_state (CoglPipeline *authority,
                                        CoglPipelineHashState *state)
 {
-  CoglHandle user_program = authority->big_state->user_program;
+  CoglProgram *user_program = authority->big_state->user_program;
   state->hash = _cogl_util_one_at_a_time_hash (state->hash, &user_program,
                                                sizeof (user_program));
 }

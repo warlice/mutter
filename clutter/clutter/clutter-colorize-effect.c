@@ -105,7 +105,7 @@ clutter_colorize_effect_create_pipeline (ClutterOffscreenEffect *effect,
 
   cogl_pipeline_set_layer_texture (colorize_effect->pipeline, 0, texture);
 
-  return cogl_object_ref (colorize_effect->pipeline);
+  return g_object_ref (colorize_effect->pipeline);
 }
 
 static void
@@ -113,11 +113,7 @@ clutter_colorize_effect_dispose (GObject *gobject)
 {
   ClutterColorizeEffect *self = CLUTTER_COLORIZE_EFFECT (gobject);
 
-  if (self->pipeline != NULL)
-    {
-      cogl_object_unref (self->pipeline);
-      self->pipeline = NULL;
-    }
+  g_clear_object (&self->pipeline);
 
   G_OBJECT_CLASS (clutter_colorize_effect_parent_class)->dispose (gobject);
 }
@@ -225,7 +221,7 @@ clutter_colorize_effect_init (ClutterColorizeEffect *self)
                                   colorize_glsl_declarations,
                                   colorize_glsl_source);
       cogl_pipeline_add_snippet (klass->base_pipeline, snippet);
-      cogl_object_unref (snippet);
+      g_object_unref (snippet);
 
       cogl_pipeline_set_layer_null_texture (klass->base_pipeline, 0);
     }

@@ -37,7 +37,7 @@ create_texture_pipeline (TestState *state)
                                    COGL_PIPELINE_FILTER_NEAREST,
                                    COGL_PIPELINE_FILTER_NEAREST);
 
-  cogl_object_unref (tex);
+  g_object_unref (tex);
 
   return pipeline;
 }
@@ -57,11 +57,11 @@ simple_fragment_snippet (TestState *state)
                               NULL, /* declarations */
                               "cogl_color_out.g += 1.0;");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 0, 0, 10, 10);
 
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 5, 5, 0xffff00ff);
 }
@@ -81,11 +81,11 @@ simple_vertex_snippet (TestState *state)
                               NULL,
                               "cogl_color_out.b += 1.0;");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 10, 0, 20, 10);
 
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 15, 5, 0xff00ffff);
 }
@@ -110,18 +110,18 @@ shared_uniform (TestState *state)
                               "uniform float a_value;",
                               "cogl_color_out.b += a_value;");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
   snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT,
                               "uniform float a_value;",
                               "cogl_color_out.b += a_value;");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_rectangle (test_fb,
                                    pipeline,
                                    20, 0, 30, 10);
 
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 25, 5, 0xff0080ff);
 }
@@ -156,7 +156,7 @@ lots_snippets (TestState *state)
                                   declarations,
                                   code);
       cogl_pipeline_add_snippet (pipeline, snippet);
-      cogl_object_unref (snippet);
+      g_object_unref (snippet);
 
       g_free (code);
       g_free (uniform_name);
@@ -165,7 +165,7 @@ lots_snippets (TestState *state)
 
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 30, 0, 40, 10);
 
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 35, 5, 0x19334cff);
 }
@@ -187,11 +187,11 @@ shared_variable_pre_post (TestState *state)
                               "cogl_color_out = redvec;");
   cogl_snippet_set_pre (snippet, "vec4 redvec = vec4 (1.0, 0.0, 0.0, 1.0);");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 40, 0, 50, 10);
 
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 45, 5, 0xff0000ff);
 }
@@ -217,14 +217,14 @@ test_pipeline_caching (TestState *state)
   pipeline = cogl_pipeline_new (test_ctx);
   cogl_pipeline_add_snippet (pipeline, snippet);
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 50, 0, 60, 10);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   pipeline = cogl_pipeline_new (test_ctx);
   cogl_pipeline_add_snippet (pipeline, snippet);
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 60, 0, 70, 10);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   test_utils_check_pixel (test_fb, 55, 5, 0x00ff00ff);
   test_utils_check_pixel (test_fb, 65, 5, 0x00ff00ff);
@@ -250,9 +250,9 @@ test_replace_string (TestState *state)
   pipeline = cogl_pipeline_new (test_ctx);
   cogl_pipeline_add_snippet (pipeline, snippet);
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 70, 0, 80, 10);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   test_utils_check_pixel (test_fb, 75, 5, 0x808000ff);
 }
@@ -277,9 +277,9 @@ test_texture_lookup_hook (TestState *state)
                                             pipeline,
                                             80, 0, 90, 10,
                                             0, 0, 0, 0);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   test_utils_check_pixel (test_fb, 85, 5, 0x00ffffff);
 }
@@ -303,9 +303,9 @@ test_multiple_samples (TestState *state)
   pipeline = create_texture_pipeline (state);
   cogl_pipeline_add_layer_snippet (pipeline, 0, snippet);
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 0, 0, 10, 10);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   test_utils_check_pixel (test_fb, 5, 5, 0xffff00ff);
 }
@@ -326,9 +326,9 @@ test_replace_lookup_hook (TestState *state)
                                             pipeline,
                                             90, 0, 100, 10,
                                             0, 0, 0, 0);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   test_utils_check_pixel (test_fb, 95, 5, 0x0000ffff);
 }
@@ -346,20 +346,20 @@ test_replace_snippet (TestState *state)
                               NULL,
                               "cogl_color_out = vec4 (0.5, 0.5, 0.5, 1.0);");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT, NULL, NULL);
   cogl_snippet_set_pre (snippet, "cogl_color_out = vec4 (1.0, 1.0, 1.0, 1.0);");
   cogl_snippet_set_replace (snippet,
                             "cogl_color_out *= vec4 (1.0, 0.0, 0.0, 1.0);");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_textured_rectangle (test_fb,
                                             pipeline,
                                             100, 0, 110, 10,
                                             0, 0, 0, 0);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 105, 5, 0xff0000ff);
 }
@@ -376,7 +376,7 @@ test_replace_fragment_layer (TestState *state)
   snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_LAYER_FRAGMENT, NULL, NULL);
   cogl_snippet_set_replace (snippet, "cogl_layer = vec4 (0.0, 0.0, 1.0, 1.0);");
   cogl_pipeline_add_layer_snippet (pipeline, 0, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   /* Add a second layer which samples from the texture in the first
      layer. The snippet override should cause the first layer not to
@@ -391,7 +391,7 @@ test_replace_fragment_layer (TestState *state)
                                             pipeline,
                                             110, 0, 120, 10,
                                             0, 0, 0, 0);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 115, 5, 0xff00ffff);
 }
@@ -414,13 +414,13 @@ test_modify_fragment_layer (TestState *state)
                               "uniform float a_value;",
                               "cogl_layer.g = a_value;");
   cogl_pipeline_add_layer_snippet (pipeline, 0, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_textured_rectangle (test_fb,
                                             pipeline,
                                             120, 0, 130, 10,
                                             0, 0, 0, 0);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 125, 5, 0xff80ffff);
 }
@@ -443,13 +443,13 @@ test_modify_vertex_layer (TestState *state)
                               NULL,
                               "cogl_tex_coord.x = 1.0;");
   cogl_pipeline_add_layer_snippet (pipeline, 0, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_textured_rectangle (test_fb,
                                             pipeline,
                                             130, 0, 140, 10,
                                             0, 0, 0, 0);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 135, 5, 0xffff00ff);
 }
@@ -473,13 +473,13 @@ test_replace_vertex_layer (TestState *state)
                               NULL);
   cogl_snippet_set_replace (snippet, "cogl_tex_coord.x = 1.0;\n");
   cogl_pipeline_add_layer_snippet (pipeline, 0, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_textured_rectangle (test_fb,
                                             pipeline,
                                             140, 0, 150, 10,
                                             0, 0, 0, 0);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 145, 5, 0x00ff00ff);
 }
@@ -508,7 +508,7 @@ test_vertex_transform_hook (TestState *state)
   cogl_snippet_set_replace (snippet, "cogl_position_out = "
                             "pmat * cogl_position_in;");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   /* Copy the current projection matrix to a uniform */
   cogl_framebuffer_get_projection_matrix (test_fb, &matrix);
@@ -526,7 +526,7 @@ test_vertex_transform_hook (TestState *state)
   cogl_framebuffer_set_projection_matrix (test_fb, &identity_matrix);
 
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 150, 0, 160, 10);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   /* Restore the projection matrix */
   cogl_framebuffer_set_projection_matrix (test_fb, &matrix);
@@ -564,7 +564,7 @@ test_global_vertex_hook (TestState *state)
                             "This string shouldn't be used so "
                             "we can safely put garbage in here.");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_VERTEX,
                               NULL, /* declarations */
@@ -574,7 +574,7 @@ test_global_vertex_hook (TestState *state)
                             "cogl_color_out.gba = vec3 (0.0, 0.0, 1.0);\n"
                             "cogl_position_out = cogl_position_in;\n");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_rectangle (test_fb,
                                    pipeline,
@@ -582,7 +582,7 @@ test_global_vertex_hook (TestState *state)
                                    10.0f * 2.0f / state->fb_width - 1.0f,
                                    10.0f * 2.0f / state->fb_height - 1.0f);
 
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 5, 5, 0xff0000ff);
 }
@@ -617,7 +617,7 @@ test_global_fragment_hook (TestState *state)
                             "This string shouldn't be used so "
                             "we can safely put garbage in here.");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT,
                               NULL, /* declarations */
@@ -626,13 +626,13 @@ test_global_fragment_hook (TestState *state)
                             "cogl_color_out.r = multiply_by_four (0.25);\n"
                             "cogl_color_out.gba = vec3 (0.0, 0.0, 1.0);\n");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_rectangle (test_fb,
                                    pipeline,
                                    0, 0, 10, 10);
 
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 5, 5, 0xff0000ff);
 }
@@ -660,17 +660,17 @@ test_snippet_order (TestState *state)
   cogl_snippet_set_pre (snippet, "cogl_color_out.r = 0.5;\n");
   cogl_snippet_set_replace (snippet, "cogl_color_out.ba = vec2 (0.0, 1.0);");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT,
                               NULL,
                               "cogl_color_out.g = 1.0;\n");
   cogl_snippet_set_pre (snippet, "cogl_color_out.r = 1.0;\n");
   cogl_pipeline_add_snippet (pipeline, snippet);
-  cogl_object_unref (snippet);
+  g_object_unref (snippet);
 
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 160, 0, 170, 10);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   test_utils_check_pixel (test_fb, 165, 5, 0x80ff00ff);
 }
@@ -705,10 +705,10 @@ test_naming_texture_units (TestState *state)
 
   cogl_framebuffer_draw_rectangle (test_fb, pipeline, 0, 0, 10, 10);
 
-  cogl_object_unref (pipeline);
-  cogl_object_unref (snippet);
-  cogl_object_unref (tex1);
-  cogl_object_unref (tex2);
+  g_object_unref (pipeline);
+  g_object_unref (snippet);
+  g_object_unref (tex1);
+  g_object_unref (tex2);
 
   test_utils_check_pixel (test_fb, 5, 5, 0xffff00ff);
 }

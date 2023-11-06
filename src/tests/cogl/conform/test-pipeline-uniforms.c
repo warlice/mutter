@@ -87,8 +87,8 @@ static CoglPipeline *
 create_pipeline_for_shader (TestState *state, const char *shader_source)
 {
   CoglPipeline *pipeline;
-  CoglHandle shader;
-  CoglHandle program;
+  CoglShader *shader;
+  CoglProgram *program;
 
   pipeline = cogl_pipeline_new (test_ctx);
 
@@ -100,8 +100,8 @@ create_pipeline_for_shader (TestState *state, const char *shader_source)
 
   cogl_pipeline_set_user_program (pipeline, program);
 
-  cogl_object_unref (shader);
-  cogl_object_unref (program);
+  g_object_unref (shader);
+  g_object_unref (program);
 
   return pipeline;
 }
@@ -163,15 +163,15 @@ init_long_pipeline_state (TestState *state)
 static void
 destroy_state (TestState *state)
 {
-  cogl_object_unref (state->pipeline_red);
-  cogl_object_unref (state->pipeline_green);
-  cogl_object_unref (state->pipeline_blue);
-  cogl_object_unref (state->matrix_pipeline);
-  cogl_object_unref (state->vector_pipeline);
-  cogl_object_unref (state->int_pipeline);
+  g_object_unref (state->pipeline_red);
+  g_object_unref (state->pipeline_green);
+  g_object_unref (state->pipeline_blue);
+  g_object_unref (state->matrix_pipeline);
+  g_object_unref (state->vector_pipeline);
+  g_object_unref (state->int_pipeline);
 
   if (state->long_pipeline)
-    cogl_object_unref (state->long_pipeline);
+    g_object_unref (state->long_pipeline);
 }
 
 static void
@@ -211,7 +211,7 @@ paint_color_pipelines (TestState *state)
       paint_pipeline (temp_pipeline, i + 3);
     }
 
-  cogl_object_unref (temp_pipeline);
+  g_object_unref (temp_pipeline);
 }
 
 static void

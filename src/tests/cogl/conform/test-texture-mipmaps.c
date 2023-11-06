@@ -15,11 +15,11 @@ typedef struct _TestState
 
 /* Creates a texture where the pixels are evenly divided between
    selecting just one of the R,G and B components */
-static CoglHandle
+static CoglTexture*
 make_texture (void)
 {
   guchar *tex_data = g_malloc (TEX_SIZE * TEX_SIZE * 3), *p = tex_data;
-  CoglHandle tex;
+  CoglTexture *tex;
   int x, y;
 
   for (y = 0; y < TEX_SIZE; y++)
@@ -49,14 +49,14 @@ on_paint (ClutterActor        *actor,
           ClutterPaintContext *paint_context,
           TestState           *state)
 {
-  CoglHandle tex;
+  CoglTexture *tex;
   CoglPipeline *pipeline;
   uint8_t pixels[8];
 
   tex = make_texture ();
   pipeline = cogl_pipeline_new ();
   cogl_pipeline_set_layer (pipeline, 0, tex);
-  cogl_object_unref (tex);
+  g_object_unref (tex);
 
   /* Render a 1x1 pixel quad without mipmaps */
   cogl_set_source (pipeline);
@@ -70,7 +70,7 @@ on_paint (ClutterActor        *actor,
                                    COGL_PIPELINE_FILTER_NEAREST);
   cogl_rectangle (1, 0, 2, 1);
 
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   /* Read back the two pixels we rendered */
   cogl_read_pixels (0, 0, 2, 1,

@@ -135,7 +135,7 @@ struct _MetaWaylandEglStream
 
   EGLStreamKHR egl_stream;
   MetaWaylandBuffer *buffer;
-  CoglTexture2D *texture;
+  CoglTexture *texture;
   gboolean is_y_inverted;
   CoglSnippet *snippet;
 };
@@ -207,7 +207,7 @@ alloc_egl_stream_texture (CoglTexture2D *texture,
                                                        error);
 }
 
-CoglTexture2D *
+CoglTexture *
 meta_wayland_egl_stream_create_texture (MetaWaylandEglStream *stream,
                                         GError              **error)
 {
@@ -218,7 +218,7 @@ meta_wayland_egl_stream_create_texture (MetaWaylandEglStream *stream,
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
   EGLDisplay egl_display = cogl_egl_context_get_egl_display (cogl_context);
-  CoglTexture2D *texture;
+  CoglTexture *texture;
   int width, height;
   int y_inverted;
 
@@ -253,9 +253,9 @@ meta_wayland_egl_stream_create_texture (MetaWaylandEglStream *stream,
       return NULL;
     }
 
-  if (!cogl_texture_allocate (COGL_TEXTURE (texture), error))
+  if (!cogl_texture_allocate (texture, error))
     {
-      cogl_object_unref (texture);
+      g_object_unref (texture);
       return NULL;
     }
 
@@ -316,7 +316,7 @@ meta_wayland_egl_stream_create_snippet (MetaWaylandEglStream *stream)
       stream->snippet = snippet;
     }
 
-  return cogl_object_ref (stream->snippet);
+  return g_object_ref (stream->snippet);
 }
 
 gboolean
@@ -361,7 +361,7 @@ meta_wayland_egl_stream_finalize (GObject *object)
 
   meta_egl_destroy_stream (egl, egl_display, stream->egl_stream, NULL);
 
-  cogl_clear_object (&stream->snippet);
+  g_clear_object (&stream->snippet);
 
   G_OBJECT_CLASS (meta_wayland_egl_stream_parent_class)->finalize (object);
 }

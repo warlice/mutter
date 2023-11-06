@@ -512,9 +512,9 @@ _cogl_bitmap_convert (CoglBitmap *src_bmp,
 {
   CoglBitmap *dst_bmp;
   int width, height;
+  CoglContext *ctx;
 
-  _COGL_GET_CONTEXT (ctx, NULL);
-
+  ctx = _cogl_bitmap_get_context (src_bmp);
   width = cogl_bitmap_get_width (src_bmp);
   height = cogl_bitmap_get_height (src_bmp);
 
@@ -527,7 +527,7 @@ _cogl_bitmap_convert (CoglBitmap *src_bmp,
 
   if (!_cogl_bitmap_convert_into_bitmap (src_bmp, dst_bmp, error))
     {
-      cogl_object_unref (dst_bmp);
+      g_object_unref (dst_bmp);
       return NULL;
     }
 
@@ -566,7 +566,6 @@ driver_can_convert (CoglContext *ctx,
 CoglBitmap *
 _cogl_bitmap_convert_for_upload (CoglBitmap *src_bmp,
                                  CoglPixelFormat internal_format,
-                                 gboolean can_convert_in_place,
                                  GError **error)
 {
   CoglContext *ctx = _cogl_bitmap_get_context (src_bmp);
@@ -590,29 +589,14 @@ _cogl_bitmap_convert_for_upload (CoglBitmap *src_bmp,
       if (_cogl_texture_needs_premult_conversion (src_format,
                                                   internal_format))
         {
-          if (can_convert_in_place)
-            {
-              if (_cogl_bitmap_convert_premult_status (src_bmp,
-                                                       (src_format ^
-                                                        COGL_PREMULT_BIT),
-                                                       error))
-                {
-                  dst_bmp = cogl_object_ref (src_bmp);
-                }
-              else
-                return NULL;
-            }
-          else
-            {
-              dst_bmp = _cogl_bitmap_convert (src_bmp,
-                                              src_format ^ COGL_PREMULT_BIT,
-                                              error);
-              if (dst_bmp == NULL)
-                return NULL;
-            }
+          dst_bmp = _cogl_bitmap_convert (src_bmp,
+                                          src_format ^ COGL_PREMULT_BIT,
+                                          error);
+          if (dst_bmp == NULL)
+            return NULL;
         }
       else
-        dst_bmp = cogl_object_ref (src_bmp);
+        dst_bmp = g_object_ref (src_bmp);
     }
   else
     {
@@ -628,7 +612,7 @@ _cogl_bitmap_convert_for_upload (CoglBitmap *src_bmp,
       if (closest_format != src_format)
         dst_bmp = _cogl_bitmap_convert (src_bmp, closest_format, error);
       else
-        dst_bmp = cogl_object_ref (src_bmp);
+        dst_bmp = g_object_ref (src_bmp);
     }
 
   return dst_bmp;

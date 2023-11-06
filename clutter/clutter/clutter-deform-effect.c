@@ -313,7 +313,7 @@ clutter_deform_effect_paint_target (ClutterOffscreenEffect *effect,
       clutter_paint_node_add_primitive (back_node, priv->primitive);
 
       clutter_paint_node_unref (back_node);
-      cogl_object_unref (back_pipeline);
+      g_object_unref (back_pipeline);
     }
 
   if (G_UNLIKELY (priv->lines_primitive != NULL))
@@ -337,23 +337,9 @@ clutter_deform_effect_free_arrays (ClutterDeformEffect *self)
 {
   ClutterDeformEffectPrivate *priv = self->priv;
 
-  if (priv->buffer)
-    {
-      cogl_object_unref (priv->buffer);
-      priv->buffer = NULL;
-    }
-
-  if (priv->primitive)
-    {
-      cogl_object_unref (priv->primitive);
-      priv->primitive = NULL;
-    }
-
-  if (priv->lines_primitive)
-    {
-      cogl_object_unref (priv->lines_primitive);
-      priv->lines_primitive = NULL;
-    }
+  g_clear_object (&priv->buffer);
+  g_clear_object (&priv->primitive);
+  g_clear_object (&priv->lines_primitive);
 }
 
 static void
@@ -488,10 +474,10 @@ clutter_deform_effect_init_arrays (ClutterDeformEffect *self)
                                   n_indices);
     }
 
-  cogl_object_unref (indices);
+  g_object_unref (indices);
 
   for (i = 0; i < 3; i++)
-    cogl_object_unref (attributes[i]);
+    g_object_unref (attributes[i]);
 
   priv->is_dirty = TRUE;
 }
@@ -501,11 +487,7 @@ clutter_deform_effect_free_back_pipeline (ClutterDeformEffect *self)
 {
   ClutterDeformEffectPrivate *priv = self->priv;
 
-  if (priv->back_pipeline != NULL)
-    {
-      cogl_object_unref (priv->back_pipeline);
-      priv->back_pipeline = NULL;
-    }
+  g_clear_object (&priv->back_pipeline);
 }
 
 static void
@@ -540,7 +522,7 @@ clutter_deform_effect_set_property (GObject      *gobject,
       break;
 
     case PROP_BACK_MATERIAL:
-      clutter_deform_effect_set_back_material (self, g_value_get_boxed (value));
+      clutter_deform_effect_set_back_material (self, g_value_get_object (value));
       break;
 
     default:
@@ -568,7 +550,7 @@ clutter_deform_effect_get_property (GObject    *gobject,
       break;
 
     case PROP_BACK_MATERIAL:
-      g_value_set_boxed (value, priv->back_pipeline);
+      g_value_set_object (value, priv->back_pipeline);
       break;
 
     default:
@@ -619,9 +601,9 @@ clutter_deform_effect_class_init (ClutterDeformEffectClass *klass)
    * By default, no material will be used
    */
   obj_props[PROP_BACK_MATERIAL] =
-    g_param_spec_boxed ("back-material", NULL, NULL,
-                        COGL_TYPE_HANDLE,
-                        CLUTTER_PARAM_READWRITE);
+    g_param_spec_object ("back-material", NULL, NULL,
+                         COGL_TYPE_PIPELINE,
+                         CLUTTER_PARAM_READWRITE);
 
   gobject_class->finalize = clutter_deform_effect_finalize;
   gobject_class->set_property = clutter_deform_effect_set_property;
@@ -658,21 +640,20 @@ clutter_deform_effect_init (ClutterDeformEffect *self)
  */
 void
 clutter_deform_effect_set_back_material (ClutterDeformEffect *effect,
-                                         CoglHandle           material)
+                                         CoglPipeline        *pipeline)
 {
   ClutterDeformEffectPrivate *priv;
-  CoglPipeline *pipeline = COGL_PIPELINE (material);
 
   g_return_if_fail (CLUTTER_IS_DEFORM_EFFECT (effect));
-  g_return_if_fail (pipeline == NULL || cogl_is_pipeline (pipeline));
+  g_return_if_fail (pipeline == NULL || COGL_IS_PIPELINE (pipeline));
 
   priv = effect->priv;
 
   clutter_deform_effect_free_back_pipeline (effect);
 
-  priv->back_pipeline = material;
+  priv->back_pipeline = pipeline;
   if (priv->back_pipeline != NULL)
-    cogl_object_ref (priv->back_pipeline);
+    g_object_ref (priv->back_pipeline);
 
   clutter_deform_effect_invalidate (effect);
 }
@@ -687,7 +668,7 @@ clutter_deform_effect_set_back_material (ClutterDeformEffect *effect,
  *   The returned material is owned by the #ClutterDeformEffect and it
  *   should not be freed directly
  */
-CoglHandle
+CoglPipeline*
 clutter_deform_effect_get_back_material (ClutterDeformEffect *effect)
 {
   g_return_val_if_fail (CLUTTER_IS_DEFORM_EFFECT (effect), NULL);

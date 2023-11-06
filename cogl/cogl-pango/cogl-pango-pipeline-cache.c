@@ -41,6 +41,8 @@
 
 typedef struct _CoglPangoPipelineCacheEntry CoglPangoPipelineCacheEntry;
 
+static GQuark pipeline_destroy_notify_key = 0;
+
 struct _CoglPangoPipelineCacheEntry
 {
   /* This will take a reference or it can be NULL to represent the
@@ -55,7 +57,7 @@ static void
 _cogl_pango_pipeline_cache_key_destroy (void *data)
 {
   if (data)
-    cogl_object_unref (data);
+    g_object_unref (data);
 }
 
 static void
@@ -64,7 +66,7 @@ _cogl_pango_pipeline_cache_value_destroy (void *data)
   CoglPangoPipelineCacheEntry *cache_entry = data;
 
   if (cache_entry->texture)
-    cogl_object_unref (cache_entry->texture);
+    g_object_unref (cache_entry->texture);
 
   /* We don't need to unref the pipeline because it only takes a weak
      reference */
@@ -78,7 +80,7 @@ _cogl_pango_pipeline_cache_new (CoglContext *ctx,
 {
   CoglPangoPipelineCache *cache = g_new (CoglPangoPipelineCache, 1);
 
-  cache->ctx = cogl_object_ref (ctx);
+  cache->ctx = g_object_ref (ctx);
 
   /* The key is the pipeline pointer. A reference is taken when the
      pipeline is used as a key so we should unref it again in the
@@ -169,17 +171,17 @@ pipeline_destroy_notify_cb (void *user_data)
 
 CoglPipeline *
 _cogl_pango_pipeline_cache_get (CoglPangoPipelineCache *cache,
-                                CoglTexture *texture)
+                                CoglTexture            *texture)
 {
   CoglPangoPipelineCacheEntry *entry;
   PipelineDestroyNotifyData *destroy_data;
-  static CoglUserDataKey pipeline_destroy_notify_key;
+  pipeline_destroy_notify_key = g_quark_from_static_string ("-cogl-pango-pipeline-cache-key");
 
   /* Look for an existing entry */
   entry = g_hash_table_lookup (cache->hash_table, texture);
 
   if (entry)
-    return cogl_object_ref (entry->pipeline);
+    return g_object_ref (entry->pipeline);
 
   /* No existing pipeline was found so let's create another */
   entry = g_new0 (CoglPangoPipelineCacheEntry, 1);
@@ -188,7 +190,7 @@ _cogl_pango_pipeline_cache_get (CoglPangoPipelineCache *cache,
     {
       CoglPipeline *base;
 
-      entry->texture = cogl_object_ref (texture);
+      entry->texture = g_object_ref (texture);
 
       if (_cogl_texture_get_format (entry->texture) == COGL_PIXEL_FORMAT_A_8)
         base = get_base_texture_alpha_pipeline (cache);
@@ -210,13 +212,13 @@ _cogl_pango_pipeline_cache_get (CoglPangoPipelineCache *cache,
   destroy_data = g_new0 (PipelineDestroyNotifyData, 1);
   destroy_data->cache = cache;
   destroy_data->texture = texture;
-  cogl_object_set_user_data (COGL_OBJECT (entry->pipeline),
-                             &pipeline_destroy_notify_key,
-                             destroy_data,
-                             pipeline_destroy_notify_cb);
+  g_object_set_qdata_full (G_OBJECT (entry->pipeline),
+                           pipeline_destroy_notify_key,
+                           destroy_data,
+                           pipeline_destroy_notify_cb);
 
   g_hash_table_insert (cache->hash_table,
-                       texture ? cogl_object_ref (texture) : NULL,
+                       texture ? g_object_ref (texture) : NULL,
                        entry);
 
   /* This doesn't take a reference on the pipeline so that it will use
@@ -228,13 +230,13 @@ void
 _cogl_pango_pipeline_cache_free (CoglPangoPipelineCache *cache)
 {
   if (cache->base_texture_rgba_pipeline)
-    cogl_object_unref (cache->base_texture_rgba_pipeline);
+    g_object_unref (cache->base_texture_rgba_pipeline);
   if (cache->base_texture_alpha_pipeline)
-    cogl_object_unref (cache->base_texture_alpha_pipeline);
+    g_object_unref (cache->base_texture_alpha_pipeline);
 
   g_hash_table_destroy (cache->hash_table);
 
-  cogl_object_unref (cache->ctx);
+  g_object_unref (cache->ctx);
 
   g_free (cache);
 }

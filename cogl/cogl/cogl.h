@@ -56,7 +56,6 @@
 #include "cogl/cogl-defines.h"
 #include "cogl/cogl-macros.h"
 
-#include "cogl/cogl-object.h"
 #include "cogl/cogl1-context.h"
 #include "cogl/cogl-bitmap.h"
 #include "cogl/cogl-color.h"
@@ -67,19 +66,6 @@
 #include "cogl/cogl-texture.h"
 #include "cogl/cogl-types.h"
 
-/*
- * 1.x only api...
- */
-#if 0
-#ifndef COGL_ENABLE_EXPERIMENTAL_2_0_API
-#warning
-#endif
-#endif
-
-/* It would be good to move these casts up into 1.x only api if we can
- * update Clutter, Mutter and GnomeShell to avoid redundant casts when
- * they enable the experimental api... */
-#include <cogl/deprecated/cogl-type-casts.h>
 
 #include <cogl/deprecated/cogl-shader.h>
 

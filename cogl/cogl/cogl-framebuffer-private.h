@@ -32,7 +32,6 @@
 #pragma once
 
 #include "cogl/cogl-framebuffer-driver.h"
-#include "cogl/cogl-object-private.h"
 #include "cogl/cogl-matrix-stack-private.h"
 #include "cogl/cogl-journal-private.h"
 #include "cogl/winsys/cogl-winsys-private.h"
@@ -154,9 +153,6 @@ CoglPixelFormat
 cogl_framebuffer_get_internal_format (CoglFramebuffer *framebuffer);
 
 void _cogl_framebuffer_free (CoglFramebuffer *framebuffer);
-
-const CoglWinsysVtable *
-_cogl_framebuffer_get_winsys (CoglFramebuffer *framebuffer);
 
 void
 _cogl_framebuffer_clear_without_flush4f (CoglFramebuffer *framebuffer,

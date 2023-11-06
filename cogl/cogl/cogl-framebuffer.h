@@ -38,9 +38,9 @@
 #include "cogl/cogl-indices.h"
 #include "cogl/cogl-bitmap.h"
 #include "cogl/cogl-texture.h"
+#include "mtk/mtk.h"
 
 #include <glib-object.h>
-#include <cairo.h>
 
 #include <graphene.h>
 
@@ -529,7 +529,7 @@ cogl_framebuffer_push_primitive_clip (CoglFramebuffer *framebuffer,
 
 COGL_EXPORT void
 cogl_framebuffer_push_region_clip (CoglFramebuffer *framebuffer,
-                                   cairo_region_t  *region);
+                                   MtkRegion       *region);
 
 /**
  * cogl_framebuffer_pop_clip:
@@ -1251,7 +1251,7 @@ cogl_framebuffer_read_pixels_into_bitmap (CoglFramebuffer *framebuffer,
  *                                           x, y,
  *                                           COGL_READ_PIXELS_COLOR_BUFFER,
  *                                           bitmap);
- * cogl_object_unref (bitmap);
+ * g_object_unref (bitmap);
  * ]|
  *
  * Return value: %TRUE if the read succeeded or %FALSE otherwise.

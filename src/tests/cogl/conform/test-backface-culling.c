@@ -131,7 +131,7 @@ paint_test_backface_culling (TestState *state,
                                            4,
                                            verts);
       cogl_primitive_draw (primitive, framebuffer, pipeline);
-      cogl_object_unref (primitive);
+      g_object_unref (primitive);
 
       x1 = x2;
       x2 = x1 + (float)(TEXTURE_RENDER_SIZE);
@@ -151,17 +151,17 @@ paint_test_backface_culling (TestState *state,
                                            4,
                                            verts);
       cogl_primitive_draw (primitive, framebuffer, pipeline);
-      cogl_object_unref (primitive);
+      g_object_unref (primitive);
 
       x1 = x2;
       x2 = x1 + (float)(TEXTURE_RENDER_SIZE);
 
       cogl_framebuffer_pop_matrix (framebuffer);
 
-      cogl_object_unref (pipeline);
+      g_object_unref (pipeline);
     }
 
-  cogl_object_unref (base_pipeline);
+  g_object_unref (base_pipeline);
 }
 
 static void
@@ -248,7 +248,7 @@ paint (TestState *state)
                                    0, TEXTURE_RENDER_SIZE * 8,
                                    state->width,
                                    state->height + TEXTURE_RENDER_SIZE * 8);
-  cogl_object_unref (pipeline);
+  g_object_unref (pipeline);
 
   validate_result (test_fb, 0);
   validate_result (test_fb, 8);
@@ -306,8 +306,8 @@ test_backface_culling (void)
   paint (&state);
 
   g_object_unref (state.offscreen);
-  cogl_object_unref (state.offscreen_tex);
-  cogl_object_unref (state.texture);
+  g_object_unref (state.offscreen_tex);
+  g_object_unref (state.texture);
 
   if (cogl_test_verbose ())
     g_print ("OK\n");

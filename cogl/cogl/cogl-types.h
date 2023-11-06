@@ -74,27 +74,8 @@ typedef struct { \
               (sizeof (TYPE) == (SIZE)) ? 1 : -1]; \
         } _ ## TYPE ## SizeCheck
 
-/**
- * CoglHandle:
- *
- * Type used for storing references to cogl objects, the CoglHandle is
- * a fully opaque type without any public data members.
- */
-typedef void * CoglHandle;
-
-#define COGL_TYPE_HANDLE        (cogl_handle_get_type ())
-COGL_EXPORT GType
-cogl_handle_get_type (void) G_GNUC_CONST;
 
 typedef struct _CoglFramebuffer CoglFramebuffer;
-
-/**
- * CoglAngle:
- *
- * Integer representation of an angle such that 1024 corresponds to
- * full circle (i.e., 2 * pi).
- */
-typedef int32_t CoglAngle;
 
 typedef struct _CoglColor               CoglColor;
 typedef struct _CoglTextureVertex       CoglTextureVertex;
@@ -129,17 +110,6 @@ typedef enum
   COGL_OFFSCREEN_BUFFER   = (1 << 2)
 } CoglBufferTarget;
 
-/**
- * CoglColor:
- * @red: amount of red
- * @green: amount of green
- * @blue: amount of green
- * @alpha: alpha
- *
- * A structure for holding a color definition. The contents of
- * the CoglColor structure are private and should never by accessed
- * directly.
- */
 struct _CoglColor
 {
   /*< private >*/

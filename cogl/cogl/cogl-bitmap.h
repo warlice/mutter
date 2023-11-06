@@ -49,38 +49,22 @@ typedef struct _CoglBitmap CoglBitmap;
 G_BEGIN_DECLS
 
 /**
- * cogl_bitmap_get_gtype:
+ * CoglBitmap:
  *
- * Returns: a #GType that can be used with the GLib type system.
- */
-COGL_EXPORT
-GType cogl_bitmap_get_gtype (void);
-
-/**
- * SECTION:cogl-bitmap
- * @short_description: Functions for loading images
+ * Functions for loading images
  *
  * Cogl allows loading image data into memory as CoglBitmaps without
  * loading them immediately into GPU textures.
- *
- * #CoglBitmap is available since Cogl 1.0
  */
 
+#define COGL_TYPE_BITMAP (cogl_bitmap_get_type ())
 
-/**
- * cogl_bitmap_new_from_file:
- * @filename: the file to load.
- * @error: a #GError or %NULL.
- *
- * Loads an image file from disk. This function can be safely called from
- * within a thread.
- *
- * Return value: (transfer full): a #CoglBitmap to the new loaded
- *               image data, or %NULL if loading the image failed.
- */
-COGL_EXPORT CoglBitmap *
-cogl_bitmap_new_from_file (const char *filename,
-                           GError **error);
+COGL_EXPORT
+G_DECLARE_FINAL_TYPE (CoglBitmap,
+                      cogl_bitmap,
+                      COGL,
+                      BITMAP,
+                      GObject)
 
 /**
  * cogl_bitmap_new_from_buffer: (skip)
@@ -207,40 +191,10 @@ cogl_bitmap_get_rowstride (CoglBitmap *bitmap);
  * @bitmap: A #CoglBitmap
  *
  * Return value: (transfer none): the #CoglPixelBuffer that this
- *   buffer uses for storage. Note that if the bitmap was created with
- *   cogl_bitmap_new_from_file() then it will not actually be using a
- *   pixel buffer and this function will return %NULL.
+ *   buffer uses for storage.
  */
 COGL_EXPORT CoglPixelBuffer *
 cogl_bitmap_get_buffer (CoglBitmap *bitmap);
-
-/**
- * cogl_bitmap_get_size_from_file:
- * @filename: the file to check
- * @width: (out): return location for the bitmap width, or %NULL
- * @height: (out): return location for the bitmap height, or %NULL
- *
- * Parses an image file enough to extract the width and height
- * of the bitmap.
- *
- * Return value: %TRUE if the image was successfully parsed
- */
-COGL_EXPORT gboolean
-cogl_bitmap_get_size_from_file (const char *filename,
-                                int *width,
-                                int *height);
-
-/**
- * cogl_is_bitmap:
- * @object: a #CoglObject pointer
- *
- * Checks whether @object is a #CoglBitmap
- *
- * Return value: %TRUE if the passed @object represents a bitmap,
- *   and %FALSE otherwise
- */
-COGL_EXPORT gboolean
-cogl_is_bitmap (void *object);
 
 /**
  * COGL_BITMAP_ERROR:
@@ -257,10 +211,7 @@ cogl_is_bitmap (void *object);
  * @COGL_BITMAP_ERROR_CORRUPT_IMAGE: An image file was broken somehow.
  *
  * Error codes that can be thrown when performing bitmap
- * operations. Note that gdk_pixbuf_new_from_file() can also throw
- * errors directly from the underlying image loading library. For
- * example, if GdkPixbuf is used then errors #GdkPixbufError<!-- -->s
- * will be used directly.
+ * operations.
  */
 typedef enum
 {

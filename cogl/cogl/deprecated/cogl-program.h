@@ -3,7 +3,7 @@
  *
  * A Low Level GPU Graphics and Utilities API
  *
- * Copyright (C) 2011 Intel Corporation.
+ * Copyright (C) 2008,2009 Intel Corporation.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -24,9 +24,17 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
+ *
+ *
  */
 
-/* The contents of this file get #included by config.h so it is
-   intended for extra configuration that needs to be included by all
-   Cogl source files. */
+#pragma once
 
+#define COGL_TYPE_PROGRAM (cogl_program_get_type ())
+
+COGL_EXPORT
+G_DECLARE_FINAL_TYPE (CoglProgram,
+                      cogl_program,
+                      COGL,
+                      PROGRAM,
+                      GObject)

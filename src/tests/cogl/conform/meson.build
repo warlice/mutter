@@ -45,7 +45,6 @@ cogl_tests = [
 #unported = [
 #  "test-multitexture",
 #  "test-npot-texture",
-#  "test-object",
 #  "test-readpixels",
 #  "test-texture-mipmaps",
 #  "test-texture-pixmap-x11",
@@ -59,7 +58,6 @@ cogl_test_conformance_includes = [
 
 cogl_test_c_args = [
   cogl_debug_c_args,
-  '-DCOGL_ENABLE_EXPERIMENTAL_API',
   '-DCOGL_DISABLE_DEPRECATED',
   '-DCOGL_DISABLE_DEPRECATION_WARNINGS',
   '-DTESTS_DATADIR="@0@/tests/data"'.format(cogl_srcdir),

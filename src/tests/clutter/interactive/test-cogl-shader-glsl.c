@@ -5,6 +5,7 @@
 #include <glib.h>
 #include <gmodule.h>
 
+#include "clutter/test-utils.h"
 #include "tests/clutter-test-utils.h"
 
 typedef struct
@@ -160,7 +161,7 @@ static ShaderSource shaders[]=
     }
 };
 
-static CoglHandle redhand;
+static CoglTexture *redhand;
 static CoglPipeline *pipeline;
 static unsigned int timeout_id = 0;
 static int shader_no = 0;
@@ -186,8 +187,8 @@ on_paint (ClutterActor        *actor,
 static void
 set_shader_num (int new_no)
 {
-  CoglHandle shader;
-  CoglHandle program;
+  CoglShader *shader;
+  CoglProgram *program;
   CoglPipeline *pipeline;
   CoglContext *ctx =
     clutter_backend_get_cogl_context (clutter_get_default_backend ());
@@ -206,7 +207,7 @@ set_shader_num (int new_no)
 
   program = cogl_create_program ();
   cogl_program_attach_shader (program, shader);
-  cogl_object_unref (shader);
+  g_object_unref (shader);
   cogl_program_link (program);
 
   uniform_no = cogl_program_get_uniform_location (program, "tex");
@@ -224,7 +225,7 @@ set_shader_num (int new_no)
   cogl_program_set_uniform_1f (program, uniform_no, 1.0f / image_height);
 
   cogl_pipeline_set_user_program (pipeline, program);
-  cogl_object_unref (program);
+  g_object_unref (program);
 
   shader_no = new_no;
 }
@@ -326,7 +327,7 @@ test_cogl_shader_glsl_main (int argc, char *argv[])
 
   file = g_build_filename (TESTS_DATADIR, "redhand.png", NULL);
   error = NULL;
-  redhand = cogl_texture_2d_new_from_file (ctx, file, &error);
+  redhand = clutter_test_texture_2d_new_from_file (ctx, file, &error);
   if (redhand == NULL)
     g_error ("image load failed: %s", error->message);
 

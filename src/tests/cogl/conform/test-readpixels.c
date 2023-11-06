@@ -25,8 +25,8 @@ on_after_paint (ClutterActor        *actor,
   graphene_matrix_t projection;
   graphene_matrix_t modelview;
   guchar *data;
-  CoglHandle tex;
-  CoglHandle offscreen;
+  CoglTexture *tex;
+  CoglOffscreen *offscreen;
   uint32_t *pixels;
   uint8_t *pixelsc;
 
@@ -125,7 +125,7 @@ on_after_paint (ClutterActor        *actor,
 
   g_free (pixelsc);
 
-  cogl_object_unref (tex);
+  g_object_unref (tex);
 
   /* Restore the viewport and matrices state */
   cogl_set_viewport (saved_viewport[0],
