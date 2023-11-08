@@ -44,9 +44,12 @@
 #include "core/workspace-private.h"
 #include "meta/compositor.h"
 #include "meta/prefs.h"
+#include "meta/util.h"
 #include "mtk/mtk-x11.h"
 #include "x11/meta-x11-display-private.h"
 #include "x11/window-x11.h"
+#include <stdbool.h>
+#include <string.h>
 
 #ifdef HAVE_NATIVE_BACKEND
 #include "backends/native/meta-backend-native.h"
@@ -564,13 +567,28 @@ index_binding (MetaKeyBindingManager *keys,
   for (i = 0; i < binding->resolved_combo.len; i++)
     {
       MetaKeyBinding *existing;
+      MetaKeyBinding *a11y_existing;
+      GHashTable *key_index_table = keys->key_bindings_index;
       guint32 index_key;
-
+      if (binding->flags & META_KEY_BINDING_IS_A11Y)
+	key_index_table = keys->a11y_key_bindings_index;
+	
       index_key = key_combo_key (&binding->resolved_combo, i);
 
+      a11y_existing = g_hash_table_lookup (keys->a11y_key_bindings_index,
+                                      GINT_TO_POINTER (index_key));
       existing = g_hash_table_lookup (keys->key_bindings_index,
                                       GINT_TO_POINTER (index_key));
-      if (existing != NULL)
+      if (a11y_existing != NULL)
+      	{
+	  /* We allow overrides for ALL accessibility keybindings. */
+	  meta_warning("Overwriting exisitng a11y key binding with"
+		       " keysym %x with keysym %x (keycode %x).",
+		       binding->combo.keysym,
+		       a11y_existing->combo.keysym,
+		       binding->resolved_combo.keycodes[i]);
+	}
+      else if (existing != NULL)
         {
           /* Overwrite already indexed keycodes only for the first
            * keycode, i.e. we give those primary keycodes precedence
@@ -585,7 +603,7 @@ index_binding (MetaKeyBindingManager *keys,
                         binding->resolved_combo.keycodes[i]);
         }
 
-      g_hash_table_replace (keys->key_bindings_index,
+      g_hash_table_replace (key_index_table,
                             GINT_TO_POINTER (index_key), binding);
     }
 }
@@ -595,7 +613,6 @@ resolve_key_combo (MetaKeyBindingManager *keys,
                    MetaKeyCombo          *combo,
                    MetaResolvedKeyCombo  *resolved_combo)
 {
-
   resolved_key_combo_reset (resolved_combo);
 
   if (combo->keysym != 0)
@@ -773,6 +790,7 @@ static void
 reload_combos (MetaKeyBindingManager *keys)
 {
   g_hash_table_remove_all (keys->key_bindings_index);
+  g_hash_table_remove_all (keys->a11y_key_bindings_index);
 
   reload_active_keyboard_layouts (keys);
 
@@ -787,6 +805,7 @@ reload_combos (MetaKeyBindingManager *keys)
   reload_iso_next_group_combos (keys);
 
   g_hash_table_foreach (keys->key_bindings, binding_reload_combos_foreach, keys);
+  g_hash_table_foreach (keys->a11y_key_bindings, binding_reload_combos_foreach, keys);
 }
 
 static void
@@ -928,6 +947,10 @@ get_keybinding (MetaKeyBindingManager *keys,
       guint32 key;
 
       key = key_combo_key (resolved_combo, i);
+      binding = g_hash_table_lookup (keys->a11y_key_bindings_index,
+                                     GINT_TO_POINTER (key));
+      if (binding != NULL)
+	break;
       binding = g_hash_table_lookup (keys->key_bindings_index,
                                      GINT_TO_POINTER (key));
 
@@ -1413,6 +1436,8 @@ meta_display_shutdown_keys (MetaDisplay *display)
 
   g_hash_table_destroy (keys->key_bindings_index);
   g_hash_table_destroy (keys->key_bindings);
+  g_hash_table_destroy (keys->a11y_key_bindings_index);
+  g_hash_table_destroy (keys->a11y_key_bindings);
 
   clear_active_keyboard_layouts (keys);
 }
@@ -1718,6 +1743,77 @@ meta_display_grab_accelerator (MetaDisplay         *display,
   return grab->action;
 }
 
+static void
+handle_accessibility_keys  (MetaDisplay           *display,
+                            MetaWindow            *event_window,
+                            const ClutterKeyEvent *event,
+                            MetaKeyBinding        *binding,
+                            gpointer               user_data)
+{
+  meta_topic(META_DEBUG_KEYBINDINGS, "TODO: handle accessibility key outputs");
+}
+
+bool
+create_a11y_binding_from_accelerator (MetaDisplay         *display,
+                                      const char          *accelerator,
+                                      MetaKeyBindingFlags  flags,
+				      const char *name)
+{
+  MetaKeyBindingManager *keys = &display->key_binding_manager;
+  MetaKeyBinding *binding;
+  MetaKeyCombo combo = { 0 };
+  MetaResolvedKeyCombo resolved_combo = { NULL, 0 };
+
+  if (!meta_parse_accelerator (accelerator, &combo))
+    {
+      meta_topic (META_DEBUG_KEYBINDINGS,
+                  "Failed to parse accelerator");
+      meta_warning ("\"%s\" is not a valid accelerator", accelerator);
+
+      return FALSE;
+    }
+  meta_topic(META_DEBUG_KEYBINDINGS, "Made combo");
+
+  resolve_key_combo (keys, &combo, &resolved_combo);
+
+  meta_topic(META_DEBUG_KEYBINDINGS, "made resolved");
+  // idk what this does, so I'm going to ignore it
+  //if (resolved_combo.len == 0)
+  //  return FALSE;
+  meta_topic(META_DEBUG_KEYBINDINGS, "is long enough");
+
+  if (get_keybinding (keys, &resolved_combo))
+    {
+      resolved_key_combo_reset (&resolved_combo);
+      return FALSE;
+    }
+  meta_topic(META_DEBUG_KEYBINDINGS, "no existing binding");
+  MetaKeyHandler *handler;
+
+  handler = g_new0 (MetaKeyHandler, 1);
+  handler->name = g_strdup (name);
+  handler->func = handle_accessibility_keys;
+  handler->default_func = handle_accessibility_keys;
+  handler->data = 0x0;
+  handler->flags = flags;
+  handler->user_data = 0x0;
+  handler->user_data_free_func = 0x0;
+
+  g_hash_table_insert (key_handlers, g_strdup (name), handler);
+
+  binding = g_new0 (MetaKeyBinding, 1);
+  binding->name = strdup(name);
+  binding->handler = handler;
+  binding->combo = combo;
+  binding->resolved_combo = resolved_combo;
+  binding->flags = flags & META_KEY_BINDING_IS_A11Y;
+
+  g_hash_table_add (keys->a11y_key_bindings, binding);
+  index_binding (keys, binding);
+
+  return TRUE;
+}
+
 gboolean
 meta_display_ungrab_accelerator (MetaDisplay *display,
                                  guint        action)
@@ -1906,14 +2002,14 @@ process_event (MetaDisplay          *display,
     (xkb_keycode_t) clutter_event_get_key_code ((ClutterEvent *) event);
   MetaResolvedKeyCombo resolved_combo = { &keycode, 1 };
   MetaKeyBinding *binding;
+  ClutterModifierType modifiers;
 
   /* we used to have release-based bindings but no longer. */
   if (clutter_event_type ((ClutterEvent *) event) == CLUTTER_KEY_RELEASE)
     return FALSE;
 
-  resolved_combo.mask =
-    mask_from_event_params (keys,
-                            clutter_event_get_state ((ClutterEvent *) event));
+  clutter_event_get_key_state ((ClutterEvent *) event, &modifiers, NULL, NULL);
+  resolved_combo.mask = mask_from_event_params (keys, modifiers);
 
   binding = get_keybinding (keys, &resolved_combo);
 
@@ -1995,7 +2091,7 @@ process_special_modifier_key (MetaDisplay          *display,
   hardware_keycode = clutter_event_get_key_code ((ClutterEvent *) event);
   time_ms = clutter_event_get_time ((ClutterEvent *) event);
   device = clutter_event_get_device ((ClutterEvent *) event);
-  modifiers = clutter_event_get_state ((ClutterEvent *) event);
+  clutter_event_get_key_state ((ClutterEvent *) event, &modifiers, NULL, NULL);
 
   if (*modifier_press_only)
     {
@@ -2167,6 +2263,7 @@ process_iso_next_group (MetaDisplay *display,
   gboolean activate;
   xkb_keycode_t keycode =
     (xkb_keycode_t) clutter_event_get_key_code ((ClutterEvent *) event);
+  ClutterModifierType modifiers;
   xkb_mod_mask_t mask;
   int i, j;
 
@@ -2174,8 +2271,8 @@ process_iso_next_group (MetaDisplay *display,
     return FALSE;
 
   activate = FALSE;
-  mask = mask_from_event_params (keys,
-                                 clutter_event_get_state ((ClutterEvent *) event));
+  clutter_event_get_key_state ((ClutterEvent *) event, &modifiers, NULL, NULL);
+  mask = mask_from_event_params (keys, modifiers);
 
   for (i = 0; i < keys->n_iso_next_group_combos; ++i)
     {
@@ -3106,6 +3203,8 @@ init_builtin_key_bindings (MetaDisplay *display)
   GSettings *mutter_keybindings = g_settings_new (SCHEMA_MUTTER_KEYBINDINGS);
   GSettings *mutter_wayland_keybindings = g_settings_new (SCHEMA_MUTTER_WAYLAND_KEYBINDINGS);
 
+  bool set_test_accessibility_binding = create_a11y_binding_from_accelerator (display, "<Super><Shift>a", META_KEY_BINDING_NONE | META_KEY_BINDING_IGNORE_AUTOREPEAT, "test-accessibility");
+  meta_topic(META_DEBUG_KEYBINDINGS, "The result of a11y_binding_from_accel is: %d", set_test_accessibility_binding);
   add_builtin_keybinding (display,
                           "switch-to-workspace-1",
                           common_keybindings,
@@ -3892,6 +3991,8 @@ meta_display_init_keys (MetaDisplay *display)
 
   keys->key_bindings = g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify) meta_key_binding_free);
   keys->key_bindings_index = g_hash_table_new (NULL, NULL);
+  keys->a11y_key_bindings = g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify) meta_key_binding_free);
+  keys->a11y_key_bindings_index = g_hash_table_new (NULL, NULL);
 
   reload_modmap (keys);
 
@@ -3954,15 +4055,15 @@ process_keybinding_key_event (MetaDisplay           *display,
   MetaKeyBindingManager *keys = &display->key_binding_manager;
   xkb_keycode_t keycode =
     (xkb_keycode_t) clutter_event_get_key_code ((ClutterEvent *) event);
+  ClutterModifierType modifiers;
   MetaResolvedKeyCombo resolved_combo = { &keycode, 1 };
   MetaKeyBinding *binding;
 
   if (clutter_event_type ((ClutterEvent *) event) == CLUTTER_KEY_RELEASE)
     return FALSE;
 
-  resolved_combo.mask =
-    mask_from_event_params (keys,
-                            clutter_event_get_state ((ClutterEvent *) event));
+  clutter_event_get_key_state ((ClutterEvent *) event, &modifiers, NULL, NULL);
+  resolved_combo.mask = mask_from_event_params (keys, modifiers);
 
   binding = get_keybinding (keys, &resolved_combo);
   if (!binding)

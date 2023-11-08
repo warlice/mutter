@@ -103,6 +103,8 @@ typedef struct
 
   GHashTable *key_bindings;
   GHashTable *key_bindings_index;
+  GHashTable *a11y_key_bindings;
+  GHashTable *a11y_key_bindings_index;
   xkb_mod_mask_t ignored_modifier_mask;
   xkb_mod_mask_t hyper_mask;
   xkb_mod_mask_t virtual_hyper_mask;
