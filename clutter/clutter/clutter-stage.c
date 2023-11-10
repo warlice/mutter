@@ -1295,11 +1295,24 @@ static void
 clutter_stage_paint (ClutterActor        *actor,
                      ClutterPaintContext *paint_context)
 {
-  ClutterStageView *view;
+  ClutterStageView *view = clutter_paint_context_get_stage_view (paint_context);
+
+#ifdef HAVE_TRACY
+  CoglFramebuffer *fb;
+  gboolean began_gpu_span = FALSE;
+
+  if (view)
+    {
+      fb = clutter_stage_view_get_framebuffer (view);
+
+      static const CoglTraceTracyLocation srcloc =
+        COGL_TRACE_TRACY_LOCATION_INIT ("Clutter::Stage::paint()");
+      began_gpu_span = cogl_framebuffer_begin_gpu_span (fb, &srcloc);
+    }
+#endif
 
   CLUTTER_ACTOR_CLASS (clutter_stage_parent_class)->paint (actor, paint_context);
 
-  view = clutter_paint_context_get_stage_view (paint_context);
   if (view &&
       G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_MAX_RENDER_TIME))
     {
@@ -1334,6 +1347,11 @@ clutter_stage_paint (ClutterActor        *actor,
 
       g_object_unref (layout);
     }
+
+#ifdef HAVE_TRACY
+  if (began_gpu_span)
+    cogl_framebuffer_end_gpu_span (fb);
+#endif
 }
 
 static void
