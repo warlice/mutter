@@ -2709,6 +2709,12 @@ clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
   COGL_TRACE_BEGIN_SCOPED (PaintToFramebuffer,
                            "Clutter::Stage::paint_to_framebuffer()");
 
+#ifdef HAVE_TRACY
+  static const CoglTraceTracyLocation srcloc =
+    COGL_TRACE_TRACY_LOCATION_INIT ("Clutter::Stage::paint_to_framebuffer()");
+  gboolean began_gpu_span = cogl_framebuffer_begin_gpu_span (framebuffer, &srcloc);
+#endif
+
   if (paint_flags & CLUTTER_PAINT_FLAG_CLEAR)
     {
       CoglColor clear_color;
@@ -2734,6 +2740,11 @@ clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
   cogl_framebuffer_pop_matrix (framebuffer);
 
   clutter_paint_context_destroy (paint_context);
+
+#ifdef HAVE_TRACY
+  if (began_gpu_span)
+    cogl_framebuffer_end_gpu_span (framebuffer);
+#endif
 }
 
 /**
