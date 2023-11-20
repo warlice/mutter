@@ -118,6 +118,10 @@ struct _ClutterFrameClock
   int64_t last_dispatch_interval_us;
 
   char *output_name;
+
+#ifdef HAVE_TRACY
+  const char *leaked_dispatch_lateness_plot_name;
+#endif
 };
 
 G_DEFINE_TYPE (ClutterFrameClock, clutter_frame_clock,
@@ -760,6 +764,18 @@ clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
     frame_clock->last_dispatch_lateness_us = 0;
   else
     frame_clock->last_dispatch_lateness_us = lateness_us;
+
+#ifdef HAVE_TRACY
+  if (G_UNLIKELY (cogl_trace_tracy_is_active ()))
+    {
+      if (!frame_clock->leaked_dispatch_lateness_plot_name)
+        frame_clock->leaked_dispatch_lateness_plot_name =
+          g_strdup_printf ("%s dispatch lateness, ms", frame_clock->output_name);
+
+      COGL_TRACE_PLOT_DOUBLE (frame_clock->leaked_dispatch_lateness_plot_name,
+                              frame_clock->last_dispatch_lateness_us / 1000.);
+    }
+#endif
 
 #ifdef CLUTTER_ENABLE_DEBUG
   if (G_UNLIKELY (CLUTTER_HAS_DEBUG (FRAME_TIMINGS)))
