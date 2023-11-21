@@ -166,6 +166,12 @@ cogl_trace_tracy_emit_message (const char *message, size_t size);
 COGL_EXPORT void
 cogl_trace_tracy_emit_plot_double (const char *name, double val);
 
+COGL_EXPORT void
+cogl_trace_tracy_emit_frame_mark_start (const char *name);
+
+COGL_EXPORT void
+cogl_trace_tracy_emit_frame_mark_end (const char *name);
+
 COGL_EXPORT uint8_t
 cogl_trace_tracy_create_gpu_context (int64_t current_gpu_time_ns);
 
@@ -225,6 +231,12 @@ cogl_auto_trace_end_helper_tracy (CoglTraceTracyHead *head)
     } \
   G_STMT_END
 
+#define COGL_TRACE_FRAME_START(name) \
+  cogl_trace_tracy_emit_frame_mark_start (name)
+
+#define COGL_TRACE_FRAME_END(name) \
+  cogl_trace_tracy_emit_frame_mark_end (name)
+
 #else /* HAVE_TRACY */
 
 #define COGL_TRACE_TRACY_BEGIN_SCOPED(Name, name) (void) 0
@@ -236,6 +248,8 @@ cogl_auto_trace_end_helper_tracy (CoglTraceTracyHead *head)
 
 #define COGL_TRACE_PLOT_DOUBLE(name, val) (void) 0
 #define COGL_TRACE_NAME_DYNAMIC(Name, ...) (void) 0
+#define COGL_TRACE_FRAME_START(name) (void) 0
+#define COGL_TRACE_FRAME_END(name) (void) 0
 
 #endif /* HAVE_TRACY */
 

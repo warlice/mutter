@@ -124,6 +124,9 @@ struct _ClutterFrameClock
   const char *leaked_time_since_presentation_plot_name;
   const char *leaked_presentation_misprediction_plot_name;
   const char *leaked_gpu_work_plot_name;
+
+  const char *leaked_frame_name;
+  gboolean tracy_frame_started;
 #endif
 };
 
@@ -268,6 +271,20 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
                            "Clutter::FrameClock::presented()");
   COGL_TRACE_DESCRIBE (ClutterFrameClockNotifyPresented,
                        frame_clock->output_name);
+
+#ifdef HAVE_TRACY
+  if (G_UNLIKELY (cogl_trace_tracy_is_active ()))
+    {
+      if (frame_clock->tracy_frame_started)
+        COGL_TRACE_FRAME_END (frame_clock->leaked_frame_name);
+      else if (!frame_clock->leaked_frame_name)
+        frame_clock->leaked_frame_name =
+          g_strdup_printf ("%s", frame_clock->output_name);
+
+      COGL_TRACE_FRAME_START (frame_clock->leaked_frame_name);
+      frame_clock->tracy_frame_started = TRUE;
+    }
+#endif
 
   frame_clock->last_next_presentation_time_us =
     frame_clock->next_presentation_time_us;
@@ -448,6 +465,15 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
       maybe_reschedule_update (frame_clock);
       break;
     }
+
+#ifdef HAVE_TRACY
+  if (frame_clock->tracy_frame_started
+      && frame_clock->state != CLUTTER_FRAME_CLOCK_STATE_SCHEDULED)
+    {
+      COGL_TRACE_FRAME_END (frame_clock->leaked_frame_name);
+      frame_clock->tracy_frame_started = FALSE;
+    }
+#endif
 }
 
 void
@@ -455,6 +481,14 @@ clutter_frame_clock_notify_ready (ClutterFrameClock *frame_clock)
 {
   COGL_TRACE_BEGIN_SCOPED (ClutterFrameClockNotifyReady, "Clutter::FrameClock::ready()");
   COGL_TRACE_DESCRIBE (ClutterFrameClockNotifyReady, frame_clock->output_name);
+
+#ifdef HAVE_TRACY
+  if (frame_clock->tracy_frame_started)
+    {
+      COGL_TRACE_FRAME_END (frame_clock->leaked_frame_name);
+      frame_clock->tracy_frame_started = FALSE;
+    }
+#endif
 
   switch (frame_clock->state)
     {
@@ -894,6 +928,15 @@ clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
         }
       break;
     }
+
+#ifdef HAVE_TRACY
+  if (frame_clock->tracy_frame_started
+      && frame_clock->state != CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED)
+    {
+      COGL_TRACE_FRAME_END (frame_clock->leaked_frame_name);
+      frame_clock->tracy_frame_started = FALSE;
+    }
+#endif
 
 #ifdef HAVE_PROFILER
   if (this_dispatch_ready_time_us != -1 &&

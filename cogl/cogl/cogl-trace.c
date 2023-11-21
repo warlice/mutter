@@ -434,6 +434,24 @@ cogl_trace_tracy_emit_plot_double (const char *name, double val)
   ___tracy_emit_plot (name, val);
 }
 
+void
+cogl_trace_tracy_emit_frame_mark_start (const char *name)
+{
+  if (!TracyCIsStarted)
+    return;
+
+  ___tracy_emit_frame_mark_start (name);
+}
+
+void
+cogl_trace_tracy_emit_frame_mark_end (const char *name)
+{
+  if (!TracyCIsStarted)
+    return;
+
+  ___tracy_emit_frame_mark_end (name);
+}
+
 uint8_t
 cogl_trace_tracy_create_gpu_context (int64_t current_gpu_time_ns)
 {
