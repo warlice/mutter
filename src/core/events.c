@@ -261,6 +261,14 @@ meta_display_handle_event (MetaDisplay        *display,
   event_type = clutter_event_type (event);
   time_ms = clutter_event_get_time (event);
 
+  ClutterModifierType locked;
+  ClutterModifierType latched;
+  ClutterModifierType pressed;
+  clutter_event_get_key_state ((ClutterEvent *) event, &pressed, &latched, &locked);
+  meta_topic(META_DEBUG_KEYBINDINGS, "Pressed %0x, Latched %0x, Locked %0x\n", pressed, locked, latched);
+  if ((pressed & 0x2) == 0x2 || (latched & 0x2) == 0x2 || (locked & 0x2) == 0x2) {
+	return FALSE;
+  }
   if (meta_display_process_captured_input (display, event))
     {
       bypass_clutter = TRUE;
