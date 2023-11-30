@@ -188,7 +188,11 @@ struct _MetaX11Display
   unsigned int reload_x11_cursor_later;
 };
 
-MetaX11Display *meta_x11_display_new (MetaDisplay *display, GError **error);
+MetaX11Display *meta_x11_display_new (MetaDisplay  *display,
+                                      const char   *display_name,
+                                      GError      **error);
+
+const char * meta_x11_display_get_display_name (MetaX11Display *x11_display);
 
 void meta_x11_display_restore_active_workspace (MetaX11Display *x11_display);
 

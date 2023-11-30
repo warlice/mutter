@@ -789,7 +789,7 @@ meta_display_init_x11_display (MetaDisplay  *display,
 {
   MetaX11Display *x11_display;
 
-  x11_display = meta_x11_display_new (display, error);
+  x11_display = meta_x11_display_new (display, NULL, error);
   if (!x11_display)
     return FALSE;
 
@@ -811,7 +811,11 @@ meta_display_init_x11_finish (MetaDisplay   *display,
                               GAsyncResult  *result,
                               GError       **error)
 {
+  MetaContext *context = meta_display_get_context (display);
+  MetaWaylandCompositor *compositor =
+    meta_context_get_wayland_compositor (context);
   MetaX11Display *x11_display;
+  const char *display_name;
 
   g_assert (g_task_get_source_tag (G_TASK (result)) == meta_display_init_x11);
 
@@ -826,7 +830,12 @@ meta_display_init_x11_finish (MetaDisplay   *display,
   if (display->x11_display)
     return TRUE;
 
-  x11_display = meta_x11_display_new (display, error);
+  display_name =
+    meta_wayland_get_private_xwayland_display_name (compositor);
+
+  x11_display = meta_x11_display_new (display,
+                                      display_name,
+                                      error);
   if (!x11_display)
     return FALSE;
 

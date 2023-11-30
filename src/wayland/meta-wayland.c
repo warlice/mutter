@@ -557,8 +557,6 @@ set_gnome_env (const char *name,
   GError *error = NULL;
   g_autoptr (GVariant) result = NULL;
 
-  setenv (name, value, TRUE);
-
   session_bus = g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, NULL);
   g_assert (session_bus);
 
