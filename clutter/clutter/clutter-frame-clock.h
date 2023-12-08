@@ -96,3 +96,7 @@ void clutter_frame_clock_record_flip_time (ClutterFrameClock *frame_clock,
                                            int64_t            flip_time_us);
 
 GString * clutter_frame_clock_get_max_render_time_debug_info (ClutterFrameClock *frame_clock);
+
+CLUTTER_EXPORT
+void clutter_frame_clock_get_next_frame_deadline (ClutterFrameClock *frame_clock,
+                                                  int64_t           *out_deadline_us);
