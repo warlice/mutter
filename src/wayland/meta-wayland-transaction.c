@@ -23,6 +23,7 @@
 
 #include <glib-unix.h>
 
+#include "compositor/meta-surface-actor-wayland.h"
 #include "wayland/meta-wayland.h"
 #include "wayland/meta-wayland-buffer.h"
 #include "wayland/meta-wayland-dma-buf.h"
@@ -314,9 +315,56 @@ meta_wayland_transaction_dma_buf_dispatch (MetaWaylandBuffer *buffer,
   meta_wayland_transaction_maybe_apply (transaction);
 }
 
+static int64_t
+meta_wayland_transaction_get_deadline (MetaWaylandTransaction *transaction)
+{
+  GHashTableIter iter;
+  MetaWaylandSurface *surface;
+  int64_t earliest_deadline_us = INT64_MAX;
+
+  g_hash_table_iter_init (&iter, transaction->entries);
+  while (g_hash_table_iter_next (&iter, (gpointer *) &surface, NULL))
+    {
+      MetaSurfaceActor *surface_actor;
+      GList *l;
+
+      surface_actor = meta_wayland_surface_get_actor (surface);
+
+      if (!surface_actor)
+        continue;
+
+      l = clutter_actor_peek_stage_views (CLUTTER_ACTOR (surface_actor));
+
+      for (; l; l = l->next)
+        {
+          ClutterStageView *view = l->data;
+          ClutterFrameClock *frame_clock;
+          int64_t deadline_us;
+
+          if (!meta_surface_actor_wayland_is_view_primary (surface_actor, view))
+            continue;
+
+          frame_clock = clutter_stage_view_get_frame_clock (view);
+          clutter_frame_clock_get_next_frame_deadline (frame_clock,
+                                                       &deadline_us);
+
+          if (deadline_us < 0)
+            continue;
+
+          earliest_deadline_us = MIN (earliest_deadline_us, deadline_us);
+        }
+    }
+
+  if (earliest_deadline_us == INT64_MAX)
+    return -1;
+
+  return earliest_deadline_us;
+}
+
 static gboolean
 meta_wayland_transaction_add_dma_buf_source (MetaWaylandTransaction *transaction,
-                                             MetaWaylandBuffer      *buffer)
+                                             MetaWaylandBuffer      *buffer,
+                                             int64_t                 deadline_us)
 {
   GSource *source;
 
@@ -329,6 +377,8 @@ meta_wayland_transaction_add_dma_buf_source (MetaWaylandTransaction *transaction
                                                transaction);
   if (!source)
     return FALSE;
+
+  meta_wayland_dma_buf_source_set_deadline (source, deadline_us);
 
   if (!transaction->buf_sources)
     {
@@ -372,7 +422,10 @@ meta_wayland_transaction_commit (MetaWaylandTransaction *transaction)
   MetaWaylandTransactionEntry *entry;
   g_autoptr (GPtrArray) placement_states = NULL;
   unsigned int num_placement_states = 0;
+  int64_t deadline_us;
   int i;
+
+  deadline_us = meta_wayland_transaction_get_deadline (transaction);
 
   g_hash_table_iter_init (&iter, transaction->entries);
   while (g_hash_table_iter_next (&iter,
@@ -383,7 +436,9 @@ meta_wayland_transaction_commit (MetaWaylandTransaction *transaction)
           MetaWaylandBuffer *buffer = entry->state->buffer;
 
           if (buffer &&
-              meta_wayland_transaction_add_dma_buf_source (transaction, buffer))
+              meta_wayland_transaction_add_dma_buf_source (transaction,
+                                                           buffer,
+                                                           deadline_us))
             maybe_apply = FALSE;
 
           if (entry->state->subsurface_placement_ops)
