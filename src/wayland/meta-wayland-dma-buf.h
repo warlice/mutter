@@ -66,3 +66,7 @@ meta_wayland_dma_buf_create_source (MetaWaylandBuffer               *buffer,
 CoglScanout *
 meta_wayland_dma_buf_try_acquire_scanout (MetaWaylandDmaBufBuffer *dma_buf,
                                           CoglOnscreen            *onscreen);
+
+void
+meta_wayland_dma_buf_source_set_deadline (GSource *base,
+                                          int64_t  deadline_us);

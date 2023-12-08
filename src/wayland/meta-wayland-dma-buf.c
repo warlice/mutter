@@ -843,6 +843,46 @@ typedef struct _MetaWaylandDmaBufSource
   int owned_sync_fd[META_WAYLAND_DMA_BUF_MAX_FDS];
 } MetaWaylandDmaBufSource;
 
+static void
+set_sync_file_deadline (int     sync_file_fd,
+                        int64_t deadline_us)
+{
+#ifdef SYNC_IOC_SET_DEADLINE
+  struct sync_set_deadline deadline = {
+    .deadline_ns = deadline_us * 1000,
+    .pad = 0,
+  };
+  int ret;
+
+  do
+    {
+      ret = ioctl (sync_file_fd, SYNC_IOC_SET_DEADLINE, &deadline);
+    }
+  while (ret == -1 && errno == EINTR);
+#endif
+}
+
+void
+meta_wayland_dma_buf_source_set_deadline (GSource *base,
+                                          int64_t  deadline_us)
+{
+  MetaWaylandDmaBufSource *source;
+  uint32_t i;
+
+  source = (MetaWaylandDmaBufSource *) base;
+
+  if (deadline_us < 0)
+    return;
+
+  for (i = 0; i < META_WAYLAND_DMA_BUF_MAX_FDS; i++)
+    {
+      int sync_fd = source->owned_sync_fd[i];
+
+      if (sync_fd >= 0)
+        set_sync_file_deadline (sync_fd, deadline_us);
+    }
+}
+
 static gboolean
 is_fd_readable (int fd)
 {
