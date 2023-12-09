@@ -26,6 +26,9 @@
 #include <drm_fourcc.h>
 #include <errno.h>
 #include <gio/gio.h>
+#include <glib/gstdio.h>
+#include <linux/dma-buf.h>
+#include <sys/ioctl.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
@@ -39,8 +42,8 @@ struct _MetaDrmBufferGbm
   MetaDrmBuffer parent;
 
   struct gbm_surface *surface;
-
   struct gbm_bo *bo;
+  int sync_file_fd;
 };
 
 static void
@@ -131,6 +134,14 @@ meta_drm_buffer_gbm_get_modifier (MetaDrmBuffer *buffer)
   return gbm_bo_get_modifier (buffer_gbm->bo);
 }
 
+static int
+meta_drm_buffer_gbm_get_sync_file_fd (MetaDrmBuffer *buffer)
+{
+  MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
+
+  return buffer_gbm->sync_file_fd;
+}
+
 static gboolean
 meta_drm_buffer_gbm_ensure_fb_id (MetaDrmBuffer  *buffer,
                                   GError        **error)
@@ -172,6 +183,39 @@ meta_drm_buffer_gbm_ensure_fb_id (MetaDrmBuffer  *buffer,
   return TRUE;
 }
 
+static int
+get_sync_file (int dmabuf_fd)
+{
+  struct dma_buf_export_sync_file dbesf = { .flags = DMA_BUF_SYNC_READ };
+  int ret;
+
+  do
+    {
+      ret = ioctl (dmabuf_fd, DMA_BUF_IOCTL_EXPORT_SYNC_FILE, &dbesf);
+    }
+  while (ret == -1 && errno == EINTR);
+
+  if (ret == 0)
+    return dbesf.fd;
+
+  return -1;
+}
+
+static void
+ensure_sync_file_fd (MetaDrmBufferGbm *buffer_gbm)
+{
+  g_autofd int dmabuf_fd = -1;
+
+  if (buffer_gbm->sync_file_fd >= 0)
+    return;
+
+  dmabuf_fd = gbm_bo_get_fd (buffer_gbm->bo);
+  if (dmabuf_fd < 0)
+    return;
+
+  buffer_gbm->sync_file_fd = get_sync_file (dmabuf_fd);
+}
+
 static gboolean
 lock_front_buffer (MetaDrmBufferGbm  *buffer_gbm,
                    GError           **error)
@@ -195,7 +239,7 @@ meta_drm_buffer_gbm_new_lock_front (MetaDeviceFile      *device_file,
                                     MetaDrmBufferFlags   flags,
                                     GError             **error)
 {
-  MetaDrmBufferGbm *buffer_gbm;
+  g_autoptr (MetaDrmBufferGbm) buffer_gbm;
 
   buffer_gbm = g_object_new (META_TYPE_DRM_BUFFER_GBM,
                              "device-file", device_file,
@@ -204,12 +248,11 @@ meta_drm_buffer_gbm_new_lock_front (MetaDeviceFile      *device_file,
   buffer_gbm->surface = gbm_surface;
 
   if (!lock_front_buffer (buffer_gbm, error))
-    {
-      g_object_unref (buffer_gbm);
-      return NULL;
-    }
+    return NULL;
 
-  return buffer_gbm;
+  ensure_sync_file_fd (buffer_gbm);
+
+  return g_steal_pointer (&buffer_gbm);
 }
 
 MetaDrmBufferGbm *
@@ -367,6 +410,8 @@ meta_drm_buffer_gbm_finalize (GObject *object)
 {
   MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (object);
 
+  g_clear_fd (&buffer_gbm->sync_file_fd, NULL);
+
   if (buffer_gbm->bo)
     {
       if (buffer_gbm->surface)
@@ -381,6 +426,7 @@ meta_drm_buffer_gbm_finalize (GObject *object)
 static void
 meta_drm_buffer_gbm_init (MetaDrmBufferGbm *buffer_gbm)
 {
+  buffer_gbm->sync_file_fd = -1;
 }
 
 static void
@@ -400,4 +446,5 @@ meta_drm_buffer_gbm_class_init (MetaDrmBufferGbmClass *klass)
   buffer_class->get_format = meta_drm_buffer_gbm_get_format;
   buffer_class->get_offset = meta_drm_buffer_gbm_get_offset;
   buffer_class->get_modifier = meta_drm_buffer_gbm_get_modifier;
+  buffer_class->get_sync_file_fd = meta_drm_buffer_gbm_get_sync_file_fd;
 }

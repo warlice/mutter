@@ -64,3 +64,5 @@ int meta_drm_buffer_get_offset (MetaDrmBuffer *buffer,
                                 int            plane);
 
 uint64_t meta_drm_buffer_get_modifier (MetaDrmBuffer *buffer);
+
+int meta_drm_buffer_get_sync_file_fd (MetaDrmBuffer *buffer);
