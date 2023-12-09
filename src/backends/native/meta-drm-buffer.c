@@ -251,6 +251,20 @@ meta_drm_buffer_get_sync_file_fd (MetaDrmBuffer *buffer)
   return META_DRM_BUFFER_GET_CLASS (buffer)->get_sync_file_fd (buffer);
 }
 
+
+static void
+meta_drm_buffer_real_set_deadline (MetaDrmBuffer *buffer,
+                                   int64_t        deadline_us)
+{
+}
+
+void
+meta_drm_buffer_set_deadline (MetaDrmBuffer *buffer,
+                              int64_t        deadline_us)
+{
+  return META_DRM_BUFFER_GET_CLASS (buffer)->set_deadline (buffer, deadline_us);
+}
+
 static void
 meta_drm_buffer_get_property (GObject    *object,
                               guint       prop_id,
@@ -337,6 +351,7 @@ meta_drm_buffer_class_init (MetaDrmBufferClass *klass)
   object_class->finalize = meta_drm_buffer_finalize;
 
   klass->get_sync_file_fd = meta_drm_buffer_real_get_sync_file_fd;
+  klass->set_deadline = meta_drm_buffer_real_set_deadline;
 
   obj_props[PROP_DEVICE_FILE] =
     g_param_spec_pointer ("device-file", NULL, NULL,

@@ -120,6 +120,16 @@ meta_drm_buffer_import_get_sync_file_fd (MetaDrmBuffer *buffer)
   return meta_drm_buffer_get_sync_file_fd (importee);
 }
 
+static void
+meta_drm_buffer_import_set_deadline (MetaDrmBuffer *buffer,
+                                     int64_t        deadline_us)
+{
+  MetaDrmBufferImport *buffer_import = META_DRM_BUFFER_IMPORT (buffer);
+  MetaDrmBuffer *importee = META_DRM_BUFFER (buffer_import->importee);
+
+  meta_drm_buffer_set_deadline (importee, deadline_us);
+}
+
 static struct gbm_bo *
 dmabuf_to_gbm_bo (struct gbm_device *importer,
                   int                dmabuf_fd,
@@ -256,4 +266,5 @@ meta_drm_buffer_import_class_init (MetaDrmBufferImportClass *klass)
   buffer_class->get_offset = meta_drm_buffer_import_get_offset;
   buffer_class->get_modifier = meta_drm_buffer_import_get_modifier;
   buffer_class->get_sync_file_fd = meta_drm_buffer_import_get_sync_file_fd;
+  buffer_class->set_deadline = meta_drm_buffer_import_set_deadline;
 }

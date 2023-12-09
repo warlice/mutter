@@ -52,6 +52,8 @@ struct _MetaDrmBufferClass
                       int            plane);
   uint64_t (* get_modifier) (MetaDrmBuffer *buffer);
   int (* get_sync_file_fd) (MetaDrmBuffer *buffer);
+  void (* set_deadline) (MetaDrmBuffer *buffer,
+                         int64_t        deadline_us);
 };
 
 MetaDeviceFile * meta_drm_buffer_get_device_file (MetaDrmBuffer *buffer);

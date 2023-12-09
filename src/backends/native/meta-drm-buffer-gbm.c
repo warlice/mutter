@@ -142,6 +142,37 @@ meta_drm_buffer_gbm_get_sync_file_fd (MetaDrmBuffer *buffer)
   return buffer_gbm->sync_file_fd;
 }
 
+static void
+set_sync_file_deadline (int     sync_file_fd,
+                        int64_t deadline_us)
+{
+#ifdef SYNC_IOC_SET_DEADLINE
+  struct sync_set_deadline deadline = {
+    .deadline_ns = deadline_us * 1000,
+    .pad = 0,
+  };
+  int ret;
+
+  do
+    {
+      ret = ioctl (sync_file_fd, SYNC_IOC_SET_DEADLINE, &deadline);
+    }
+  while (ret == -1 && errno == EINTR);
+#endif
+}
+
+static void
+meta_drm_buffer_gbm_set_deadline (MetaDrmBuffer *buffer,
+                                  int64_t        deadline_us)
+{
+  MetaDrmBufferGbm *buffer_gbm = META_DRM_BUFFER_GBM (buffer);
+
+  if (buffer_gbm->sync_file_fd < 0)
+    return;
+
+  set_sync_file_deadline (buffer_gbm->sync_file_fd, deadline_us);
+}
+
 static gboolean
 meta_drm_buffer_gbm_ensure_fb_id (MetaDrmBuffer  *buffer,
                                   GError        **error)
@@ -447,4 +478,5 @@ meta_drm_buffer_gbm_class_init (MetaDrmBufferGbmClass *klass)
   buffer_class->get_offset = meta_drm_buffer_gbm_get_offset;
   buffer_class->get_modifier = meta_drm_buffer_gbm_get_modifier;
   buffer_class->get_sync_file_fd = meta_drm_buffer_gbm_get_sync_file_fd;
+  buffer_class->set_deadline = meta_drm_buffer_gbm_set_deadline;
 }
