@@ -1042,6 +1042,18 @@ static const MetaKmsResultListenerVtable swap_buffer_result_listener_vtable = {
 };
 
 static void
+set_deadline_hint (MetaOnscreenNative *onscreen_native,
+                   MetaDrmBuffer      *buffer)
+{
+  ClutterStageView *view = CLUTTER_STAGE_VIEW (onscreen_native->view);
+  ClutterFrameClock *frame_clock = clutter_stage_view_get_frame_clock (view);
+  int64_t flip_deadline_us;
+
+  clutter_frame_clock_get_next_flip_deadline (frame_clock, &flip_deadline_us);
+  meta_drm_buffer_set_deadline (buffer, flip_deadline_us);
+}
+
+static void
 meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
                                                const int     *rectangles,
                                                int            n_rectangles,
@@ -1147,6 +1159,8 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
       break;
 #endif
     }
+
+  set_deadline_hint (onscreen_native, onscreen_native->gbm.next_fb);
 
   /*
    * If we changed EGL context, cogl will have the wrong idea about what is
