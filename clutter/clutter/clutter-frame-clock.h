@@ -100,3 +100,7 @@ GString * clutter_frame_clock_get_max_render_time_debug_info (ClutterFrameClock 
 CLUTTER_EXPORT
 void clutter_frame_clock_get_next_frame_deadline (ClutterFrameClock *frame_clock,
                                                   int64_t           *out_deadline_us);
+
+CLUTTER_EXPORT
+void clutter_frame_clock_get_next_flip_deadline (ClutterFrameClock *frame_clock,
+                                                 int64_t           *out_deadline_us);
