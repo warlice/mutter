@@ -249,24 +249,13 @@ send_configure_notify (MetaWindow *window)
   event.xconfigure.y = priv->client_rect.y - priv->border_width;
   if (window->frame)
     {
-      if (window->withdrawn)
-        {
-          MetaFrameBorders borders;
-          /* We reparent the client window and put it to the position
-           * where the visible top-left of the frame window currently is.
-           */
+      MetaFrameBorders borders;
 
-          meta_frame_calc_borders (window->frame, &borders);
+      meta_frame_calc_borders (window->frame, &borders);
 
-          event.xconfigure.x = window->frame->rect.x + borders.invisible.left;
-          event.xconfigure.y = window->frame->rect.y + borders.invisible.top;
-        }
-      else
-        {
-          /* Need to be in root window coordinates */
-          event.xconfigure.x += window->frame->rect.x;
-          event.xconfigure.y += window->frame->rect.y;
-        }
+      /* Need to be in root window coordinates */
+      event.xconfigure.x += window->frame->rect.x + borders.total.left;
+      event.xconfigure.y += window->frame->rect.y + borders.total.top;
     }
   event.xconfigure.width = priv->client_rect.width;
   event.xconfigure.height = priv->client_rect.height;
@@ -562,7 +551,7 @@ meta_window_x11_manage (MetaWindow *window)
     update_sm_hints (window); /* must come after transient_for */
 
   if (window->decorated)
-    meta_window_ensure_frame (window);
+    meta_window_sync_frame_state (window);
   else
     meta_window_x11_initialize_state (window);
 }
@@ -1356,12 +1345,14 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
 
   /* The above client_rect is in root window coordinates. The
    * values we need to pass to XConfigureWindow are in parent
-   * coordinates, so if the window is in a frame, we need to
-   * correct the x/y positions here. */
+   * coordinates, so if the window is in a frame, it should be placed at 0,0,
+   * and the wrapper window needs to be placed we need to inside the frame
+   * window.
+   */
   if (window->frame)
     {
-      client_rect.x = borders.total.left;
-      client_rect.y = borders.total.top;
+      client_rect.x = 0;
+      client_rect.y = 0;
     }
 
   if (client_rect.x != priv->client_rect.x ||
@@ -1504,7 +1495,12 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
     }
 
   if (configure_frame_first && window->frame)
-    frame_shape_changed = meta_frame_sync_to_window (window->frame, need_resize_frame);
+    {
+      frame_shape_changed = meta_frame_sync_to_window (window->frame,
+                                                       client_rect.width,
+                                                       client_rect.height,
+                                                       need_resize_frame);
+    }
 
   if (mask != 0)
     {
@@ -1515,7 +1511,12 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
     }
 
   if (!configure_frame_first && window->frame)
-    frame_shape_changed = meta_frame_sync_to_window (window->frame, need_resize_frame);
+    {
+      frame_shape_changed = meta_frame_sync_to_window (window->frame,
+                                                       client_rect.width,
+                                                       client_rect.height,
+                                                       need_resize_frame);
+    }
 
   meta_x11_error_trap_pop (window->display->x11_display);
 
@@ -1823,8 +1824,7 @@ meta_window_x11_are_updates_frozen (MetaWindow *window)
   MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
   MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
 
-  if (window->frame &&
-      meta_sync_counter_is_waiting (meta_frame_get_sync_counter (window->frame)))
+  if (window->frame && meta_frame_is_frozen (window->frame))
     return TRUE;
 
   return meta_sync_counter_is_waiting (&priv->sync_counter);
@@ -1973,6 +1973,9 @@ meta_window_x11_unmap (MetaWindow *window)
   meta_x11_error_trap_push (x11_display);
   XUnmapWindow (x11_display->xdisplay, window->xwindow);
   meta_x11_error_trap_pop (x11_display);
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Increasing unmaps_pending due to unmapping window %s",
+              window->desc);
   window->unmaps_pending ++;
 }
 
@@ -4132,7 +4135,10 @@ meta_window_x11_destroy_sync_request_alarm (MetaWindow *window)
 Window
 meta_window_x11_get_toplevel_xwindow (MetaWindow *window)
 {
-  return window->frame ? window->frame->xwindow : window->xwindow;
+  if (window->frame)
+    return meta_frame_get_current_xwindow (window->frame);
+  else
+    return window->xwindow;
 }
 
 void
@@ -4292,15 +4298,9 @@ meta_window_x11_is_awaiting_sync_response (MetaWindow *window)
 void
 meta_window_x11_check_update_resize (MetaWindow *window)
 {
-  MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
-  MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
   MetaWindowDrag *window_drag;
 
-  if (window->frame &&
-      meta_sync_counter_is_waiting (meta_frame_get_sync_counter (window->frame)))
-    return;
-
-  if (meta_sync_counter_is_waiting (&priv->sync_counter))
+  if (meta_window_updates_are_frozen (window))
     return;
 
   window_drag =

@@ -36,25 +36,171 @@
 #include <X11/Xatom.h>
 #include <X11/extensions/shape.h>
 
-#define EVENT_MASK (SubstructureRedirectMask |                     \
-                    StructureNotifyMask | SubstructureNotifyMask | \
-                    PropertyChangeMask | FocusChangeMask)
+#define EVENT_MASK (SubstructureRedirectMask | \
+                    PropertyChangeMask | \
+                    FocusChangeMask)
 
-void
-meta_window_ensure_frame (MetaWindow *window)
+static void
+request_frame (MetaWindow *window)
 {
   MetaX11Display *x11_display = window->display->x11_display;
   unsigned long data[1] = { 1 };
 
+  if (window->frame_pending)
+    return;
+
   meta_x11_error_trap_push (x11_display);
+
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Requesting frame for window %s", window->desc);
 
   XChangeProperty (x11_display->xdisplay,
                    window->xwindow,
                    x11_display->atom__MUTTER_NEEDS_FRAME,
                    XA_CARDINAL,
-                   32, PropModeReplace, (guchar*) data, 1);
+                   32, PropModeReplace, (uint8_t *) data, 1);
+  window->frame_pending = TRUE;
 
   meta_x11_error_trap_pop (x11_display);
+}
+
+static void
+sync_frame_fullscreen_state (MetaWindow *window,
+                             gboolean    initial)
+{
+  MetaX11Display *x11_display = window->display->x11_display;
+  MetaFrame *frame = window->frame;
+  MetaFrameBorders borders;
+
+  if (window->fullscreen == frame->is_fullscreen && !initial)
+    return;
+
+  frame->is_fullscreen = window->fullscreen;
+
+  meta_x11_error_trap_push (x11_display);
+
+  meta_frame_calc_borders (frame, &borders);
+
+  if (frame->is_fullscreen)
+    {
+      unsigned long serial;
+
+      serial = XNextRequest (x11_display->xdisplay);
+      XReparentWindow (x11_display->xdisplay,
+                       frame->wrapper_xwindow,
+                       x11_display->xroot,
+                       window->frame->rect.x + borders.invisible.left,
+                       window->frame->rect.y + borders.invisible.top);
+      XUnmapWindow (x11_display->xdisplay,
+                    frame->xwindow);
+      window->reparents_pending += 1;
+
+      meta_stack_tracker_record_add (window->display->stack_tracker,
+                                     frame->wrapper_xwindow,
+                                     serial);
+      if (!initial)
+        {
+          meta_stack_tracker_record_remove (window->display->stack_tracker,
+                                            frame->xwindow,
+                                            serial);
+        }
+    }
+  else
+    {
+      unsigned long serial;
+
+      serial = XNextRequest (x11_display->xdisplay);
+      XMapWindow (x11_display->xdisplay,
+                  frame->xwindow);
+      XReparentWindow (x11_display->xdisplay,
+                       frame->wrapper_xwindow,
+                       frame->xwindow,
+                       borders.total.left,
+                       borders.total.top);
+      window->reparents_pending += 1;
+
+      meta_stack_tracker_record_add (window->display->stack_tracker,
+                                     frame->xwindow,
+                                     serial);
+      if (!initial)
+        {
+          meta_stack_tracker_record_remove (window->display->stack_tracker,
+                                            frame->wrapper_xwindow,
+                                            serial);
+        }
+    }
+  meta_x11_error_trap_pop (x11_display);
+
+  if (meta_window_has_focus (window))
+    window->restore_focus_on_map = TRUE;
+
+  /* Move keybindings to frame or wrapper instead of window */
+  meta_window_grab_keys (window);
+
+  meta_compositor_sync_updates_frozen (window->display->compositor, window);
+  meta_window_queue (window, META_QUEUE_CALC_SHOWING);
+  meta_window_queue (window, META_QUEUE_MOVE_RESIZE);
+}
+
+void
+meta_window_sync_frame_state (MetaWindow *window)
+{
+  if (window->client_type != META_WINDOW_CLIENT_TYPE_X11)
+    return;
+
+  if (!window->decorated)
+    meta_window_destroy_frame (window);
+  else if (!window->frame)
+    request_frame (window);
+  else
+    sync_frame_fullscreen_state (window, FALSE);
+}
+
+static void
+init_wrapper_window (MetaFrame *frame)
+{
+  MetaWindow *window = frame->window;
+  MetaX11Display *x11_display = window->display->x11_display;
+  XSetWindowAttributes xattr = { 0, };
+  MetaFrameBorders borders;
+  long mask;
+
+  xattr.background_pixel = BlackPixel (x11_display->xdisplay,
+                                       DefaultScreen (x11_display->xdisplay));
+  xattr.border_pixel = xattr.background_pixel;
+  xattr.event_mask = EVENT_MASK | StructureNotifyMask | SubstructureNotifyMask;
+  xattr.bit_gravity = NorthWestGravity;
+  xattr.colormap =
+    XCreateColormap (x11_display->xdisplay,
+                     x11_display->xroot,
+                     window->xvisual,
+                     AllocNone);
+
+  meta_frame_calc_borders (frame, &borders);
+
+  mask = (CWBorderPixel | CWColormap | CWEventMask | CWBitGravity);
+
+  frame->wrapper_xwindow = XCreateWindow (x11_display->xdisplay,
+                                          frame->xwindow,
+                                          borders.total.left,
+                                          borders.total.top,
+                                          window->rect.width,
+                                          window->rect.height,
+                                          0,
+                                          window->depth,
+                                          InputOutput,
+                                          window->xvisual,
+                                          mask, &xattr);
+
+  XReparentWindow (x11_display->xdisplay,
+                   window->xwindow,
+                   frame->wrapper_xwindow,
+                   0, 0);
+  XMapWindow (x11_display->xdisplay, frame->wrapper_xwindow);
+  window->reparents_pending += 1;
+
+  meta_x11_display_register_x_window (x11_display,
+                                      &frame->wrapper_xwindow, window);
 }
 
 void
@@ -68,6 +214,8 @@ meta_window_set_frame_xwindow (MetaWindow *window,
 
   if (window->frame)
     return;
+
+  window->frame_pending = FALSE;
 
   frame = g_new0 (MetaFrame, 1);
 
@@ -86,21 +234,19 @@ meta_window_set_frame_xwindow (MetaWindow *window,
 
   window->frame = frame;
 
-  meta_verbose ("Frame geometry %d,%d  %dx%d",
-                frame->rect.x, frame->rect.y,
-                frame->rect.width, frame->rect.height);
-
-  meta_verbose ("Setting frame 0x%lx for window %s, "
-                "frame geometry %d,%d  %dx%d",
-                xframe, window->desc,
-                frame->rect.x, frame->rect.y,
-                frame->rect.width, frame->rect.height);
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Setting frame 0x%lx for window %s, "
+              "frame geometry %d,%d  %dx%d",
+              xframe, window->desc,
+              frame->rect.x, frame->rect.y,
+              frame->rect.width, frame->rect.height);
 
   meta_stack_tracker_record_add (window->display->stack_tracker,
                                  frame->xwindow,
                                  create_serial);
 
-  meta_verbose ("Frame for %s is 0x%lx", frame->window->desc, frame->xwindow);
+  meta_topic (META_DEBUG_WINDOW_STATE,
+              "Frame for %s is 0x%lx", frame->window->desc, frame->xwindow);
 
   meta_x11_error_trap_push (x11_display);
 
@@ -123,17 +269,11 @@ meta_window_set_frame_xwindow (MetaWindow *window,
       window->unmaps_pending += 1;
     }
 
+  init_wrapper_window (frame);
+
   meta_stack_tracker_record_remove (window->display->stack_tracker,
                                     window->xwindow,
                                     XNextRequest (x11_display->xdisplay));
-  XReparentWindow (x11_display->xdisplay,
-                   window->xwindow,
-                   frame->xwindow,
-                   frame->child_x,
-                   frame->child_y);
-  window->reparents_pending += 1;
-  /* FIXME handle this error */
-  meta_x11_error_trap_pop (x11_display);
 
   /* Ensure focus is restored after the unmap/map events triggered
    * by XReparentWindow().
@@ -151,12 +291,10 @@ meta_window_set_frame_xwindow (MetaWindow *window,
                                             x11_display->atom__NET_WM_OPAQUE_REGION,
                                             TRUE);
 
-  meta_x11_error_trap_push (x11_display);
-  XMapWindow (x11_display->xdisplay, frame->xwindow);
-  meta_x11_error_trap_pop (x11_display);
+  sync_frame_fullscreen_state (window, TRUE);
 
-  /* Move keybindings to frame instead of window */
-  meta_window_grab_keys (window);
+  /* FIXME handle this error */
+  meta_x11_error_trap_pop (x11_display);
 
   /* Even though the property was already set, notify
    * on it so other bits of the machinery catch up
@@ -168,25 +306,36 @@ meta_window_set_frame_xwindow (MetaWindow *window,
 void
 meta_window_destroy_frame (MetaWindow *window)
 {
+  MetaX11Display *x11_display = window->display->x11_display;
   MetaFrame *frame;
   MetaFrameBorders borders;
-  MetaX11Display *x11_display;
+  unsigned long serial;
 
   if (window->frame == NULL)
-    return;
+    {
+      if (window->frame_pending)
+        {
+          window->frame_pending = FALSE;
+          meta_x11_error_trap_push (x11_display);
+          XDeleteProperty (x11_display->xdisplay,
+                           window->xwindow,
+                           x11_display->atom__MUTTER_NEEDS_FRAME);
+          meta_x11_error_trap_pop (x11_display);
+        }
 
-  x11_display = window->display->x11_display;
+      meta_topic (META_DEBUG_WINDOW_STATE,
+                  "Unframing unframed window %s", window->desc);
+      return;
+    }
 
-  meta_verbose ("Unframing window %s", window->desc);
+  meta_topic (META_DEBUG_WINDOW_STATE, "Unframing window %s", window->desc);
 
   frame = window->frame;
 
+  meta_x11_error_trap_push (x11_display);
+
   meta_frame_calc_borders (frame, &borders);
 
-  /* Unparent the client window; it may be destroyed,
-   * thus the error trap.
-   */
-  meta_x11_error_trap_push (x11_display);
   if (window->mapped)
     {
       window->mapped = FALSE; /* Keep track of unmapping it, so we
@@ -222,6 +371,32 @@ meta_window_destroy_frame (MetaWindow *window)
   if (META_X11_DISPLAY_HAS_SHAPE (x11_display))
     XShapeSelectInput (x11_display->xdisplay, frame->xwindow, NoEventMask);
 
+  serial = XNextRequest (x11_display->xdisplay);
+
+  if (frame->is_fullscreen)
+    {
+      meta_stack_tracker_record_remove (window->display->stack_tracker,
+                                        frame->wrapper_xwindow,
+                                        serial);
+    }
+  else
+    {
+      meta_stack_tracker_record_remove (window->display->stack_tracker,
+                                        frame->xwindow,
+                                        serial);
+    }
+
+  if (frame->wrapper_xwindow != None)
+    {
+      XDestroyWindow (window->display->x11_display->xdisplay,
+                      frame->wrapper_xwindow);
+
+      meta_x11_display_unregister_x_window (x11_display,
+                                            frame->wrapper_xwindow);
+      frame->wrapper_xwindow = None;
+    }
+
+  window->frame_pending = FALSE;
   XDeleteProperty (x11_display->xdisplay,
                    window->xwindow,
                    x11_display->atom__MUTTER_NEEDS_FRAME);
@@ -366,26 +541,58 @@ meta_frame_clear_cached_borders (MetaFrame *frame)
 
 gboolean
 meta_frame_sync_to_window (MetaFrame *frame,
+                           int        client_width,
+                           int        client_height,
                            gboolean   need_resize)
 {
   MetaWindow *window = frame->window;
   MetaX11Display *x11_display = window->display->x11_display;
+  MetaFrameBorders borders;
+
+  meta_frame_calc_borders (window->frame, &borders);
 
   meta_topic (META_DEBUG_GEOMETRY,
-              "Syncing frame geometry %d,%d %dx%d (SE: %d,%d)",
+              "Syncing %s frame geometry %d,%d %dx%d (SE: %d,%d), "
+              "wrapper: %d,%d %dx%d",
+              frame->window->desc,
               frame->rect.x, frame->rect.y,
               frame->rect.width, frame->rect.height,
               frame->rect.x + frame->rect.width,
-              frame->rect.y + frame->rect.height);
+              frame->rect.y + frame->rect.height,
+              borders.total.left, borders.total.top,
+              client_width, client_height);
 
   meta_x11_error_trap_push (x11_display);
 
-  XMoveResizeWindow (x11_display->xdisplay,
-                     frame->xwindow,
-                     frame->rect.x,
-                     frame->rect.y,
-                     frame->rect.width,
-                     frame->rect.height);
+  if (frame->is_fullscreen)
+    {
+      XMoveResizeWindow (window->display->x11_display->xdisplay,
+                         frame->wrapper_xwindow,
+                         frame->rect.x, frame->rect.y,
+                         frame->rect.width, frame->rect.height);
+
+      XMoveWindow (window->display->x11_display->xdisplay,
+                   window->xwindow,
+                   0, 0);
+    }
+  else
+    {
+      XMoveResizeWindow (window->display->x11_display->xdisplay,
+                         frame->wrapper_xwindow,
+                         borders.total.left, borders.total.top,
+                         client_width, client_height);
+
+      XMoveWindow (window->display->x11_display->xdisplay,
+                   window->xwindow,
+                   0, 0);
+
+      XMoveResizeWindow (x11_display->xdisplay,
+                         frame->xwindow,
+                         frame->rect.x,
+                         frame->rect.y,
+                         frame->rect.width,
+                         frame->rect.height);
+    }
 
   meta_x11_error_trap_pop (x11_display);
 
@@ -430,9 +637,18 @@ meta_frame_get_mask (MetaFrame    *frame,
 }
 
 Window
-meta_frame_get_xwindow (MetaFrame *frame)
+meta_frame_get_frame_xwindow (MetaFrame *frame)
 {
   return frame->xwindow;
+}
+
+Window
+meta_frame_get_current_xwindow (MetaFrame *frame)
+{
+  if (frame->is_fullscreen)
+    return frame->wrapper_xwindow;
+  else
+    return frame->xwindow;
 }
 
 static void
@@ -592,4 +808,13 @@ meta_frame_set_opaque_region (MetaFrame *frame,
     frame->opaque_region = mtk_region_ref (region);
 
   meta_compositor_window_shape_changed (window->display->compositor, window);
+}
+
+gboolean
+meta_frame_is_frozen (MetaFrame *frame)
+{
+  if (frame->is_fullscreen)
+    return FALSE;
+
+  return meta_sync_counter_is_waiting (&frame->sync_counter);
 }

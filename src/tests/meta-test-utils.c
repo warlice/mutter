@@ -23,6 +23,7 @@
 
 #include <gio/gio.h>
 #include <string.h>
+#include <X11/Xatom.h>
 #include <X11/Xlib-xcb.h>
 
 #include "backends/meta-monitor-config-store.h"
@@ -376,6 +377,63 @@ meta_test_client_run (MetaTestClient *client,
     }
 }
 
+static void
+wait_frames_client (MetaContext *context)
+{
+  MetaDisplay *display = meta_context_get_display (context);
+  MetaX11Display *x11_display;
+  static unsigned long serial_counter = 0;
+  unsigned long desync_serial;
+  unsigned long desync_data[2] = {};
+
+  x11_display = meta_display_get_x11_display (display);
+  if (!x11_display)
+    return;
+
+  if (!x11_display->frames_client)
+    return;
+
+  desync_serial = ++serial_counter;
+  desync_data[0] = desync_serial;
+
+  XChangeProperty (x11_display->xdisplay,
+                   x11_display->xroot,
+                   x11_display->atom__MUTTER_FRAME_SYNC_SERIALS,
+                   XA_CARDINAL,
+                   32, PropModeReplace, (uint8_t *) desync_data, 2);
+
+  while (TRUE)
+    {
+      int format;
+      Atom type;
+      unsigned long nitems, bytes_after;
+      unsigned long *sync_data = NULL;
+
+      if (!x11_display->frames_client)
+        break;
+
+      XGetWindowProperty (x11_display->xdisplay,
+                          x11_display->xroot,
+                          x11_display->atom__MUTTER_FRAME_SYNC_SERIALS,
+                          0, 2,
+                          False, XA_CARDINAL,
+                          &type, &format,
+                          &nitems, &bytes_after,
+                          (uint8_t **) &sync_data);
+
+      if (sync_data &&
+          sync_data[0] == desync_serial &&
+          sync_data[1] == desync_serial)
+        {
+          XFree (sync_data);
+          break;
+        }
+
+      XFree (sync_data);
+      g_main_context_iteration (NULL, TRUE);
+    }
+}
+
 gboolean
 meta_test_client_wait (MetaTestClient  *client,
                        GError         **error)
@@ -400,6 +458,9 @@ meta_test_client_wait (MetaTestClient  *client,
         return FALSE;
 
       meta_async_waiter_wait (client->waiter, wait_value);
+
+      wait_frames_client (client->context);
+
       return TRUE;
     }
 }

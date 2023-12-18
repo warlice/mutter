@@ -30,8 +30,10 @@ struct _MetaFrame
   /* window we frame */
   MetaWindow *window;
 
-  /* reparent window */
+  /* Frame window */
   Window xwindow;
+  /* Wrapper window. */
+  Window wrapper_xwindow;
 
   /* This rect is trusted info from where we put the
    * frame, not the result of ConfigureNotify
@@ -51,18 +53,23 @@ struct _MetaFrame
   int bottom_height;
 
   guint borders_cached : 1;
+  guint is_fullscreen : 1;
 };
 
-void     meta_window_ensure_frame           (MetaWindow *window);
+void     meta_window_sync_frame_state       (MetaWindow *window);
 void     meta_window_destroy_frame          (MetaWindow *window);
 
-Window         meta_frame_get_xwindow (MetaFrame *frame);
+Window meta_frame_get_frame_xwindow (MetaFrame *frame);
+
+Window meta_frame_get_current_xwindow (MetaFrame *frame);
 
 /* These should ONLY be called from meta_window_move_resize_internal */
 void meta_frame_calc_borders      (MetaFrame        *frame,
                                    MetaFrameBorders *borders);
 
 gboolean meta_frame_sync_to_window (MetaFrame         *frame,
+                                    int                client_width,
+                                    int                client_height,
                                     gboolean           need_resize);
 
 void meta_frame_clear_cached_borders (MetaFrame *frame);
@@ -83,3 +90,5 @@ MetaSyncCounter * meta_frame_get_sync_counter (MetaFrame *frame);
 
 void meta_frame_set_opaque_region (MetaFrame *frame,
                                    MtkRegion *region);
+
+gboolean meta_frame_is_frozen (MetaFrame *frame);
