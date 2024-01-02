@@ -57,7 +57,7 @@ gbm_req = '>= 21.3'
 libpipewire_req = '>= 0.3.33'
 
 # profiler requirements
-sysprof_req = '>= 3.37.2'
+sysprof_req = '>= 3.48.0'
 
 gnome = import('gnome')
 pkg = import('pkgconfig')
@@ -424,8 +424,28 @@ endif
 
 have_profiler = get_option('profiler')
 if have_profiler
+  # libsysprof support
+  # This is actually not needed unless using the subproject,
+  # but meson won't reconfigure again the same subproject,
+  # so we have to check for the "superset" sysprof-6 first,
+  # so the subproject can provide all the deps we will want.
+  sysprof_dep = dependency('sysprof-6', 'sysprof-4',
+    version: sysprof_req,
+    required: true,
+    default_options: [
+      'examples=false',
+      'gtk=false',
+      'tests=false',
+      'tools=false',
+      'libsysprof=false',
+      'sysprofd=bundled',
+      'help=false',
+    ],
+  )
+
   # libsysprof-capture support
   libsysprof_capture_dep = dependency('sysprof-capture-4',
+    version: sysprof_req,
     required: true,
     default_options: [
       'examples=false',
@@ -436,14 +456,12 @@ if have_profiler
       'sysprofd=none',
       'help=false',
     ],
-    fallback: ['sysprof', 'libsysprof_capture_dep'],
   )
 
-  if libsysprof_capture_dep.type_name() == 'pkgconfig'
-    sysprof_dep = dependency('sysprof-6', 'sysprof-4')
+  if sysprof_dep.type_name() == 'pkgconfig'
     sysprof_dbus_interfaces_dir = sysprof_dep.get_variable('datadir') / 'dbus-1' / 'interfaces'
   else
-    sysprof_dbus_interfaces_dir = mutter_srcdir / 'subprojects' / 'sysprof' / 'src'
+    sysprof_dbus_interfaces_dir = mutter_srcdir / 'subprojects' / 'sysprof' / 'src' / 'sysprofd'
   endif
 endif
 
