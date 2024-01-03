@@ -172,7 +172,9 @@ struct _MetaBackendPrivate
   MetaDnd *dnd;
 
   guint upower_watch_id;
+  guint logind_watch_id;
   GDBusProxy *upower_proxy;
+  GDBusProxy *logind_proxy;
   gboolean lid_is_closed;
   gboolean on_battery;
 
@@ -237,11 +239,17 @@ meta_backend_dispose (GObject *object)
       g_bus_unwatch_name (priv->upower_watch_id);
       priv->upower_watch_id = 0;
     }
+  if (priv->logind_watch_id)
+    {
+      g_bus_unwatch_name (priv->logind_watch_id);
+      priv->logind_watch_id = 0;
+    }
 
   g_cancellable_cancel (priv->cancellable);
   g_clear_object (&priv->cancellable);
   g_clear_object (&priv->system_bus);
   g_clear_object (&priv->upower_proxy);
+  g_clear_object (&priv->logind_proxy);
 
   g_clear_handle_id (&priv->device_update_idle_id, g_source_remove);
 
@@ -670,27 +678,6 @@ upower_properties_changed (GDBusProxy *proxy,
   gboolean reset_idle_time = FALSE;
 
   v = g_variant_lookup_value (changed_properties,
-                              "LidIsClosed",
-                              G_VARIANT_TYPE_BOOLEAN);
-  if (v)
-    {
-      gboolean lid_is_closed;
-
-      lid_is_closed = g_variant_get_boolean (v);
-      g_variant_unref (v);
-
-      if (lid_is_closed != priv->lid_is_closed)
-        {
-          priv->lid_is_closed = lid_is_closed;
-          g_signal_emit (backend, signals[LID_IS_CLOSED_CHANGED], 0,
-                         priv->lid_is_closed);
-
-          if (!lid_is_closed)
-            reset_idle_time = TRUE;
-        }
-    }
-
-  v = g_variant_lookup_value (changed_properties,
                               "OnBattery",
                               G_VARIANT_TYPE_BOOLEAN);
   if (v)
@@ -738,19 +725,6 @@ upower_ready_cb (GObject      *source_object,
   g_signal_connect (proxy, "g-properties-changed",
                     G_CALLBACK (upower_properties_changed), backend);
 
-  v = g_dbus_proxy_get_cached_property (proxy, "LidIsClosed");
-  if (v)
-    {
-      priv->lid_is_closed = g_variant_get_boolean (v);
-      g_variant_unref (v);
-
-      if (priv->lid_is_closed)
-        {
-          g_signal_emit (backend, signals[LID_IS_CLOSED_CHANGED], 0,
-                         priv->lid_is_closed);
-        }
-    }
-
   v = g_dbus_proxy_get_cached_property (proxy, "OnBattery");
   if (v)
     {
@@ -791,6 +765,114 @@ upower_vanished (GDBusConnection *connection,
 }
 
 static void
+logind_properties_changed (GDBusProxy *proxy,
+                           GVariant   *changed_properties,
+                           GStrv       invalidated_properties,
+                           gpointer    user_data)
+{
+  MetaBackend *backend = user_data;
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+  GVariant *v;
+  gboolean reset_idle_time = FALSE;
+
+  v = g_variant_lookup_value (changed_properties,
+                              "LidClosed",
+                              G_VARIANT_TYPE_BOOLEAN);
+  if (v)
+    {
+      gboolean lid_is_closed;
+
+      lid_is_closed = g_variant_get_boolean (v);
+      g_variant_unref (v);
+
+      if (lid_is_closed != priv->lid_is_closed)
+        {
+          priv->lid_is_closed = lid_is_closed;
+          g_signal_emit (backend, signals[LID_IS_CLOSED_CHANGED], 0,
+                         priv->lid_is_closed);
+
+          if (!lid_is_closed)
+            reset_idle_time = TRUE;
+        }
+    }
+
+  if (reset_idle_time)
+    meta_idle_manager_reset_idle_time (priv->idle_manager);
+}
+
+static void
+logind_ready_cb (GObject      *source_object,
+                 GAsyncResult *res,
+                 gpointer      user_data)
+{
+  MetaBackend *backend;
+  MetaBackendPrivate *priv;
+  GDBusProxy *proxy;
+  GError *error = NULL;
+  GVariant *v;
+
+  proxy = g_dbus_proxy_new_finish (res, &error);
+  if (!proxy)
+    {
+      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        g_warning ("Failed to create logind proxy: %s", error->message);
+      g_error_free (error);
+      return;
+    }
+
+  backend = META_BACKEND (user_data);
+  priv = meta_backend_get_instance_private (backend);
+
+  priv->logind_proxy = proxy;
+  g_signal_connect (proxy, "g-properties-changed",
+                    G_CALLBACK (logind_properties_changed), backend);
+
+  v = g_dbus_proxy_get_cached_property (proxy, "LidClosed");
+  if (v)
+    {
+      priv->lid_is_closed = g_variant_get_boolean (v);
+      g_variant_unref (v);
+
+      if (priv->lid_is_closed)
+        {
+          g_signal_emit (backend, signals[LID_IS_CLOSED_CHANGED], 0,
+                         priv->lid_is_closed);
+        }
+    }
+}
+
+static void
+logind_appeared (GDBusConnection *connection,
+                 const gchar     *name,
+                 const gchar     *name_owner,
+                 gpointer         user_data)
+{
+  MetaBackend *backend = META_BACKEND (user_data);
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  g_dbus_proxy_new (connection,
+                    G_DBUS_PROXY_FLAGS_NONE,
+                    NULL,
+                    "org.freedesktop.login1",
+                    "/org/freedesktop/login1",
+                    "org.freedesktop.login1.Manager",
+                    priv->cancellable,
+                    logind_ready_cb,
+                    backend);
+}
+
+static void
+logind_vanished (GDBusConnection *connection,
+                 const gchar     *name,
+                 gpointer         user_data)
+{
+  MetaBackend *backend = META_BACKEND (user_data);
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  g_clear_object (&priv->logind_proxy);
+}
+
+static void
 meta_backend_constructed (GObject *object)
 {
   MetaBackend *backend = META_BACKEND (object);
@@ -818,6 +900,14 @@ meta_backend_constructed (GObject *object)
                                                 G_BUS_NAME_WATCHER_FLAGS_NONE,
                                                 upower_appeared,
                                                 upower_vanished,
+                                                backend,
+                                                NULL);
+
+      priv->logind_watch_id = g_bus_watch_name (G_BUS_TYPE_SYSTEM,
+                                                "org.freedesktop.login1",
+                                                G_BUS_NAME_WATCHER_FLAGS_NONE,
+                                                logind_appeared,
+                                                logind_vanished,
                                                 backend,
                                                 NULL);
     }
