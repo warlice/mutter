@@ -958,25 +958,24 @@ update_scroll_button (MetaInputSettings  *input_settings,
 
   priv = meta_input_settings_get_instance_private (input_settings);
   input_settings_class = META_INPUT_SETTINGS_GET_CLASS (input_settings);
-  if (settings == priv->trackball_settings) {
-    if (device)
-      {
-        caps = clutter_input_device_get_capabilities (device);
 
-        if ((caps & CLUTTER_INPUT_CAPABILITY_TRACKBALL) == 0)
-          return;
-      }
-  } else if (settings == priv->mouse_settings) {
-    if (device)
-      {
-        caps = clutter_input_device_get_capabilities (device);
+  if (device)
+    {
+      if (settings == priv->trackball_settings)
+        {
+          caps = clutter_input_device_get_capabilities (device);
 
-        if ((caps & CLUTTER_INPUT_CAPABILITY_POINTER) == 0)
-          return;
-      }
-  } else {
-    return;
-  }
+          if ((caps & CLUTTER_INPUT_CAPABILITY_TRACKBALL) == 0)
+            return;
+        }
+      else if (settings == priv->mouse_settings)
+        {
+          caps = clutter_input_device_get_capabilities (device);
+
+          if ((caps & CLUTTER_INPUT_CAPABILITY_POINTER) == 0)
+            return;
+        }
+    }
 
   /* This key is 'i' in the schema but it also specifies a minimum
    * range of 0 so the cast here is safe. */
@@ -996,13 +995,10 @@ update_scroll_button (MetaInputSettings  *input_settings,
           device = l->data;
           caps = clutter_input_device_get_capabilities (device);
 
-          if (settings == priv->trackball_settings) {
-            if ((caps & CLUTTER_INPUT_CAPABILITY_TRACKBALL) != 0)
-              input_settings_class->set_scroll_button (input_settings, device, button, button_lock);
-          } else if (settings == priv->mouse_settings) {
-            if ((caps & CLUTTER_INPUT_CAPABILITY_POINTER) != 0)
-              input_settings_class->set_scroll_button (input_settings, device, button, button_lock);
-          }
+          if ((settings == priv->trackball_settings) && ((caps & CLUTTER_INPUT_CAPABILITY_TRACKBALL) != 0))
+            input_settings_class->set_scroll_button (input_settings, device, button, button_lock);
+          else if ((settings == priv->mouse_settings) && ((caps & CLUTTER_INPUT_CAPABILITY_POINTER) != 0))
+            input_settings_class->set_scroll_button (input_settings, device, button, button_lock);
         }
     }
 }
