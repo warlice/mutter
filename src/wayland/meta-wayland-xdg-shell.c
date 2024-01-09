@@ -1768,6 +1768,8 @@ meta_wayland_xdg_surface_apply_state (MetaWaylandSurfaceRole  *surface_role,
 
   if (surface->buffer)
     priv->first_buffer_attached = TRUE;
+
+  meta_window_set_mapped (window, surface->buffer != NULL);
 }
 
 static void
@@ -2042,6 +2044,7 @@ xdg_surface_constructor_get_toplevel (struct wl_client   *client,
   meta_wayland_xdg_surface_constructor_finalize (constructor, xdg_surface);
 
   window = meta_window_wayland_new (display_from_surface (surface), surface);
+  meta_window_set_mapped (window, FALSE);
   shell_surface = META_WAYLAND_SHELL_SURFACE (xdg_surface);
   meta_wayland_shell_surface_set_window (shell_surface, window);
 }

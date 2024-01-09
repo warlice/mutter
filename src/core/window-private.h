@@ -547,6 +547,9 @@ struct _MetaWindow
   guint is_alive : 1;
 
   guint in_workspace_change : 1;
+
+  /* Whether the window surface is mapped. Only used on Wayland */
+  guint is_mapped : 1;
 };
 
 struct _MetaWindowClass
@@ -889,3 +892,5 @@ gboolean meta_window_is_suspended (MetaWindow *window);
 
 META_EXPORT_TEST
 int meta_get_window_suspend_timeout_s (void);
+
+void meta_window_set_mapped (MetaWindow *window, gboolean is_mapped);
