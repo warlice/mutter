@@ -144,8 +144,8 @@ meta_selection_source_memory_new (const char  *mimetype,
  * Returns: (transfer full): a `MetaSelectionSource`
  */
 MetaSelectionSource *
-meta_selection_source_memory_new_multiple (const char * const *mimetypes,
-                                           GBytes **values)
+meta_selection_source_memory_new_multiple (const char * const  *mimetypes,
+                                           GBytes             **values)
 {
   MetaSelectionSourceMemory *source;
   GList *mimetypes_list = NULL;
