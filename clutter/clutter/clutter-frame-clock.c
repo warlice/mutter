@@ -523,25 +523,18 @@ clutter_frame_clock_notify_ready (ClutterFrameClock *frame_clock)
     }
 }
 
-static int64_t
-clutter_frame_clock_compute_max_render_time_us (ClutterFrameClock *frame_clock)
+static gboolean
+clutter_frame_clock_compute_max_render_time_us (ClutterFrameClock *frame_clock,
+                                                int64_t           *max_render_time_us)
 {
   int64_t refresh_interval_us;
-  int64_t max_render_time_us;
 
   refresh_interval_us = frame_clock->refresh_interval_us;
 
   if (!frame_clock->ever_got_measurements ||
       G_UNLIKELY (clutter_paint_debug_flags &
                   CLUTTER_DEBUG_DISABLE_DYNAMIC_MAX_RENDER_TIME))
-    {
-      int64_t ret = (int64_t) (refresh_interval_us * SYNC_DELAY_FALLBACK_FRACTION);
-
-      if (frame_clock->state == CLUTTER_FRAME_CLOCK_STATE_DISPATCHED_ONE)
-        ret += refresh_interval_us;
-
-      return ret;
-    }
+    return FALSE;
 
   /* Max render time shows how early the frame clock needs to be dispatched
    * to make it to the predicted next presentation time. It is an estimate of
@@ -555,15 +548,15 @@ clutter_frame_clock_compute_max_render_time_us (ClutterFrameClock *frame_clock)
    * - The duration of vertical blank.
    * - A constant to account for variations in the above estimates.
    */
-  max_render_time_us =
+  *max_render_time_us =
     MAX (frame_clock->longterm_max_update_duration_us,
          frame_clock->shortterm_max_update_duration_us) +
     frame_clock->vblank_duration_us +
     clutter_max_render_time_constant_us;
 
-  max_render_time_us = CLAMP (max_render_time_us, 0, 2 * refresh_interval_us);
+  *max_render_time_us = CLAMP (*max_render_time_us, 0, 2 * refresh_interval_us);
 
-  return max_render_time_us;
+  return TRUE;
 }
 
 static void
@@ -580,6 +573,7 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
   int64_t next_presentation_time_us;
   int64_t next_smooth_presentation_time_us = 0;
   int64_t next_update_time_us;
+  gboolean max_render_time_is_known;
 
   now_us = g_get_monotonic_time ();
 
@@ -599,10 +593,13 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
     }
 
   min_render_time_allowed_us = refresh_interval_us / 2;
-  max_render_time_allowed_us =
-    clutter_frame_clock_compute_max_render_time_us (frame_clock);
 
-  if (min_render_time_allowed_us > max_render_time_allowed_us)
+  max_render_time_is_known =
+    clutter_frame_clock_compute_max_render_time_us (frame_clock,
+                                                    &max_render_time_allowed_us);
+
+  if (max_render_time_is_known &&
+      min_render_time_allowed_us > max_render_time_allowed_us)
     min_render_time_allowed_us = max_render_time_allowed_us;
 
   /*
@@ -724,6 +721,24 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
     }
   else
     {
+      /* If the max render time isn't known then using the current value of
+       * next_presentation_time_us is suboptimal. Targeting always one frame
+       * prior to that we'd lose the ability to scale up to triple buffering
+       * on late presentation. But targeting two frames prior we would be
+       * always triple buffering even when not required.
+       *   So the algorithm for deciding when to scale up to triple buffering
+       * in the absence of render time measurements is to simply target full
+       * frame rate. If we're keeping up then we'll stay double buffering. If
+       * we're not keeping up then this will switch us to triple buffering.
+       */
+      if (!max_render_time_is_known)
+        {
+          max_render_time_allowed_us =
+            (int64_t) (refresh_interval_us * SYNC_DELAY_FALLBACK_FRACTION);
+          next_presentation_time_us =
+            last_presentation_time_us + refresh_interval_us;
+        }
+
       while (next_presentation_time_us - min_render_time_allowed_us < now_us)
         next_presentation_time_us += refresh_interval_us;
 
@@ -755,7 +770,9 @@ calculate_next_variable_update_time_us (ClutterFrameClock *frame_clock,
 
   refresh_interval_us = frame_clock->refresh_interval_us;
 
-  if (frame_clock->last_presentation_time_us == 0)
+  if (frame_clock->last_presentation_time_us == 0 ||
+      !clutter_frame_clock_compute_max_render_time_us (frame_clock,
+                                                       &max_render_time_allowed_us))
     {
       *out_next_update_time_us =
         frame_clock->last_dispatch_time_us ?
@@ -767,9 +784,6 @@ calculate_next_variable_update_time_us (ClutterFrameClock *frame_clock,
       *out_next_frame_deadline_us = 0;
       return;
     }
-
-  max_render_time_allowed_us =
-    clutter_frame_clock_compute_max_render_time_us (frame_clock);
 
   last_presentation_time_us = frame_clock->last_presentation_time_us;
   next_presentation_time_us = last_presentation_time_us + refresh_interval_us;
@@ -1253,12 +1267,19 @@ clutter_frame_clock_record_flip (ClutterFrameClock *frame_clock,
 GString *
 clutter_frame_clock_get_max_render_time_debug_info (ClutterFrameClock *frame_clock)
 {
+  int64_t max_render_time_us;
   int64_t max_update_duration_us;
   GString *string;
 
-  string = g_string_new (NULL);
-  g_string_append_printf (string, "Max render time: %ld µs",
-                          clutter_frame_clock_compute_max_render_time_us (frame_clock));
+  string = g_string_new ("Max render time: ");
+  if (!clutter_frame_clock_compute_max_render_time_us (frame_clock,
+                                                       &max_render_time_us))
+    {
+      g_string_append (string, "unknown");
+      return string;
+    }
+
+  g_string_append_printf (string, "%ld µs", max_render_time_us);
 
   if (frame_clock->got_measurements_last_frame)
     g_string_append_printf (string, " =");
