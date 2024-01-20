@@ -85,7 +85,7 @@ variables:
     - .skip-git-clone
   variables:
     FDO_DISTRIBUTION_VERSION: 39
-    BASE_TAG: '2024-01-10.0'
+    BASE_TAG: '2024-01-18.0'
     MUTTER_USER: 'meta-user'
     FDO_DISTRIBUTION_PACKAGES:
       asciidoc
@@ -121,6 +121,9 @@ variables:
       dnf builddep -y gnome-shell --setopt=install_weak_deps=False
       dnf builddep -y kernel --setopt=install_weak_deps=False
       dnf builddep -y libei --setopt=install_weak_deps=False
+
+      # For ASAN
+      dnf install -y libasan libasan-static llvm
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/jadahl/catch.git \
@@ -437,6 +440,32 @@ build-wayland-only@x86_64:
     paths:
       - build/meson-logs
 
+build-with-address-sanitizer@x86_64:
+  extends:
+    - .mutter.distribution-image
+    - .mutter.fedora@x86_64
+  stage: build
+  needs:
+    - job: build-fedora-container@x86_64
+      artifacts: false
+  script:
+    - meson setup . build
+        --prefix /usr
+        --werror
+        --fatal-meson-warnings
+        --warnlevel 2
+        -Dbuildtype=debugoptimized
+        -Db_sanitize=address
+        -Dintrospection=false
+        $BASE_MESON_OPTIONS
+        $EXTRA_MESON_OPTIONS
+    - meson compile -C build
+    - sudo meson install --dry-run -C build
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - build
+
 .test-setup:
   variables:
     XDG_RUNTIME_DIR: "$CI_PROJECT_DIR/runtime-dir"
@@ -449,6 +478,7 @@ build-wayland-only@x86_64:
     MALLOC_CHECK_: "3"
     NO_AT_BRIDGE: "1"
     GTK_A11Y: "none"
+    ASAN_OPTIONS: "abort_on_error=false:symbolize=true"
   before_script:
     - !reference [.mutter.git-clone, before_script]
     # Disable e.g. audio support to not dead lock screen cast tests
@@ -535,6 +565,13 @@ test-mutter@aarch64:
   needs:
     - build-mutter@aarch64
   when: manual
+
+test-mutter-with-address-sanitizer@x86_64:
+  extends:
+    - .mutter.fedora@x86_64
+    - .test-mutter
+  needs:
+    - build-with-address-sanitizer@x86_64
 
 coverage:
   extends:
