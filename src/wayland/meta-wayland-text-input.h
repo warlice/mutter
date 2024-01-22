@@ -43,3 +43,7 @@ gboolean meta_wayland_text_input_update (MetaWaylandTextInput *text_input,
 
 gboolean meta_wayland_text_input_handle_event (MetaWaylandTextInput *text_input,
                                                const ClutterEvent   *event);
+
+void meta_wayland_text_input_cache_event (MetaWaylandTextInput *text_input,
+                                          const ClutterEvent   *event,
+                                          uint32_t              serial);

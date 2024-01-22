@@ -42,6 +42,16 @@ typedef enum
   META_WAYLAND_PENDING_STATE_ENABLED          = 1 << 4,
 } MetaWaylandTextInputPendingState;
 
+typedef struct _CachedKeyEvent CachedKeyEvent;
+
+struct _CachedKeyEvent
+{
+  ClutterEvent *event;
+  uint32_t serial;
+};
+
+#define MAX_CACHED_EVENTS 10
+
 typedef struct _MetaWaylandTextInput MetaWaylandTextInput;
 
 struct _MetaWaylandTextInput
@@ -53,6 +63,8 @@ struct _MetaWaylandTextInput
   struct wl_list focus_resource_list;
   MetaWaylandSurface *surface;
   struct wl_listener surface_listener;
+
+  GQueue cached_events;
 
   MetaWaylandTextInputPendingState pending_state;
 
@@ -755,6 +767,7 @@ meta_wayland_text_input_new (MetaWaylandSeat *seat)
   text_input = g_new0 (MetaWaylandTextInput, 1);
   text_input->input_focus = meta_wayland_text_input_focus_new (text_input);
   text_input->seat = seat;
+  text_input->cached_events = (GQueue) G_QUEUE_INIT;
 
   wl_list_init (&text_input->resource_list);
   wl_list_init (&text_input->focus_resource_list);
@@ -934,4 +947,28 @@ meta_wayland_text_input_handle_event (MetaWaylandTextInput *text_input,
     }
 
   return retval;
+}
+
+void
+meta_wayland_text_input_cache_event (MetaWaylandTextInput *text_input,
+                                     const ClutterEvent   *event,
+                                     uint32_t              serial)
+{
+  CachedKeyEvent *cached_event;
+
+  if ((clutter_event_get_flags (event) & CLUTTER_EVENT_FLAG_INPUT_METHOD) != 0)
+    return;
+
+  cached_event = g_new0 (CachedKeyEvent, 1);
+  cached_event->event = clutter_event_copy (event);
+  cached_event->serial = serial;
+
+  g_queue_push_head (&text_input->cached_events, cached_event);
+
+  while (g_queue_get_length (&text_input->cached_events) > MAX_CACHED_EVENTS)
+    {
+      cached_event = g_queue_pop_tail (&text_input->cached_events);
+      clutter_event_free (cached_event->event);
+      g_free (cached_event);
+    }
 }

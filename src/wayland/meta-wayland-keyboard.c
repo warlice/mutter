@@ -235,6 +235,7 @@ keyboard_handle_focus_surface_destroy (struct wl_listener *listener, void *data)
 
 static gboolean
 meta_wayland_keyboard_broadcast_key (MetaWaylandKeyboard *keyboard,
+                                     const ClutterEvent  *event,
                                      uint32_t             time,
                                      uint32_t             key,
                                      uint32_t             state)
@@ -245,6 +246,8 @@ meta_wayland_keyboard_broadcast_key (MetaWaylandKeyboard *keyboard,
     {
       MetaWaylandInputDevice *input_device =
         META_WAYLAND_INPUT_DEVICE (keyboard);
+      MetaWaylandSeat *seat =
+        meta_wayland_input_device_get_seat (input_device);
       uint32_t serial;
 
       serial = meta_wayland_input_device_next_serial (input_device);
@@ -259,6 +262,8 @@ meta_wayland_keyboard_broadcast_key (MetaWaylandKeyboard *keyboard,
           keyboard->key_up_serial = serial;
           keyboard->key_up_keycode = key;
         }
+
+      meta_wayland_text_input_cache_event (seat->text_input, event, serial);
 
       wl_resource_for_each (resource, &keyboard->focus_resource_list)
         wl_keyboard_send_key (resource, serial, time, key, state);
@@ -283,6 +288,7 @@ notify_key (MetaWaylandKeyboard *keyboard,
   code = clutter_event_get_event_code (event);
 
   return meta_wayland_keyboard_broadcast_key (keyboard,
+                                              event,
                                               clutter_event_get_time (event),
                                               code, is_press);
 }
