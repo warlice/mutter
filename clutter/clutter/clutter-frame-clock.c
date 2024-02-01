@@ -710,6 +710,70 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
   frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_SCHEDULED;
 }
 
+void
+clutter_frame_clock_get_next_frame_deadline (ClutterFrameClock *frame_clock,
+                                             int64_t           *out_deadline_us)
+{
+  int64_t now_us;
+  int64_t next_presentation_time_us;
+  int64_t min_render_time_allowed_us;
+
+  now_us = g_get_monotonic_time ();
+
+  if (frame_clock->state == CLUTTER_FRAME_CLOCK_STATE_INIT)
+    {
+      *out_deadline_us = now_us;
+      return;
+    }
+
+  if (frame_clock->next_update_time_us > now_us)
+    {
+      *out_deadline_us = frame_clock->next_update_time_us;
+      return;
+    }
+
+  calculate_next_update_time_us (frame_clock,
+                                 out_deadline_us,
+                                 &next_presentation_time_us,
+                                 &min_render_time_allowed_us);
+}
+
+void
+clutter_frame_clock_get_next_flip_deadline (ClutterFrameClock *frame_clock,
+                                            int64_t           *out_deadline_us)
+{
+  int64_t deadline_us;
+  int64_t now_us;
+  int64_t next_update_time_us;
+  int64_t next_presentation_time_us;
+  int64_t min_render_time_allowed_us;
+
+  now_us = g_get_monotonic_time ();
+
+  if (frame_clock->state == CLUTTER_FRAME_CLOCK_STATE_INIT)
+    {
+      *out_deadline_us = now_us;
+      return;
+    }
+
+  deadline_us =
+    frame_clock->next_presentation_time_us - frame_clock->vblank_duration_us;
+
+  if (deadline_us > now_us)
+    {
+      *out_deadline_us = deadline_us;
+      return;
+    }
+
+  calculate_next_update_time_us (frame_clock,
+                                 &next_update_time_us,
+                                 &next_presentation_time_us,
+                                 &min_render_time_allowed_us);
+
+  deadline_us = next_presentation_time_us - frame_clock->vblank_duration_us;
+  *out_deadline_us = deadline_us;
+}
+
 static void
 clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
                               int64_t            time_us)
