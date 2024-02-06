@@ -1018,6 +1018,9 @@ trigger_mousekeys_move (gpointer data)
   /* Pointer motion */
   switch (device->last_mousekeys_key)
     {
+    case XKB_KEY_Pointer_Up:
+    case XKB_KEY_Pointer_UpLeft:
+    case XKB_KEY_Pointer_UpRight:
     case XKB_KEY_KP_Home:
     case XKB_KEY_KP_7:
     case XKB_KEY_KP_Up:
@@ -1026,6 +1029,9 @@ trigger_mousekeys_move (gpointer data)
     case XKB_KEY_KP_9:
        dy = -1;
        break;
+    case XKB_KEY_Pointer_Down:
+    case XKB_KEY_Pointer_DownLeft:
+    case XKB_KEY_Pointer_DownRight:
     case XKB_KEY_KP_End:
     case XKB_KEY_KP_1:
     case XKB_KEY_KP_Down:
@@ -1040,6 +1046,9 @@ trigger_mousekeys_move (gpointer data)
 
   switch (device->last_mousekeys_key)
     {
+    case XKB_KEY_Pointer_Left:
+    case XKB_KEY_Pointer_UpLeft:
+    case XKB_KEY_Pointer_DownLeft:
     case XKB_KEY_KP_Home:
     case XKB_KEY_KP_7:
     case XKB_KEY_KP_Left:
@@ -1048,6 +1057,9 @@ trigger_mousekeys_move (gpointer data)
     case XKB_KEY_KP_1:
        dx = -1;
        break;
+    case XKB_KEY_Pointer_Right:
+    case XKB_KEY_Pointer_UpRight:
+    case XKB_KEY_Pointer_DownRight:
     case XKB_KEY_KP_Page_Up:
     case XKB_KEY_KP_9:
     case XKB_KEY_KP_Right:
@@ -1098,7 +1110,33 @@ handle_mousekeys_press (ClutterEvent          *event,
   if (!(clutter_event_get_flags (event) & CLUTTER_EVENT_FLAG_SYNTHETIC))
     stop_mousekeys_move (device);
 
-  /* Do not handle mousekeys if NumLock is ON */
+  /* Keysyms that tell us to move the pointer always work */
+  switch (clutter_event_get_key_symbol (event))
+    {
+    case XKB_KEY_Pointer_Button1:
+      emulate_button_click (device, CLUTTER_BUTTON_PRIMARY);
+      return TRUE;
+    case XKB_KEY_Pointer_Button2:
+      emulate_button_click (device, CLUTTER_BUTTON_MIDDLE);
+      return TRUE;
+    case XKB_KEY_Pointer_Button3:
+      emulate_button_click (device, CLUTTER_BUTTON_SECONDARY);
+      return TRUE;
+    case XKB_KEY_Pointer_Left:
+    case XKB_KEY_Pointer_Right:
+    case XKB_KEY_Pointer_Down:
+    case XKB_KEY_Pointer_DownLeft:
+    case XKB_KEY_Pointer_DownRight:
+    case XKB_KEY_Pointer_Up:
+    case XKB_KEY_Pointer_UpLeft:
+    case XKB_KEY_Pointer_UpRight:
+      start_mousekeys_move (event, device);
+      return TRUE;
+    default:
+      break;
+    }
+
+  /* But our NumLock-based mousekeys only works with NumLock off */
   if (is_numlock_active (device))
     return FALSE;
 
@@ -1175,12 +1213,33 @@ static gboolean
 handle_mousekeys_release (ClutterEvent          *event,
                           MetaInputDeviceNative *device)
 {
-  /* Do not handle mousekeys if NumLock is ON */
+  /* Keysyms that tell us to move the pointer always work */
+  switch (clutter_event_get_key_symbol (event))
+    {
+    case XKB_KEY_Pointer_Down:
+    case XKB_KEY_Pointer_DownLeft:
+    case XKB_KEY_Pointer_DownRight:
+    case XKB_KEY_Pointer_Up:
+    case XKB_KEY_Pointer_UpLeft:
+    case XKB_KEY_Pointer_UpRight:
+      stop_mousekeys_move (device);
+      return TRUE;
+    default:
+      break;
+    }
+
+  /* But our NumLock-based mousekeys only works with NumLock off */
   if (is_numlock_active (device))
     return FALSE;
 
   switch (clutter_event_get_key_symbol (event))
     {
+    case XKB_KEY_Pointer_Down:
+    case XKB_KEY_Pointer_DownLeft:
+    case XKB_KEY_Pointer_DownRight:
+    case XKB_KEY_Pointer_Up:
+    case XKB_KEY_Pointer_UpLeft:
+    case XKB_KEY_Pointer_UpRight:
     case XKB_KEY_KP_0:
     case XKB_KEY_KP_1:
     case XKB_KEY_KP_2:
