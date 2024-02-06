@@ -808,10 +808,9 @@ get_button_index (int button)
 }
 
 static void
-emulate_button_press (MetaInputDeviceNative *device_evdev)
+emulate_button_press (MetaInputDeviceNative *device_evdev, int btn)
 {
   ClutterInputDevice *device = CLUTTER_INPUT_DEVICE (device_evdev);
-  int btn = device_evdev->mousekeys_btn;
 
   if (device_evdev->mousekeys_btn_states[get_button_index (btn)])
     return;
@@ -823,10 +822,9 @@ emulate_button_press (MetaInputDeviceNative *device_evdev)
 }
 
 static void
-emulate_button_release (MetaInputDeviceNative *device_evdev)
+emulate_button_release (MetaInputDeviceNative *device_evdev, int btn)
 {
   ClutterInputDevice *device = CLUTTER_INPUT_DEVICE (device_evdev);
-  int btn = device_evdev->mousekeys_btn;
 
   if (device_evdev->mousekeys_btn_states[get_button_index (btn)] == CLUTTER_BUTTON_STATE_RELEASED)
     return;
@@ -838,10 +836,10 @@ emulate_button_release (MetaInputDeviceNative *device_evdev)
 }
 
 static void
-emulate_button_click (MetaInputDeviceNative *device)
+emulate_button_click (MetaInputDeviceNative *device, int btn)
 {
-  emulate_button_press (device);
-  emulate_button_release (device);
+  emulate_button_press (device, btn);
+  emulate_button_release (device, btn);
 }
 
 #define MOUSEKEYS_CURVE (1.0 + (((double) 50.0) * 0.001))
@@ -970,19 +968,19 @@ disable_mousekeys (MetaInputDeviceNative *device_evdev)
   if (device_evdev->mousekeys_btn_states[get_button_index (CLUTTER_BUTTON_PRIMARY)])
     {
       device_evdev->mousekeys_btn = CLUTTER_BUTTON_PRIMARY;
-      emulate_button_release (device_evdev);
+      emulate_button_release (device_evdev, device_evdev->mousekeys_btn);
     }
 
   if (device_evdev->mousekeys_btn_states[get_button_index (CLUTTER_BUTTON_MIDDLE)])
     {
       device_evdev->mousekeys_btn = CLUTTER_BUTTON_MIDDLE;
-      emulate_button_release (device_evdev);
+      emulate_button_release (device_evdev, device_evdev->mousekeys_btn);
     }
 
   if (device_evdev->mousekeys_btn_states[get_button_index (CLUTTER_BUTTON_SECONDARY)])
     {
       device_evdev->mousekeys_btn = CLUTTER_BUTTON_SECONDARY;
-      emulate_button_release (device_evdev);
+      emulate_button_release (device_evdev, device_evdev->mousekeys_btn);
     }
 
   if (device->accessibility_virtual_device)
@@ -1095,6 +1093,8 @@ static gboolean
 handle_mousekeys_press (ClutterEvent          *event,
                         MetaInputDeviceNative *device)
 {
+  int btn;
+
   if (!(clutter_event_get_flags (event) & CLUTTER_EVENT_FLAG_SYNTHETIC))
     stop_mousekeys_move (device);
 
@@ -1118,24 +1118,26 @@ handle_mousekeys_press (ClutterEvent          *event,
       break;
     }
 
+  btn = device->mousekeys_btn;
+
   /* Button events */
   switch (clutter_event_get_key_symbol (event))
     {
     case XKB_KEY_KP_Begin:
     case XKB_KEY_KP_5:
-      emulate_button_click (device);
+      emulate_button_click (device, btn);
       return TRUE;
     case XKB_KEY_KP_Insert:
     case XKB_KEY_KP_0:
-      emulate_button_press (device);
+      emulate_button_press (device, btn);
       return TRUE;
     case XKB_KEY_KP_Decimal:
     case XKB_KEY_KP_Delete:
-      emulate_button_release (device);
+      emulate_button_release (device, btn);
       return TRUE;
     case XKB_KEY_KP_Add:
-      emulate_button_click (device);
-      emulate_button_click (device);
+      emulate_button_click (device, btn);
+      emulate_button_click (device, btn);
       return TRUE;
     default:
       break;
