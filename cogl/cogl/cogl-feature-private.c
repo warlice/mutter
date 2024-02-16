@@ -57,6 +57,7 @@ _cogl_feature_check (CoglRenderer *renderer,
   switch (driver)
     {
     case COGL_DRIVER_GLES2:
+    case COGL_DRIVER_GLES3:
       gles_availability = COGL_EXT_IN_GLES2;
 
       if (COGL_CHECK_GL_VERSION (gl_major, gl_minor, 3, 0))

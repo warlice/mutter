@@ -447,7 +447,6 @@ _cogl_texture_driver_upload_supported (CoglContext *ctx,
     case COGL_PIXEL_FORMAT_A_8:
     case COGL_PIXEL_FORMAT_R_8:
     case COGL_PIXEL_FORMAT_RG_88:
-      return TRUE;
     case COGL_PIXEL_FORMAT_BGRX_8888:
     case COGL_PIXEL_FORMAT_BGRA_8888:
     case COGL_PIXEL_FORMAT_BGRA_8888_PRE:
@@ -465,7 +464,8 @@ _cogl_texture_driver_upload_supported (CoglContext *ctx,
     case COGL_PIXEL_FORMAT_ARGB_2101010:
     case COGL_PIXEL_FORMAT_ARGB_2101010_PRE:
 #if G_BYTE_ORDER == G_LITTLE_ENDIAN
-      if (cogl_has_feature (ctx,  COGL_FEATURE_ID_TEXTURE_RGBA1010102))
+      if (_cogl_has_private_feature
+          (ctx,  COGL_PRIVATE_FEATURE_TEXTURE_FORMAT_RGBA1010102))
         return TRUE;
       else
         return FALSE;
@@ -500,21 +500,15 @@ _cogl_texture_driver_upload_supported (CoglContext *ctx,
     case COGL_PIXEL_FORMAT_RGBX_FP_16161616:
     case COGL_PIXEL_FORMAT_RGBA_FP_16161616:
     case COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE:
-    case COGL_PIXEL_FORMAT_RGBA_FP_32323232:
-    case COGL_PIXEL_FORMAT_RGBA_FP_32323232_PRE:
-      if (cogl_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT))
+      if (_cogl_has_private_feature
+          (ctx, COGL_PRIVATE_FEATURE_TEXTURE_FORMAT_HALF_FLOAT))
         return TRUE;
       else
         return FALSE;
     case COGL_PIXEL_FORMAT_R_16:
     case COGL_PIXEL_FORMAT_RG_1616:
-    case COGL_PIXEL_FORMAT_RGBA_16161616:
-    case COGL_PIXEL_FORMAT_RGBA_16161616_PRE:
-      if (cogl_has_feature (ctx, COGL_FEATURE_ID_TEXTURE_NORM16))
-        return TRUE;
-      else
-        return FALSE;
     case COGL_PIXEL_FORMAT_DEPTH_16:
+    case COGL_PIXEL_FORMAT_DEPTH_32:
     case COGL_PIXEL_FORMAT_DEPTH_24_STENCIL_8:
     case COGL_PIXEL_FORMAT_ANY:
     case COGL_PIXEL_FORMAT_YUV:
@@ -542,7 +536,7 @@ _cogl_texture_driver_find_best_gl_get_data_format
 }
 
 const CoglTextureDriver
-_cogl_texture_driver_gles =
+_cogl_texture_driver_gles2 =
   {
     _cogl_texture_driver_gen,
     _cogl_texture_driver_upload_subregion_to_gl,

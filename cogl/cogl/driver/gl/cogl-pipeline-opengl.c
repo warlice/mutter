@@ -424,7 +424,7 @@ get_max_activateable_texture_units (void)
       int n_values = 0;
       int i;
 
-#ifdef HAVE_GL
+#if defined(HAVE_GL) || defined(HAVE_GLES3)
       if (ctx->driver != COGL_DRIVER_GLES2)
         {
           /* GL_MAX_TEXTURE_COORDS defines the number of texture coordinates
@@ -435,7 +435,7 @@ get_max_activateable_texture_units (void)
           GE (ctx, glGetIntegerv (GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS,
                                   values + n_values++));
         }
-#endif /* HAVE_GL */
+#endif
 
 #ifdef HAVE_GLES2
       if (ctx->driver == COGL_DRIVER_GLES2)
