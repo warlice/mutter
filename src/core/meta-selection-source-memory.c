@@ -24,8 +24,8 @@
 struct _MetaSelectionSourceMemory
 {
   MetaSelectionSource parent_instance;
-  char *mimetype;
-  GBytes *content;
+  GList *mimetypes;
+  GList *values;
 };
 
 G_DEFINE_TYPE (MetaSelectionSourceMemory,
@@ -42,8 +42,19 @@ meta_selection_source_memory_read_async (MetaSelectionSource *source,
   MetaSelectionSourceMemory *source_mem = META_SELECTION_SOURCE_MEMORY (source);
   GInputStream *stream;
   g_autoptr (GTask) task = NULL;
+  int mimetype_idx = -1;
 
-  if (g_strcmp0 (mimetype, source_mem->mimetype) != 0)
+  for (int i = 0; i < g_list_length (source_mem->mimetypes); i++)
+    {
+      char *other = g_list_nth_data (source_mem->mimetypes, i);
+      if (g_strcmp0 (mimetype, other) == 0)
+        {
+          mimetype_idx = i;
+          break;
+        }
+    }
+
+  if (mimetype_idx == -1)
     {
       g_task_report_new_error (source, callback, user_data,
                                meta_selection_source_memory_read_async,
@@ -55,7 +66,8 @@ meta_selection_source_memory_read_async (MetaSelectionSource *source,
   task = g_task_new (source, cancellable, callback, user_data);
   g_task_set_source_tag (task, meta_selection_source_memory_read_async);
 
-  stream = g_memory_input_stream_new_from_bytes (source_mem->content);
+  GBytes *data = g_list_nth_data (source_mem->values, mimetype_idx);
+  stream = g_memory_input_stream_new_from_bytes (data);
   g_task_return_pointer (task, stream, g_object_unref);
 }
 
@@ -74,10 +86,7 @@ meta_selection_source_memory_get_mimetypes (MetaSelectionSource *source)
 {
   MetaSelectionSourceMemory *source_mem = META_SELECTION_SOURCE_MEMORY (source);
 
-  if (!source_mem->mimetype)
-    return NULL;
-
-  return g_list_prepend (NULL, g_strdup (source_mem->mimetype));
+  return g_list_copy_deep (source_mem->mimetypes, (GCopyFunc) g_strdup, NULL);
 }
 
 static void
@@ -85,8 +94,8 @@ meta_selection_source_memory_finalize (GObject *object)
 {
   MetaSelectionSourceMemory *source_mem = META_SELECTION_SOURCE_MEMORY (object);
 
-  g_clear_pointer (&source_mem->content, g_bytes_unref);
-  g_free (source_mem->mimetype);
+  g_clear_list (&source_mem->mimetypes, g_free);
+  g_clear_list (&source_mem->values, (GDestroyNotify)g_bytes_unref);
 
   G_OBJECT_CLASS (meta_selection_source_memory_parent_class)->finalize (object);
 }
@@ -119,8 +128,42 @@ meta_selection_source_memory_new (const char  *mimetype,
   g_return_val_if_fail (content != NULL, NULL);
 
   source = g_object_new (META_TYPE_SELECTION_SOURCE_MEMORY, NULL);
-  source->mimetype = g_strdup (mimetype);
-  source->content = g_bytes_ref (content);
+  source->mimetypes = g_list_append (NULL, g_strdup (mimetype));
+  source->values = g_list_append (NULL, g_bytes_ref (content));
+
+  return META_SELECTION_SOURCE (source);
+}
+
+/**
+ * meta_selection_source_memory_new_multiple:
+ * @mimetypes: (element-type utf8) (array zero-terminated=1): the array of mimetypes in the selection
+ * @values: (element-type GBytes) (array zero-terminated=1): an array of `GBytes` matching the provided mimetypes
+ *
+ * Create a new [class@Meta.SelectionSource] with multiple mimetypes.
+ *
+ * Returns: (transfer full): a `MetaSelectionSource`
+ */
+MetaSelectionSource *
+meta_selection_source_memory_new_multiple (const char * const  *mimetypes,
+                                           GBytes             **values)
+{
+  MetaSelectionSourceMemory *source;
+  GList *mimetypes_list = NULL;
+  GList *values_list = NULL;
+
+  g_return_val_if_fail (mimetypes != NULL, NULL);
+  g_return_val_if_fail (values != NULL, NULL);
+
+  for (int i = 0; mimetypes[i] != NULL && values[i] != NULL; i++)
+    {
+      mimetypes_list = g_list_prepend (mimetypes_list, g_strdup (mimetypes[i]));
+      values_list = g_list_prepend (values_list,  g_bytes_ref (values[i]));
+    }
+
+  source = g_object_new (META_TYPE_SELECTION_SOURCE_MEMORY, NULL);
+
+  source->mimetypes = g_list_reverse (mimetypes_list);
+  source->values = g_list_reverse (values_list);
 
   return META_SELECTION_SOURCE (source);
 }
