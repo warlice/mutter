@@ -315,6 +315,11 @@ cogl_onscreen_egl_swap_buffers_with_damage (CoglOnscreen  *onscreen,
         cogl_context_get_gpu_time_ns (context);
       info->cpu_time_before_buffer_swap_us = g_get_monotonic_time ();
 
+#ifdef HAVE_TRACY
+      cogl_trace_tracy_emit_gpu_time_sync (context->tracy_context_id,
+                                           info->gpu_time_before_buffer_swap_ns);
+#endif
+
       /* Set up a timestamp query for when all rendering will be finished. */
       info->timestamp_query =
         cogl_framebuffer_create_timestamp_query (COGL_FRAMEBUFFER (onscreen));

@@ -27,6 +27,11 @@
 
 #include "config.h"
 
+// Must come before cogl-trace.h.
+#ifdef HAVE_TRACY
+#include <tracy/TracyC.h>
+#endif
+
 #include "cogl/cogl-trace.h"
 
 #ifdef HAVE_PROFILER
@@ -385,6 +390,143 @@ cogl_trace_describe (CoglTraceHead *head,
     head->description = g_strdup (description);
 }
 
+#ifdef HAVE_TRACY
+
+void
+cogl_trace_tracy_begin (CoglTraceTracyHead *head, const CoglTraceTracyLocation *location)
+{
+  head->ctx = ___tracy_emit_zone_begin (location, TracyCIsStarted);
+}
+
+void
+cogl_trace_tracy_end (CoglTraceTracyHead *head)
+{
+  ___tracy_emit_zone_end (head->ctx);
+}
+
+void
+cogl_trace_tracy_describe (CoglTraceTracyHead *head, const char *description, size_t size)
+{
+  ___tracy_emit_zone_text (head->ctx, description, size);
+}
+
+void
+cogl_trace_tracy_name_dynamic (CoglTraceTracyHead *head, const char *name, size_t size)
+{
+  ___tracy_emit_zone_name (head->ctx, name, size);
+}
+
+void
+cogl_trace_tracy_emit_message (const char *message, size_t size)
+{
+  if (!TracyCIsStarted)
+    return;
+
+  ___tracy_emit_message (message, size, 0);
+}
+
+void
+cogl_trace_tracy_emit_plot_double (const char *name, double val)
+{
+  if (!TracyCIsStarted)
+    return;
+
+  ___tracy_emit_plot (name, val);
+}
+
+void
+cogl_trace_tracy_emit_frame_mark_start (const char *name)
+{
+  if (!TracyCIsStarted)
+    return;
+
+  ___tracy_emit_frame_mark_start (name);
+}
+
+void
+cogl_trace_tracy_emit_frame_mark_end (const char *name)
+{
+  if (!TracyCIsStarted)
+    return;
+
+  ___tracy_emit_frame_mark_end (name);
+}
+
+uint8_t
+cogl_trace_tracy_create_gpu_context (int64_t current_gpu_time_ns)
+{
+  static int context_id_counter = 1;
+  int context_id;
+
+  if (!TracyCIsStarted)
+    return 0;
+
+  context_id = g_atomic_int_add (&context_id_counter, 1);
+  g_return_val_if_fail (context_id <= 255, 0);
+
+  ___tracy_emit_gpu_new_context ((struct ___tracy_gpu_new_context_data) {
+    .gpuTime = current_gpu_time_ns,
+    .period = 1.,
+    .context = context_id,
+    .flags = 0,
+    .type = 1, // OpenGL
+  });
+
+  return context_id;
+}
+
+void
+cogl_trace_tracy_emit_gpu_time (uint8_t context_id, unsigned int query_id, int64_t gpu_time_ns)
+{
+  if (context_id == 0)
+    return;
+
+  ___tracy_emit_gpu_time ((struct ___tracy_gpu_time_data) {
+    .gpuTime = gpu_time_ns,
+    .queryId = query_id,
+    .context = context_id,
+  });
+}
+
+void
+cogl_trace_tracy_emit_gpu_time_sync (uint8_t context_id, int64_t current_gpu_time_ns)
+{
+  if (context_id == 0)
+    return;
+
+  ___tracy_emit_gpu_time_sync ((struct ___tracy_gpu_time_sync_data) {
+    .gpuTime = current_gpu_time_ns,
+    .context = context_id,
+  });
+}
+
+void
+cogl_trace_tracy_begin_gpu_zone (uint8_t context_id, unsigned int query_id, const CoglTraceTracyLocation *location)
+{
+  if (context_id == 0)
+    return;
+
+  ___tracy_emit_gpu_zone_begin ((struct ___tracy_gpu_zone_begin_data) {
+    .srcloc = (uint64_t) location,
+    .queryId = query_id,
+    .context = context_id,
+  });
+}
+
+void
+cogl_trace_tracy_end_gpu_zone (uint8_t context_id, unsigned int query_id)
+{
+  if (context_id == 0)
+    return;
+
+  ___tracy_emit_gpu_zone_end ((struct ___tracy_gpu_zone_end_data) {
+    .queryId = query_id,
+    .context = context_id,
+  });
+}
+
+#endif /* HAVE_TRACY */
+
 #else
 
 #include <string.h>
@@ -428,3 +570,22 @@ cogl_set_tracing_disabled_on_thread (void *data)
 }
 
 #endif /* HAVE_PROFILER */
+
+void
+cogl_trace_tracy_start (void)
+{
+#ifdef TRACY_MANUAL_LIFETIME
+  if (!TracyCIsStarted)
+    ___tracy_startup_profiler ();
+#endif
+}
+
+gboolean
+cogl_trace_tracy_is_active (void)
+{
+#ifdef HAVE_TRACY
+  return TracyCIsStarted && TracyCIsConnected;
+#else
+  return FALSE;
+#endif
+}

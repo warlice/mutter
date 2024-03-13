@@ -136,6 +136,16 @@ struct _ClutterFrameClock
   int64_t last_dispatch_interval_us;
 
   char *output_name;
+
+#ifdef HAVE_TRACY
+  const char *leaked_dispatch_lateness_plot_name;
+  const char *leaked_time_since_presentation_plot_name;
+  const char *leaked_presentation_misprediction_plot_name;
+  const char *leaked_gpu_work_plot_name;
+
+  const char *leaked_frame_name;
+  gboolean tracy_frame_started;
+#endif
 };
 
 G_DEFINE_TYPE (ClutterFrameClock, clutter_frame_clock,
@@ -280,6 +290,20 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
   COGL_TRACE_DESCRIBE (ClutterFrameClockNotifyPresented,
                        frame_clock->output_name);
 
+#ifdef HAVE_TRACY
+  if (G_UNLIKELY (cogl_trace_tracy_is_active ()))
+    {
+      if (frame_clock->tracy_frame_started)
+        COGL_TRACE_FRAME_END (frame_clock->leaked_frame_name);
+      else if (!frame_clock->leaked_frame_name)
+        frame_clock->leaked_frame_name =
+          g_strdup_printf ("%s", frame_clock->output_name);
+
+      COGL_TRACE_FRAME_START (frame_clock->leaked_frame_name);
+      frame_clock->tracy_frame_started = TRUE;
+    }
+#endif
+
   frame_clock->last_next_presentation_time_us =
     frame_clock->next_presentation_time_us;
   frame_clock->has_last_next_presentation_time =
@@ -356,6 +380,47 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
     }
 #endif
 
+#ifdef HAVE_TRACY
+  if (G_UNLIKELY (cogl_trace_tracy_is_active ()))
+    {
+      if (frame_info->presentation_time != 0)
+        {
+          int64_t current_time_us;
+          double since_us;
+          int64_t misprediction_us;
+
+          current_time_us = g_get_monotonic_time ();
+          since_us = current_time_us - frame_info->presentation_time;
+          misprediction_us =
+            frame_info->presentation_time - frame_clock->next_presentation_time_us;
+
+          if (!frame_clock->leaked_time_since_presentation_plot_name)
+            frame_clock->leaked_time_since_presentation_plot_name =
+              g_strdup_printf ("%s time since presentation, ms", frame_clock->output_name);
+          if (!frame_clock->leaked_presentation_misprediction_plot_name)
+            frame_clock->leaked_presentation_misprediction_plot_name =
+              g_strdup_printf ("%s presentation misprediction, ms", frame_clock->output_name);
+
+          COGL_TRACE_PLOT_DOUBLE (frame_clock->leaked_time_since_presentation_plot_name,
+                                  since_us / 1000.);
+          COGL_TRACE_PLOT_DOUBLE (frame_clock->leaked_presentation_misprediction_plot_name,
+                                  misprediction_us / 1000.);
+        }
+
+      if (frame_info->gpu_rendering_duration_ns != 0)
+        {
+          double value = frame_info->gpu_rendering_duration_ns / 1000000.;
+
+          if (!frame_clock->leaked_gpu_work_plot_name)
+            frame_clock->leaked_gpu_work_plot_name =
+              g_strdup_printf ("%s GPU work, ms", frame_clock->output_name);
+
+          COGL_TRACE_PLOT_DOUBLE (frame_clock->leaked_gpu_work_plot_name,
+                                  MAX (value, -1.));
+        }
+    }
+#endif
+
   if (frame_info->presentation_time > 0)
     frame_clock->last_presentation_time_us = frame_info->presentation_time;
 
@@ -418,6 +483,15 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
       maybe_reschedule_update (frame_clock);
       break;
     }
+
+#ifdef HAVE_TRACY
+  if (frame_clock->tracy_frame_started
+      && frame_clock->state != CLUTTER_FRAME_CLOCK_STATE_SCHEDULED)
+    {
+      COGL_TRACE_FRAME_END (frame_clock->leaked_frame_name);
+      frame_clock->tracy_frame_started = FALSE;
+    }
+#endif
 }
 
 void
@@ -425,6 +499,14 @@ clutter_frame_clock_notify_ready (ClutterFrameClock *frame_clock)
 {
   COGL_TRACE_BEGIN_SCOPED (ClutterFrameClockNotifyReady, "Clutter::FrameClock::ready()");
   COGL_TRACE_DESCRIBE (ClutterFrameClockNotifyReady, frame_clock->output_name);
+
+#ifdef HAVE_TRACY
+  if (frame_clock->tracy_frame_started)
+    {
+      COGL_TRACE_FRAME_END (frame_clock->leaked_frame_name);
+      frame_clock->tracy_frame_started = FALSE;
+    }
+#endif
 
   switch (frame_clock->state)
     {
@@ -926,6 +1008,18 @@ clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
   else
     frame_clock->last_dispatch_lateness_us = lateness_us;
 
+#ifdef HAVE_TRACY
+  if (G_UNLIKELY (cogl_trace_tracy_is_active ()))
+    {
+      if (!frame_clock->leaked_dispatch_lateness_plot_name)
+        frame_clock->leaked_dispatch_lateness_plot_name =
+          g_strdup_printf ("%s dispatch lateness, ms", frame_clock->output_name);
+
+      COGL_TRACE_PLOT_DOUBLE (frame_clock->leaked_dispatch_lateness_plot_name,
+                              frame_clock->last_dispatch_lateness_us / 1000.);
+    }
+#endif
+
 #ifdef CLUTTER_ENABLE_DEBUG
   if (G_UNLIKELY (CLUTTER_HAS_DEBUG (FRAME_TIMINGS)))
     {
@@ -999,6 +1093,15 @@ clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
         }
       break;
     }
+
+#ifdef HAVE_TRACY
+  if (frame_clock->tracy_frame_started
+      && frame_clock->state != CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED)
+    {
+      COGL_TRACE_FRAME_END (frame_clock->leaked_frame_name);
+      frame_clock->tracy_frame_started = FALSE;
+    }
+#endif
 
 #ifdef HAVE_PROFILER
   if (this_dispatch_ready_time_us != -1 &&

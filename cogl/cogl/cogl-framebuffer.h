@@ -37,6 +37,7 @@
 #include "cogl/cogl-pipeline.h"
 #include "cogl/cogl-indices.h"
 #include "cogl/cogl-bitmap.h"
+#include "cogl/cogl-trace.h"
 #include "cogl/cogl-texture.h"
 #include "mtk/mtk.h"
 
@@ -1380,5 +1381,25 @@ cogl_framebuffer_flush (CoglFramebuffer *framebuffer);
  */
 COGL_EXPORT CoglTimestampQuery *
 cogl_framebuffer_create_timestamp_query (CoglFramebuffer *framebuffer);
+
+#ifdef HAVE_TRACY
+/**
+ * cogl_framebuffer_begin_gpu_span: (skip)
+ *
+ * Return value: Whether the GPU span has begun and must be ended later
+ */
+COGL_EXPORT gboolean
+cogl_framebuffer_begin_gpu_span (CoglFramebuffer *framebuffer,
+                                 const CoglTraceTracyLocation *location);
+
+/**
+ * cogl_framebuffer_end_gpu_span: (skip)
+ *
+ * This function should only be called after a corresponding successful
+ * cogl_framebuffer_begin_gpu_span().
+ */
+COGL_EXPORT void
+cogl_framebuffer_end_gpu_span (CoglFramebuffer *framebuffer);
+#endif /* HAVE_TRACY */
 
 G_END_DECLS

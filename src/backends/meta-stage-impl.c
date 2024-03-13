@@ -338,6 +338,7 @@ swap_framebuffer (ClutterStageWindow *stage_window,
       meta_topic (META_DEBUG_BACKEND,
                   "fake offscreen swap (framebuffer: %p)",
                   framebuffer);
+      cogl_context_maybe_collect_trace_timestamp_queries (cogl_context);
       meta_stage_view_perform_fake_swap (view, priv->global_frame_counter);
       priv->global_frame_counter++;
     }

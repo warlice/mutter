@@ -245,6 +245,12 @@ struct _CoglDriverVtable
 
   int64_t
   (* get_gpu_time_ns) (CoglContext *context);
+
+  void
+  (* collect_trace_timestamp_queries) (CoglContext *context);
+
+  unsigned int
+  (* create_trace_timestamp_query) (CoglContext *context);
 };
 
 #define COGL_DRIVER_ERROR (_cogl_driver_error_quark ())

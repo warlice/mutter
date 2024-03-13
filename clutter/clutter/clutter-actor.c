@@ -3447,12 +3447,14 @@ clutter_actor_paint (ClutterActor        *self,
 #ifdef HAVE_PROFILER
   COGL_TRACE_SCOPED_ANCHOR (ClutterActorPaint);
 
-  if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_DETAILED_TRACE))
+  // if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_DETAILED_TRACE))
     {
       COGL_TRACE_BEGIN_ANCHORED (ClutterActorPaint,
                                  "Clutter::Actor::paint()");
       COGL_TRACE_DESCRIBE (ClutterActorPaint,
                            _clutter_actor_get_debug_name (self));
+      COGL_TRACE_NAME_DYNAMIC (ClutterActorPaint,
+                               "%s::paint()", G_OBJECT_TYPE_NAME (self));
     }
 #endif
 
@@ -8660,12 +8662,14 @@ clutter_actor_allocate (ClutterActor          *self,
 #ifdef HAVE_PROFILER
   COGL_TRACE_SCOPED_ANCHOR (ClutterActorAllocate);
 
-  if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_DETAILED_TRACE))
+  // if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_DETAILED_TRACE))
     {
       COGL_TRACE_BEGIN_ANCHORED (ClutterActorAllocate,
                                  "Clutter::Actor::allocate()");
       COGL_TRACE_DESCRIBE (ClutterActorAllocate,
                            _clutter_actor_get_debug_name (self));
+      COGL_TRACE_NAME_DYNAMIC (ClutterActorAllocate,
+                               "%s::allocate()", G_OBJECT_TYPE_NAME (self));
     }
 #endif
 
@@ -11635,6 +11639,7 @@ clutter_actor_event (ClutterActor       *actor,
 
   COGL_TRACE_BEGIN_SCOPED (Event, "Clutter::Actor::event()");
   COGL_TRACE_DESCRIBE (Event, _clutter_actor_get_debug_name (actor));
+  COGL_TRACE_NAME_DYNAMIC (Event, "%s::event()", G_OBJECT_TYPE_NAME (actor));
 
   g_object_ref (actor);
 

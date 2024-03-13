@@ -268,6 +268,8 @@ COGL_EXT_FUNCTION (void, glQueryCounter,
                    (GLuint id, GLenum target))
 COGL_EXT_FUNCTION (void, glGetQueryObjecti64v,
                    (GLuint id, GLenum pname, GLint64 *params))
+COGL_EXT_FUNCTION (void, glGetQueryObjectiv,
+                   (GLuint id, GLenum pname, GLint *params))
 COGL_EXT_END ()
 
 COGL_EXT_BEGIN (queries, 1, 5,

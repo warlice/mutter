@@ -20,6 +20,12 @@ if have_profiler
   cogl_pkg_private_deps += [
     libsysprof_capture_dep,
   ]
+
+  if have_tracy
+    cogl_pkg_private_deps += [
+      tracy_dep,
+    ]
+  endif
 endif
 
 if have_wayland

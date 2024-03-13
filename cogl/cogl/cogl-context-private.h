@@ -54,6 +54,8 @@
 #include "cogl/cogl-private.h"
 #include "cogl/winsys/cogl-winsys-private.h"
 
+#define COGL_N_TRACE_TIMESTAMP_QUERIES 1024
+
 typedef struct
 {
   GLfloat v[3];
@@ -258,6 +260,11 @@ struct _CoglContext
   CoglList fences;
 
   GHashTable *named_pipelines;
+
+  uint8_t tracy_context_id;
+  unsigned int trace_timestamp_queries[COGL_N_TRACE_TIMESTAMP_QUERIES];
+  unsigned short trace_timestamp_queries_head;
+  unsigned short trace_timestamp_queries_tail;
 
   /* This defines a list of function pointers that Cogl uses from
      either GL or GLES. All functions are accessed indirectly through

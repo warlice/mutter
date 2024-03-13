@@ -466,6 +466,31 @@ if have_profiler
   else
     sysprof_dbus_interfaces_dir = mutter_srcdir / 'subprojects' / 'sysprof' / 'src'
   endif
+
+  # Tracy support
+  have_tracy = get_option('profiler_tracy')
+  if have_tracy
+    tracy_dep = dependency('tracy',
+      default_options: [
+        # Capture profiling data only when Tracy is connected.
+        #
+        # Disabling this will cause Tracy to collect profile data in-memory
+        # right from the start, which can be used to profile Mutter or Shell
+        # startup.
+        'on_demand=true',
+        # Only let localhost Tracy instances connect.
+        'only_localhost=true',
+        # Disable symbol resolving parts of Tracy, because they contend with
+        # GJS spamming dlsym, causing massive slowdowns.
+        'no_callstack=true',
+        # Build as a shared, rather than static, library, because otherwise
+        # some binaries end up with two copies of Tracy, which is not supported.
+        'default_library=shared',
+      ],
+    )
+  endif
+else
+  have_tracy = false
 endif
 
 required_functions = [
@@ -569,6 +594,7 @@ cdata.set('HAVE_SM', have_sm)
 cdata.set('HAVE_STARTUP_NOTIFICATION', have_startup_notification)
 cdata.set('HAVE_INTROSPECTION', have_introspection)
 cdata.set('HAVE_PROFILER', have_profiler)
+cdata.set('HAVE_TRACY', have_tracy)
 cdata.set('HAVE_LIBDISPLAY_INFO', have_libdisplay_info)
 cdata.set('HAVE_PANGO_FT2', have_pango_ft2)
 cdata.set('HAVE_TIMERFD', have_timerfd)
@@ -749,6 +775,7 @@ summary('Startup notification', have_startup_notification, section: 'Options')
 summary('Introspection', have_introspection, section: 'Options')
 summary('Documentation', have_documentation, section: 'Options')
 summary('Profiler', have_profiler, section: 'Options')
+summary('Tracy Profiler', have_tracy, section: 'Options')
 summary('Xwayland initfd', have_xwayland_initfd, section: 'Options')
 summary('Xwayland listenfd', have_xwayland_listenfd, section: 'Options')
 summary('Xwayland terminate delay', have_xwayland_terminate_delay, section: 'Options')

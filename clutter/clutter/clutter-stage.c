@@ -445,6 +445,12 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
 
   fb = clutter_stage_view_get_framebuffer (view);
 
+#ifdef HAVE_TRACY
+  static const CoglTraceTracyLocation srcloc =
+    COGL_TRACE_TRACY_LOCATION_INIT ("Clutter::Stage::paint_view()");
+  gboolean began_gpu_span = cogl_framebuffer_begin_gpu_span (fb, &srcloc);
+#endif
+
   root_node = clutter_root_node_new (fb, &bg_color, COGL_BUFFER_BIT_DEPTH);
   clutter_paint_node_set_static_name (root_node, "Stage (root)");
   clutter_paint_node_paint (root_node, paint_context);
@@ -452,6 +458,11 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
 
   clutter_actor_paint (CLUTTER_ACTOR (stage), paint_context);
   clutter_paint_context_destroy (paint_context);
+
+#ifdef HAVE_TRACY
+  if (began_gpu_span)
+    cogl_framebuffer_end_gpu_span (fb);
+#endif
 }
 
 /* This provides a common point of entry for painting the scenegraph
@@ -1284,11 +1295,24 @@ static void
 clutter_stage_paint (ClutterActor        *actor,
                      ClutterPaintContext *paint_context)
 {
-  ClutterStageView *view;
+  ClutterStageView *view = clutter_paint_context_get_stage_view (paint_context);
+
+#ifdef HAVE_TRACY
+  CoglFramebuffer *fb;
+  gboolean began_gpu_span = FALSE;
+
+  if (view)
+    {
+      fb = clutter_stage_view_get_framebuffer (view);
+
+      static const CoglTraceTracyLocation srcloc =
+        COGL_TRACE_TRACY_LOCATION_INIT ("Clutter::Stage::paint()");
+      began_gpu_span = cogl_framebuffer_begin_gpu_span (fb, &srcloc);
+    }
+#endif
 
   CLUTTER_ACTOR_CLASS (clutter_stage_parent_class)->paint (actor, paint_context);
 
-  view = clutter_paint_context_get_stage_view (paint_context);
   if (view &&
       G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_MAX_RENDER_TIME))
     {
@@ -1323,6 +1347,11 @@ clutter_stage_paint (ClutterActor        *actor,
 
       g_object_unref (layout);
     }
+
+#ifdef HAVE_TRACY
+  if (began_gpu_span)
+    cogl_framebuffer_end_gpu_span (fb);
+#endif
 }
 
 static void
@@ -2698,6 +2727,12 @@ clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
   COGL_TRACE_BEGIN_SCOPED (PaintToFramebuffer,
                            "Clutter::Stage::paint_to_framebuffer()");
 
+#ifdef HAVE_TRACY
+  static const CoglTraceTracyLocation srcloc =
+    COGL_TRACE_TRACY_LOCATION_INIT ("Clutter::Stage::paint_to_framebuffer()");
+  gboolean began_gpu_span = cogl_framebuffer_begin_gpu_span (framebuffer, &srcloc);
+#endif
+
   if (paint_flags & CLUTTER_PAINT_FLAG_CLEAR)
     {
       CoglColor clear_color;
@@ -2723,6 +2758,11 @@ clutter_stage_paint_to_framebuffer (ClutterStage                *stage,
   cogl_framebuffer_pop_matrix (framebuffer);
 
   clutter_paint_context_destroy (paint_context);
+
+#ifdef HAVE_TRACY
+  if (began_gpu_span)
+    cogl_framebuffer_end_gpu_span (framebuffer);
+#endif
 }
 
 /**
