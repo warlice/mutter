@@ -70,6 +70,24 @@ monitor_manager_from_crtc (MetaCrtc *crtc)
   return META_MONITOR_MANAGER_NATIVE (monitor_manager);
 }
 
+const MetaDegammaLut *
+meta_crtc_kms_peek_degamma_lut (MetaCrtcKms *crtc_kms)
+{
+  MetaDegammaLut *degamma;
+
+  /* TODO: fetch degamma lut */
+  return degamma;
+}
+
+const MetaCtm *
+meta_crtc_kms_peek_ctm (MetaCrtcKms *crtc_kms)
+{
+  MetaCtm *ctm;
+
+  /* TODO: fetch ctm matrix */
+  return ctm;
+}
+
 static size_t
 meta_crtc_kms_get_gamma_lut_size (MetaCrtc *crtc)
 {

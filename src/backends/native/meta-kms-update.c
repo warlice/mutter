@@ -547,6 +547,22 @@ ensure_color_update (MetaKmsUpdate *update,
 }
 
 void
+meta_kms_update_set_crtc_degamma (MetaKmsUpdate        *update,
+                                  MetaKmsCrtc          *crtc,
+                                  const MetaDegammaLut *degamma)
+{
+  /* TODO: prepare crtc degamma for color update */
+}
+
+void
+meta_kms_update_set_crtc_ctm (MetaKmsUpdate *update,
+                              MetaKmsCrtc   *crtc,
+                              const MetaCtm *ctm)
+{
+  /* TODO: prepare crtc ctm for color update */
+}
+
+void
 meta_kms_update_set_crtc_gamma (MetaKmsUpdate      *update,
                                 MetaKmsCrtc        *crtc,
                                 const MetaGammaLut *gamma)

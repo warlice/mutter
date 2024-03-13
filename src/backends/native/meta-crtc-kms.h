@@ -47,6 +47,10 @@ void meta_crtc_kms_set_mode (MetaCrtcKms   *crtc_kms,
 META_EXPORT_TEST
 MetaKmsCrtc * meta_crtc_kms_get_kms_crtc (MetaCrtcKms *crtc_kms);
 
+const MetaDegammaLut * meta_crtc_kms_peek_degamma_lut (MetaCrtcKms *crtc_kms);
+
+const MetaCtm * meta_crtc_kms_peek_ctm (MetaCrtcKms *crtc_kms);
+
 const MetaGammaLut * meta_crtc_kms_peek_gamma_lut (MetaCrtcKms *crtc_kms);
 
 MetaCrtcKms * meta_crtc_kms_from_kms_crtc (MetaKmsCrtc *kms_crtc);

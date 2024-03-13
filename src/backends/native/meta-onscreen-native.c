@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Intel Corporation.
+ * Copyright (C) 2011,2024 Intel Corporation.
  * Copyright (C) 2016-2020 Red Hat
  * Copyright (c) 2018,2019 DisplayLink (UK) Ltd.
  *
@@ -32,6 +32,7 @@
 #include <drm_fourcc.h>
 
 #include "backends/meta-egl-ext.h"
+#include "backends/meta-color-manager.h"
 #include "backends/native/meta-crtc-kms.h"
 #include "backends/native/meta-device-pool.h"
 #include "backends/native/meta-drm-buffer-dumb.h"
@@ -1215,6 +1216,67 @@ update_secondary_gpu_state_post_swap_buffers (CoglOnscreen   *onscreen,
     }
 }
 
+/* Check if the content has colorspace info, hence enable colorspace
+ * transformation */
+static void
+meta_onscreen_native_maybe_supports_color_transformation (CoglOnscreen *onscreen,
+                                                          ClutterFrame *frame)
+{
+  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+  MetaCrtcKms *crtc_kms = META_CRTC_KMS (onscreen_native->crtc);
+  MetaKmsCrtc *kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
+  MetaKmsDevice *kms_device = meta_kms_crtc_get_device (kms_crtc);
+  MetaFrameNative *frame_native = meta_frame_native_from_frame (frame);
+
+  MetaGpu *gpu = meta_crtc_get_gpu (onscreen_native->crtc);
+  MetaBackend *backend = meta_gpu_get_backend (gpu);
+  MetaColorManager *color_manager =
+    meta_backend_get_color_manager (backend);
+  gboolean client_supports_colorspace = FALSE;
+
+  meta_verbose ("\nTRACE: File: %s, Function: %s 1\n", __FILE__, __FUNCTION__);
+
+  MetaOutputColorspace surface_color_space;
+
+  /* TODO: get the content or surface colorspace from client
+   * we should remove default colorspace */
+  surface_color_space = META_OUTPUT_COLORSPACE_DEFAULT;
+
+  if (surface_color_space != META_OUTPUT_COLORSPACE_BT2020)
+    {
+      MetaKmsUpdate *kms_update;
+      const MetaDegammaLut *degamma;
+      const MetaCtm *ctm;
+      const MetaGammaLut *gamma;
+
+      meta_verbose ("\nTRACE: File: %s, Function: %s, set color transformation pipeline\n", __FILE__, __FUNCTION__);
+
+      kms_update = meta_frame_native_ensure_kms_update (frame_native,
+                                                        kms_device);
+
+      /* non-linear to linear (srgb_eotf) electrical encoding */
+      degamma = meta_crtc_kms_peek_degamma_lut (crtc_kms);
+      meta_kms_update_set_crtc_degamma (kms_update,
+                                        kms_crtc,
+                                        degamma);
+
+      /* srgb/bt709 to bt2020 colorspace conversion */
+      ctm = meta_crtc_kms_peek_ctm (crtc_kms);
+      meta_kms_update_set_crtc_ctm (kms_update,
+                                    kms_crtc,
+                                    ctm);
+
+      /* linear to non-linear (pq_inv_eotf) optical encoding */
+      gamma = meta_crtc_kms_peek_gamma_lut (crtc_kms);
+      meta_kms_update_set_crtc_gamma (kms_update,
+                                      kms_crtc,
+                                      gamma);
+    }
+  meta_verbose ("\nTRACE: File: %s, Function: %s 2\n", __FILE__, __FUNCTION__);
+
+
+}
+
 static void
 ensure_crtc_modes (CoglOnscreen  *onscreen,
                    MetaKmsUpdate *kms_update)
@@ -1800,6 +1862,13 @@ meta_onscreen_native_prepare_frame (CoglOnscreen *onscreen,
 
       enabled = meta_output_is_privacy_screen_enabled (onscreen_native->output);
       meta_kms_update_set_privacy_screen (kms_update, kms_connector, enabled);
+    }
+
+  /* check if HDR is enabled & content has colorspace info */
+  if (meta_output_is_hdr_enabled (onscreen_native->output))
+    {
+      meta_verbose ("\n%s, %s: HDR support is enabled\n", __FILE__, __FUNCTION__);
+      meta_onscreen_native_maybe_supports_color_transformation (onscreen, frame);
     }
 
   if (onscreen_native->is_color_space_invalid)

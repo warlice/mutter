@@ -84,6 +84,20 @@ typedef struct _MetaDbusSessionWatcher MetaDbusSessionWatcher;
 typedef struct _MetaRemoteDesktop MetaRemoteDesktop;
 #endif
 
+typedef struct _MetaDegammaLut
+{
+  uint16_t *red;
+  uint16_t *green;
+  uint16_t *blue;
+  size_t size;
+} MetaDegammaLut;
+
+typedef struct _MetaCtm
+{
+  size_t size;
+  uint64_t *matrix;
+} MetaCtm;
+
 typedef struct _MetaGammaLut
 {
   uint16_t *red;
