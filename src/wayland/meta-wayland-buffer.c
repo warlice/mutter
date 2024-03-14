@@ -847,6 +847,16 @@ meta_wayland_buffer_process_damage (MetaWaylandBuffer *buffer,
     }
 }
 
+static void
+scanout_destroyed (gpointer  data,
+                   GObject  *where_the_object_was)
+{
+  MetaWaylandBuffer *buffer = data;
+
+  meta_wayland_buffer_dec_use_count (buffer);
+  g_object_unref (buffer);
+}
+
 static CoglScanout *
 try_acquire_egl_image_scanout (MetaWaylandBuffer *buffer,
                                CoglOnscreen      *onscreen)
@@ -892,20 +902,14 @@ try_acquire_egl_image_scanout (MetaWaylandBuffer *buffer,
   if (!meta_onscreen_native_is_buffer_scanout_compatible (onscreen, scanout))
     return NULL;
 
+  g_object_ref (buffer);
+  meta_wayland_buffer_inc_use_count (buffer);
+  g_object_weak_ref (G_OBJECT (scanout), scanout_destroyed, buffer);
+
   return g_steal_pointer (&scanout);
 #else
   return NULL;
 #endif
-}
-
-static void
-scanout_destroyed (gpointer  data,
-                   GObject  *where_the_object_was)
-{
-  MetaWaylandBuffer *buffer = data;
-
-  meta_wayland_buffer_dec_use_count (buffer);
-  g_object_unref (buffer);
 }
 
 CoglScanout *
@@ -963,10 +967,6 @@ meta_wayland_buffer_try_acquire_scanout (MetaWaylandBuffer     *buffer,
 
   g_signal_connect (scanout, "scanout-failed",
                     G_CALLBACK (on_scanout_failed), buffer);
-
-  g_object_ref (buffer);
-  meta_wayland_buffer_inc_use_count (buffer);
-  g_object_weak_ref (G_OBJECT (scanout), scanout_destroyed, buffer);
 
   return scanout;
 }

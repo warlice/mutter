@@ -258,14 +258,10 @@ find_scanout_candidate (MetaCompositorView  *compositor_view,
       return FALSE;
     }
 
-  if (!G_APPROX_VALUE (actor_box.x1, view_rect.x,
-                       CLUTTER_COORDINATE_EPSILON) ||
-      !G_APPROX_VALUE (actor_box.y1, view_rect.y,
-                       CLUTTER_COORDINATE_EPSILON) ||
-      !G_APPROX_VALUE (actor_box.x2, view_rect.x + view_rect.width,
-                       CLUTTER_COORDINATE_EPSILON) ||
-      !G_APPROX_VALUE (actor_box.y2, view_rect.y + view_rect.height,
-                       CLUTTER_COORDINATE_EPSILON))
+  if (actor_box.x1 < view_rect.x ||
+      actor_box.y1 < view_rect.y ||
+      actor_box.x2 > view_rect.x + view_rect.width ||
+      actor_box.y2 > view_rect.y + view_rect.height)
     {
       meta_topic (META_DEBUG_RENDER,
                   "No direct scanout candidate: paint-box (%f,%f,%f,%f) does "

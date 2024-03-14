@@ -29,6 +29,7 @@
 
 #include "cogl/cogl-types.h"
 #include "cogl/cogl-framebuffer.h"
+#include "cogl/cogl-offscreen.h"
 #include "cogl/cogl-onscreen.h"
 #include "mtk/mtk.h"
 
@@ -98,3 +99,24 @@ void cogl_scanout_get_dst_rect (CoglScanout  *scanout,
 COGL_EXPORT
 void cogl_scanout_set_dst_rect (CoglScanout        *scanout,
                                 const MtkRectangle *rect);
+
+COGL_EXPORT
+/**
+ * cogl_scanout_get_fbo:
+ * @scanout: A #CoglScanout
+ *
+ * Returns: (transfer none): the scanout that was set with
+ * cogl_scanout_set_fbo()
+ */
+CoglOffscreen * cogl_scanout_get_fbo (CoglScanout *scanout);
+
+COGL_EXPORT
+void cogl_scanout_set_fbo (CoglScanout   *scanout,
+                           CoglOffscreen *fbo);
+
+COGL_EXPORT
+uint32_t cogl_scanout_get_plane_id (CoglScanout *scanout);
+
+COGL_EXPORT
+void cogl_scanout_set_plane_id (CoglScanout *scanout,
+                                uint32_t     plane_id);

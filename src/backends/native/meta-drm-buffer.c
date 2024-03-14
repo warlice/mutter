@@ -53,6 +53,9 @@ typedef struct _MetaDrmBufferPrivate
 
   uint32_t fb_id;
   uint32_t handle;
+
+  MtkRectangle src_rect;
+  MtkRectangle dst_rect;
 } MetaDrmBufferPrivate;
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MetaDrmBuffer, meta_drm_buffer,

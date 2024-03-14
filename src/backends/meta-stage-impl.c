@@ -772,22 +772,53 @@ meta_stage_impl_redraw_view (ClutterStageWindow *stage_window,
   scanout = clutter_stage_view_take_scanout (stage_view);
   if (scanout)
     {
-      g_autoptr (GError) error = NULL;
+      const MtkRegion *redraw_clip;
+      MtkRectangle redraw_clip_rect;
+      MtkRectangle scanout_rect;
 
-      if (meta_stage_impl_scanout_view (stage_impl,
-                                        stage_view,
-                                        scanout,
-                                        frame,
-                                        &error))
+      redraw_clip = clutter_stage_view_peek_redraw_clip (stage_view);
+      if (redraw_clip)
+        redraw_clip_rect = mtk_region_get_extents (redraw_clip);
+      else
+        clutter_stage_view_get_layout (stage_view, &redraw_clip_rect);
+      cogl_scanout_get_dst_rect (scanout, &scanout_rect);
+
+      if (mtk_rectangle_contains_rect (&scanout_rect, &redraw_clip_rect))
         {
-          clutter_stage_view_accumulate_redraw_clip (stage_view);
-          return;
-        }
+          g_autoptr (GError) error = NULL;
 
-      if (!g_error_matches (error,
-                            COGL_SCANOUT_ERROR,
-                            COGL_SCANOUT_ERROR_INHIBITED))
-        g_warning ("Failed to scan out client buffer: %s", error->message);
+          if (meta_stage_impl_scanout_view (stage_impl,
+                                            stage_view,
+                                            scanout,
+                                            frame,
+                                            &error))
+            {
+              clutter_stage_view_accumulate_redraw_clip (stage_view);
+              return;
+            }
+
+          if (g_error_matches (error,
+                               COGL_SCANOUT_ERROR,
+                               COGL_SCANOUT_ERROR_INHIBITED))
+            {
+              meta_topic (META_DEBUG_RENDER,
+                          "Skipping scanout: inhibited");
+            }
+          else
+            {
+              g_warning ("Failed to scan out client buffer: %s", error->message);
+            }
+        }
+      else
+        {
+          meta_topic (META_DEBUG_RENDER,
+                      "Skipping scanout: redraw clip (%d,%d,%d,%d) exceeds "
+                      "scanout area (%d,%d,%d,%d)",
+                      redraw_clip_rect.x, redraw_clip_rect.y,
+                      redraw_clip_rect.width, redraw_clip_rect.height,
+                      scanout_rect.x, scanout_rect.y,
+                      scanout_rect.width, scanout_rect.height);
+        }
     }
 
   meta_stage_impl_redraw_view_primary (stage_impl, stage_view, frame);
