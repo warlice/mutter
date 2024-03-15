@@ -107,6 +107,36 @@ meta_kms_crtc_is_active (MetaKmsCrtc *crtc)
   return crtc->current_state.is_active;
 }
 
+MetaDegammaLut *
+meta_kms_crtc_get_degamma (MetaKmsCrtc *crtc)
+{
+  MetaDegammaLut *degamma;
+
+  // TODO: fetch Degamma lut size & generate degamma lut values
+
+  return degamma;
+}
+
+MetaCtm *
+meta_kms_crtc_get_ctm (MetaKmsCrtc *crtc)
+{
+  MetaCtm *ctm;
+
+  // TODO: generate CTM matrix values
+
+  return ctm;
+}
+
+MetaGammaLut *
+meta_kms_crtc_get_gamma (MetaKmsCrtc *crtc)
+{
+  MetaGammaLut *gamma;
+
+  // TODO: fetch Gamma lut size & generate gamma lut values
+
+  return gamma;
+}
+
 static void
 read_crtc_gamma (MetaKmsCrtc       *crtc,
                  MetaKmsCrtcState  *crtc_state,
@@ -279,6 +309,14 @@ meta_kms_crtc_read_state (MetaKmsCrtc             *crtc,
       crtc_state.vrr.enabled = !!prop->value;
     }
 
+  /* read degamma lut size */
+  prop = &crtc->prop_table.props[META_KMS_CRTC_PROP_DEGAMMA_LUT_SIZE];
+  if (prop->prop_id)
+    {
+      crtc_state.degamma.size = prop->value;
+      crtc_state.degamma.supported = TRUE;
+    }
+
   read_gamma_state (crtc, &crtc_state, impl_device, drm_crtc);
 
   if (!crtc_state.is_active)
@@ -446,6 +484,21 @@ init_properties (MetaKmsCrtc       *crtc,
         {
           .name = "ACTIVE",
           .type = DRM_MODE_PROP_RANGE,
+        },
+      [META_KMS_CRTC_PROP_DEGAMMA_LUT] =
+        {
+          .name = "DEGAMMA_LUT",
+          .type = DRM_MODE_PROP_BLOB,
+        },
+      [META_KMS_CRTC_PROP_DEGAMMA_LUT_SIZE] =
+        {
+          .name = "DEGAMMA_LUT_SIZE",
+          .type = DRM_MODE_PROP_RANGE,
+        },
+      [META_KMS_CRTC_PROP_CTM] =
+        {
+          .name = "CTM",
+          .type = DRM_MODE_PROP_BLOB,
         },
       [META_KMS_CRTC_PROP_GAMMA_LUT] =
         {
