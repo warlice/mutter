@@ -102,6 +102,38 @@ void meta_crtc_set_gamma_lut (MetaCrtc           *crtc,
                               const MetaGammaLut *lut);
 
 META_EXPORT_TEST
+void meta_degamma_lut_free (MetaDegammaLut *lut);
+
+META_EXPORT_TEST
+MetaDegammaLut * meta_degamma_lut_new (int             size,
+                                       const uint16_t *red,
+                                       const uint16_t *green,
+                                       const uint16_t *blue);
+
+MetaDegammaLut * meta_degamma_lut_new_sized (int size);
+
+META_EXPORT_TEST
+MetaDegammaLut * meta_degamma_lut_copy (const MetaDegammaLut *degamma);
+
+MetaDegammaLut * meta_degamma_lut_copy_to_size (const MetaDegammaLut *degamma,
+                                                int                   target_size);
+
+META_EXPORT_TEST
+void meta_ctm_free (MetaCtm *ctm);
+
+META_EXPORT_TEST
+MetaCtm * meta_ctm_new (int             size,
+                        const uint64_t *matrix);
+
+MetaCtm * meta_ctm_new_sized (int size);
+
+META_EXPORT_TEST
+MetaCtm * meta_ctm_copy (const MetaCtm *ctm);
+
+MetaCtm * meta_ctm_copy_to_size (const MetaCtm *ctm,
+                                 int            target_size);
+
+META_EXPORT_TEST
 void meta_gamma_lut_free (MetaGammaLut *lut);
 
 META_EXPORT_TEST

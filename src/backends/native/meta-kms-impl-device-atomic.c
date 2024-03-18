@@ -781,6 +781,76 @@ process_crtc_color_updates (MetaKmsImplDevice  *impl_device,
   MetaKmsCrtcColorUpdate *color_update = update_entry;
   MetaKmsCrtc *crtc = color_update->crtc;
 
+  if (color_update->degamma.has_update)
+    {
+      MetaDegammaLut *degamma = color_update->degamma.state;
+      struct drm_color_lut drm_color_lut[degamma->size];
+      int i;
+      uint32_t color_lut_blob_id;
+
+      for (i = 0; i < degamma->size; i++)
+        {
+          drm_color_lut[i].red = degamma->red[i];
+          drm_color_lut[i].green = degamma->green[i];
+          drm_color_lut[i].blue = degamma->blue[i];
+        }
+
+      color_lut_blob_id = store_new_blob (impl_device,
+                                          blob_ids,
+                                          drm_color_lut,
+                                          sizeof drm_color_lut,
+                                          error);
+      if (!color_lut_blob_id)
+        return FALSE;
+
+      meta_topic (META_DEBUG_KMS,
+                  "[atomic] Setting CRTC (%u, %s) degamma, size: %zu",
+                  meta_kms_crtc_get_id (crtc),
+                  meta_kms_impl_device_get_path (impl_device),
+                  degamma->size);
+
+      if (!add_crtc_property (impl_device,
+                              crtc, req,
+                              META_KMS_CRTC_PROP_DEGAMMA_LUT,
+                              color_lut_blob_id,
+                              error))
+        return FALSE;
+    }
+
+  if (color_update->ctm.has_update)
+    {
+      MetaCtm *ctm = color_update->ctm.state;
+      struct drm_color_ctm drm_color_ctm;
+      int i;
+      uint32_t color_ctm_blob_id;
+
+      for (i = 0; i < ctm->size; i++)
+        {
+          drm_color_ctm.matrix[i] = ctm->matrix[i];
+        }
+
+      color_ctm_blob_id = store_new_blob (impl_device,
+                                          blob_ids,
+                                          &drm_color_ctm,
+                                          sizeof drm_color_ctm,
+                                          error);
+      if (!color_ctm_blob_id)
+        return FALSE;
+
+      meta_topic (META_DEBUG_KMS,
+                  "[atomic] Setting CRTC (%u, %s) ctm, size: %zu",
+                  meta_kms_crtc_get_id (crtc),
+                  meta_kms_impl_device_get_path (impl_device),
+                  ctm->size);
+
+      if (!add_crtc_property (impl_device,
+                              crtc, req,
+                              META_KMS_CRTC_PROP_CTM,
+                              color_ctm_blob_id,
+                              error))
+        return FALSE;
+    }
+
   if (color_update->gamma.has_update)
     {
       MetaGammaLut *gamma = color_update->gamma.state;

@@ -176,6 +176,204 @@ meta_crtc_set_gamma_lut (MetaCrtc           *crtc,
 }
 
 void
+meta_degamma_lut_free (MetaDegammaLut *lut)
+{
+  g_free (lut->red);
+  g_free (lut->green);
+  g_free (lut->blue);
+  g_free (lut);
+}
+
+MetaDegammaLut *
+meta_degamma_lut_new (int             size,
+                      const uint16_t *red,
+                      const uint16_t *green,
+                      const uint16_t *blue)
+{
+  MetaDegammaLut *degamma;
+
+  degamma = g_new0 (MetaDegammaLut, 1);
+  *degamma = (MetaDegammaLut) {
+    .size = size,
+    .red = g_memdup2 (red, size * sizeof (*red)),
+    .green = g_memdup2 (green, size * sizeof (*green)),
+    .blue = g_memdup2 (blue, size * sizeof (*blue)),
+  };
+
+  return degamma;
+}
+
+MetaDegammaLut *
+meta_degamma_lut_new_sized (int size)
+{
+  MetaDegammaLut *degamma;
+
+  degamma = g_new0 (MetaDegammaLut, 1);
+  *degamma = (MetaDegammaLut) {
+    .size = size,
+    .red = g_new0 (uint16_t, size),
+    .green = g_new0 (uint16_t, size),
+    .blue = g_new0 (uint16_t, size),
+  };
+
+  return degamma;
+}
+
+MetaDegammaLut *
+meta_degamma_lut_copy (const MetaDegammaLut *degamma)
+{
+  g_return_val_if_fail (gamma != NULL, NULL);
+
+  return meta_degamma_lut_new (degamma->size, degamma->red, degamma->green, degamma->blue);
+}
+
+MetaDegammaLut *
+meta_degamma_lut_copy_to_size (const MetaDegammaLut *degamma,
+                               int                   target_size)
+{
+  MetaDegammaLut *out;
+
+  g_return_val_if_fail (degamma != NULL, NULL);
+
+  if (degamma->size == target_size)
+    return meta_degamma_lut_copy (degamma);
+
+  out = meta_degamma_lut_new_sized (target_size);
+
+  if (target_size >= degamma->size)
+    {
+      int i, j;
+      int slots;
+
+      slots = target_size / degamma->size;
+      for (i = 0; i < degamma->size; i++)
+        {
+          for (j = 0; j < slots; j++)
+            {
+              out->red[i * slots + j] = degamma->red[i];
+              out->green[i * slots + j] = degamma->green[i];
+              out->blue[i * slots + j] = degamma->blue[i];
+            }
+        }
+
+      for (j = i * slots; j < target_size; j++)
+        {
+          out->red[j] = degamma->red[i - 1];
+          out->green[j] = degamma->green[i - 1];
+          out->blue[j] = degamma->blue[i - 1];
+        }
+    }
+  else
+    {
+      int i;
+      int idx;
+
+      for (i = 0; i < target_size; i++)
+        {
+          idx = i * (degamma->size - 1) / (target_size - 1);
+
+          out->red[i] = degamma->red[idx];
+          out->green[i] = degamma->green[idx];
+          out->blue[i] = degamma->blue[idx];
+        }
+    }
+
+  return out;
+}
+
+void
+meta_ctm_free (MetaCtm *ctm)
+{
+  g_free (ctm->matrix);
+  g_free (ctm);
+}
+
+MetaCtm *
+meta_ctm_new (int             size,
+              const uint64_t *matrix)
+{
+  MetaCtm *ctm;
+
+  ctm = g_new0 (MetaCtm, 1);
+  *ctm = (MetaCtm) {
+    .size = size,
+    .matrix = g_memdup2 (matrix, size * sizeof *matrix),
+  };
+
+  return ctm;
+}
+
+MetaCtm *
+meta_ctm_new_sized (int size)
+{
+  MetaCtm *ctm;
+
+  ctm = g_new0 (MetaCtm, 1);
+  *ctm = (MetaCtm) {
+    .size = size,
+    .matrix = g_new0 (uint64_t, size),
+  };
+
+  return ctm;
+}
+
+MetaCtm *
+meta_ctm_copy (const MetaCtm *ctm)
+{
+  g_return_val_if_fail (ctm != NULL, NULL);
+
+  return meta_ctm_new (ctm->size, ctm->matrix);
+}
+
+MetaCtm *
+meta_ctm_copy_to_size (const MetaCtm *ctm,
+                       int            target_size)
+{
+  MetaCtm *out;
+
+  g_return_val_if_fail (ctm != NULL, NULL);
+
+  if (ctm->size == target_size)
+    return meta_ctm_copy (ctm);
+
+  out = meta_ctm_new_sized (target_size);
+
+  if (target_size >= ctm->size)
+    {
+      int i, j;
+      int slots;
+
+      slots = target_size / ctm->size;
+      for (i = 0; i < ctm->size; i++)
+        {
+          for (j = 0; j < slots; j++)
+            {
+              out->matrix[i * slots + j] = ctm->matrix[i];
+            }
+        }
+
+      for (j = i * slots; j < target_size; j++)
+        {
+          out->matrix[j] = ctm->matrix[i - 1];
+        }
+    }
+  else
+    {
+      int i;
+      int idx;
+
+      for (i = 0; i < target_size; i++)
+        {
+          idx = i * (ctm->size - 1) / (target_size - 1);
+
+          out->matrix[i] = ctm->matrix[idx];
+        }
+    }
+
+  return out;
+}
+
+void
 meta_gamma_lut_free (MetaGammaLut *lut)
 {
   g_free (lut->red);

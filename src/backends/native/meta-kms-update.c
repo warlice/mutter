@@ -551,7 +551,21 @@ meta_kms_update_set_crtc_degamma (MetaKmsUpdate        *update,
                                   MetaKmsCrtc          *crtc,
                                   const MetaDegammaLut *degamma)
 {
-  /* TODO: prepare crtc degamma for color update */
+  MetaKmsCrtcColorUpdate *color_update;
+  MetaDegammaLut *degamma_update = NULL;
+  const MetaKmsCrtcState *crtc_state = meta_kms_crtc_get_current_state (crtc);
+
+  g_assert (meta_kms_crtc_get_device (crtc) == update->device);
+
+  /* prepare crtc degamma for color update */
+  if (degamma)
+    degamma_update = meta_degamma_lut_copy_to_size (degamma, crtc_state->degamma.size);
+
+  color_update = ensure_color_update (update, crtc);
+  color_update->degamma.state = degamma_update;
+  color_update->degamma.has_update = TRUE;
+
+  update_latch_crtc (update, crtc);
 }
 
 void
@@ -559,7 +573,21 @@ meta_kms_update_set_crtc_ctm (MetaKmsUpdate *update,
                               MetaKmsCrtc   *crtc,
                               const MetaCtm *ctm)
 {
-  /* TODO: prepare crtc ctm for color update */
+  MetaKmsCrtcColorUpdate *color_update;
+  MetaCtm *ctm_update = NULL;
+  const MetaKmsCrtcState *crtc_state = meta_kms_crtc_get_current_state (crtc);
+
+  g_assert (meta_kms_crtc_get_device (crtc) == update->device);
+
+  /* prepare crtc ctm for color update */
+  if (ctm)
+    ctm_update = meta_ctm_copy_to_size (ctm, crtc_state->ctm.size);
+
+  color_update = ensure_color_update (update, crtc);
+  color_update->ctm.state = ctm_update;
+  color_update->ctm.has_update = TRUE;
+
+  update_latch_crtc (update, crtc);
 }
 
 void
@@ -586,6 +614,10 @@ meta_kms_update_set_crtc_gamma (MetaKmsUpdate      *update,
 static void
 meta_kms_crtc_color_updates_free (MetaKmsCrtcColorUpdate *color_update)
 {
+  if (color_update->degamma.has_update)
+    g_clear_pointer (&color_update->degamma.state, meta_degamma_lut_free);
+  if (color_update->ctm.has_update)
+    g_clear_pointer (&color_update->ctm.state, meta_ctm_free);
   if (color_update->gamma.has_update)
     g_clear_pointer (&color_update->gamma.state, meta_gamma_lut_free);
   g_free (color_update);
