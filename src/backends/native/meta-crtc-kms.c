@@ -81,11 +81,14 @@ meta_crtc_kms_peek_degamma_lut (MetaCrtcKms *crtc_kms)
 }
 
 const MetaCtm *
-meta_crtc_kms_peek_ctm (MetaCrtcKms *crtc_kms)
+meta_crtc_kms_peek_ctm (MetaCrtcKms *crtc_kms,
+                        MetaOutputColorspace src_cs,
+                        MetaOutputColorspace dst_cs)
 {
   MetaCtm *ctm;
 
-  ctm = meta_kms_crtc_get_ctm (meta_crtc_kms_get_kms_crtc (crtc_kms));
+  ctm = meta_kms_crtc_get_ctm (meta_crtc_kms_get_kms_crtc (crtc_kms),
+                               src_cs, dst_cs);
 
   return ctm;
 }

@@ -49,7 +49,9 @@ MetaKmsCrtc * meta_crtc_kms_get_kms_crtc (MetaCrtcKms *crtc_kms);
 
 const MetaDegammaLut * meta_crtc_kms_peek_degamma_lut (MetaCrtcKms *crtc_kms);
 
-const MetaCtm * meta_crtc_kms_peek_ctm (MetaCrtcKms *crtc_kms);
+const MetaCtm * meta_crtc_kms_peek_ctm (MetaCrtcKms *crtc_kms,
+                                        MetaOutputColorspace src_cs,
+                                        MetaOutputColorspace dst_cs);
 
 const MetaGammaLut * meta_crtc_kms_peek_gamma_lut (MetaCrtcKms *crtc_kms);
 

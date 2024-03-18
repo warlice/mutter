@@ -82,7 +82,9 @@ META_EXPORT_TEST
 MetaDegammaLut * meta_kms_crtc_get_degamma (MetaKmsCrtc *crtc);
 
 META_EXPORT_TEST
-MetaCtm * meta_kms_crtc_get_ctm (MetaKmsCrtc *crtc);
+MetaCtm * meta_kms_crtc_get_ctm (MetaKmsCrtc *crtc,
+                                 uint16_t src_cs,
+                                 uint16_t dst_cs);
 
 META_EXPORT_TEST
 MetaGammaLut * meta_kms_crtc_get_gamma (MetaKmsCrtc *crtc);

@@ -1228,12 +1228,6 @@ meta_onscreen_native_maybe_supports_color_transformation (CoglOnscreen *onscreen
   MetaKmsDevice *kms_device = meta_kms_crtc_get_device (kms_crtc);
   MetaFrameNative *frame_native = meta_frame_native_from_frame (frame);
 
-  MetaGpu *gpu = meta_crtc_get_gpu (onscreen_native->crtc);
-  MetaBackend *backend = meta_gpu_get_backend (gpu);
-  MetaColorManager *color_manager =
-    meta_backend_get_color_manager (backend);
-  gboolean client_supports_colorspace = FALSE;
-
   meta_verbose ("\nTRACE: File: %s, Function: %s 1\n", __FILE__, __FUNCTION__);
 
   MetaOutputColorspace surface_color_space;
@@ -1261,7 +1255,9 @@ meta_onscreen_native_maybe_supports_color_transformation (CoglOnscreen *onscreen
                                         degamma);
 
       /* srgb/bt709 to bt2020 colorspace conversion */
-      ctm = meta_crtc_kms_peek_ctm (crtc_kms);
+      ctm = meta_crtc_kms_peek_ctm (crtc_kms,
+                                    surface_color_space,
+                                    META_OUTPUT_COLORSPACE_BT2020);
       meta_kms_update_set_crtc_ctm (kms_update,
                                     kms_crtc,
                                     ctm);

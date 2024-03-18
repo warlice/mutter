@@ -20,6 +20,7 @@
 #include "backends/native/meta-kms-crtc.h"
 #include "backends/native/meta-kms-crtc-private.h"
 
+#include "backends/native/meta-kms-color-utility.h"
 #include "backends/native/meta-kms-device-private.h"
 #include "backends/native/meta-kms-impl-device.h"
 #include "backends/native/meta-kms-impl-device-atomic.h"
@@ -112,17 +113,76 @@ meta_kms_crtc_get_degamma (MetaKmsCrtc *crtc)
 {
   MetaDegammaLut *degamma;
 
-  // TODO: fetch Degamma lut size & generate degamma lut values
+  /* fetch Degamma lut size & generate degamma lut values */
+  int degamma_lut_size = crtc->current_state.degamma.size;
+
+  degamma = g_malloc0 (degamma_lut_size * sizeof (MetaDegammaLut *));
+  degamma->red = g_malloc0 (degamma_lut_size * sizeof (uint16_t *));
+  degamma->green = g_malloc0 (degamma_lut_size * sizeof (uint16_t *));
+  degamma->blue = g_malloc0 (degamma_lut_size * sizeof (uint16_t *));
+  degamma->size = degamma_lut_size;
+
+  meta_color_utility_generate_srgb_degamma_lut (degamma);
 
   return degamma;
 }
 
 MetaCtm *
-meta_kms_crtc_get_ctm (MetaKmsCrtc *crtc)
+meta_kms_crtc_get_ctm (MetaKmsCrtc *crtc,
+                       uint16_t src_cs,
+                       uint16_t dst_cs)
 {
   MetaCtm *ctm;
 
-  // TODO: generate CTM matrix values
+  /* generate CTM matrix values */
+  // CTM size is fixed globally
+  uint32_t ctm_size = 9;
+
+  ctm = g_malloc0 (ctm_size * sizeof (MetaCtm *));
+  ctm->matrix = g_malloc0 (ctm_size * sizeof (uint64_t *));
+  ctm->size = ctm_size;
+
+  // FIXME: currently it handles bt709 & bt2020 support only,
+  // need to handle other known colorspaces
+  MetaColorSpace src, dst;
+  MetaColorSpace bt709, bt2020;
+
+  bt2020.white.x = 0.3127;
+  bt2020.white.y = 0.3290;
+  bt2020.white.luminance = 100.0;
+
+  bt2020.red.x = 0.708;
+  bt2020.red.y = 0.292;
+  bt2020.green.x = 0.170;
+  bt2020.green.y = 0.797;
+  bt2020.blue.x = 0.131;
+  bt2020.blue.y = 0.046;
+
+  bt709.white.x = 0.3127;
+  bt709.white.y = 0.3290;
+  bt709.white.luminance = 100.0;
+
+  bt709.red.x = 0.64;
+  bt709.red.y = 0.33;
+  bt709.green.x = 0.30;
+  bt709.green.y = 0.60;
+  bt709.blue.x = 0.15;
+  bt709.blue.y = 0.06;
+
+  // FIXME: default to bt709, need to handle other known color spaces
+  src = dst = bt709;
+
+  if (src_cs == META_OUTPUT_COLORSPACE_DEFAULT)
+    src = bt709;
+  else if (src_cs == META_OUTPUT_COLORSPACE_BT2020)
+    src = bt2020;
+
+  if (dst_cs == META_OUTPUT_COLORSPACE_DEFAULT)
+    dst = bt709;
+  else if (dst_cs == META_OUTPUT_COLORSPACE_BT2020)
+    dst = bt2020;
+
+  meta_color_utility_get_transformation_matrix (src, dst, ctm);
 
   return ctm;
 }
@@ -132,7 +192,16 @@ meta_kms_crtc_get_gamma (MetaKmsCrtc *crtc)
 {
   MetaGammaLut *gamma;
 
-  // TODO: fetch Gamma lut size & generate gamma lut values
+  /* fetch Gamma lut size & generate gamma lut values */
+  int gamma_lut_size = crtc->current_state.gamma.size;
+
+  gamma = g_malloc0 (gamma_lut_size * sizeof (MetaGammaLut *));
+  gamma->red = g_malloc0 (gamma_lut_size * sizeof (uint16_t *));
+  gamma->green = g_malloc0 (gamma_lut_size * sizeof (uint16_t *));
+  gamma->blue = g_malloc0 (gamma_lut_size * sizeof (uint16_t *));
+  gamma->size = gamma_lut_size;
+
+  meta_color_utility_generate_srgb_gamma_lut (gamma);
 
   return gamma;
 }
