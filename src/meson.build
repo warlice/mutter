@@ -785,6 +785,8 @@ if have_native_backend
     'backends/native/meta-output-native.h',
     'backends/native/meta-output-virtual.c',
     'backends/native/meta-output-virtual.h',
+    'backends/native/meta-kms-color-utility.c',
+    'backends/native/meta-kms-color-utility.h',
     'backends/native/meta-kms-connector-private.h',
     'backends/native/meta-kms-connector.c',
     'backends/native/meta-kms-connector.h',
