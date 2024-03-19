@@ -100,6 +100,8 @@ struct _MetaWaylandPointer
   MetaWaylandSurface *cursor_surface;
   gulong cursor_surface_destroy_id;
 
+  MetaCursor cursor_shape;
+
   guint32 grab_button;
   guint32 grab_serial;
   guint32 grab_time;
@@ -1135,7 +1137,7 @@ meta_wayland_pointer_update_cursor_surface (MetaWaylandPointer *pointer)
 
   if (pointer->current)
     {
-      MetaCursorSprite *cursor_sprite = NULL;
+      g_autoptr (MetaCursorSprite) cursor_sprite = NULL;
 
       if (pointer->cursor_surface)
         {
@@ -1143,6 +1145,15 @@ meta_wayland_pointer_update_cursor_surface (MetaWaylandPointer *pointer)
             META_WAYLAND_CURSOR_SURFACE (pointer->cursor_surface->role);
 
           cursor_sprite = meta_wayland_cursor_surface_get_sprite (cursor_surface);
+          g_object_ref (cursor_sprite);
+        }
+      else if (pointer->cursor_shape != META_CURSOR_NONE)
+        {
+          MetaCursorSpriteXcursor *sprite;
+
+          sprite = meta_cursor_sprite_xcursor_new (pointer->cursor_shape,
+                                                   cursor_tracker);
+          cursor_sprite = META_CURSOR_SPRITE (sprite);
         }
 
       meta_cursor_tracker_set_window_cursor (cursor_tracker, cursor_sprite);
@@ -1176,6 +1187,7 @@ meta_wayland_pointer_set_cursor_surface (MetaWaylandPointer *pointer,
     return;
 
   pointer->cursor_surface = cursor_surface;
+  pointer->cursor_shape = META_CURSOR_NONE;
 
   if (prev_cursor_surface)
     {
@@ -1191,6 +1203,23 @@ meta_wayland_pointer_set_cursor_surface (MetaWaylandPointer *pointer,
                                   G_CALLBACK (ensure_update_cursor_surface),
                                   pointer);
     }
+
+  meta_wayland_pointer_update_cursor_surface (pointer);
+}
+
+static void
+meta_wayland_pointer_set_cursor_shape (MetaWaylandPointer *pointer,
+                                       MetaCursor          shape)
+{
+  if (pointer->cursor_surface)
+    {
+      meta_wayland_surface_update_outputs (pointer->cursor_surface);
+      g_clear_signal_handler (&pointer->cursor_surface_destroy_id,
+                              pointer->cursor_surface);
+    }
+
+  pointer->cursor_surface = NULL;
+  pointer->cursor_shape = shape;
 
   meta_wayland_pointer_update_cursor_surface (pointer);
 }
@@ -1519,4 +1548,20 @@ MetaWaylandPointerClient *
 meta_wayland_pointer_get_focus_client (MetaWaylandPointer *pointer)
 {
   return pointer->focus_client;
+}
+
+void
+meta_wayland_pointer_set_shape (MetaWaylandPointer *pointer,
+                                struct wl_client   *client,
+                                uint32_t            serial,
+                                MetaCursor          shape)
+{
+  if (pointer->focus_surface == NULL)
+    return;
+  if (wl_resource_get_client (pointer->focus_surface->resource) != client)
+    return;
+  if (pointer->focus_serial - serial > G_MAXUINT32 / 2)
+    return;
+
+  meta_wayland_pointer_set_cursor_shape (pointer, shape);
 }

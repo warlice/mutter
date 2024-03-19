@@ -40,6 +40,7 @@
 #include "core/meta-context-private.h"
 #include "wayland/meta-wayland-activation.h"
 #include "wayland/meta-wayland-buffer.h"
+#include "wayland/meta-wayland-cursor-shape.h"
 #include "wayland/meta-wayland-data-device.h"
 #include "wayland/meta-wayland-dma-buf.h"
 #include "wayland/meta-wayland-egl-stream.h"
@@ -868,6 +869,7 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_activation_init (compositor);
   meta_wayland_transaction_init (compositor);
   meta_wayland_idle_inhibit_init (compositor);
+  meta_wayland_init_cursor_shape (compositor);
 
 #ifdef HAVE_WAYLAND_EGLSTREAM
   {
