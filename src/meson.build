@@ -594,6 +594,8 @@ if have_wayland
     'wayland/meta-wayland.c',
     'wayland/meta-wayland-client.c',
     'wayland/meta-wayland-client-private.h',
+    'wayland/meta-wayland-cursor-shape.c',
+    'wayland/meta-wayland-cursor-shape.h',
     'wayland/meta-wayland-cursor-surface.c',
     'wayland/meta-wayland-cursor-surface.h',
     'wayland/meta-wayland-data-device.c',
@@ -1057,6 +1059,7 @@ if have_wayland
   #  - protocol stability ('private', 'stable' or 'unstable')
   #  - protocol version (if stability is 'unstable')
   wayland_protocols = [
+    ['cursor-shape', 'staging', 'v1', ],
     ['fractional-scale', 'staging', 'v1', ],
     ['gtk-shell', 'private', ],
     ['idle-inhibit', 'unstable', 'v1', ],

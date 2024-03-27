@@ -65,3 +65,8 @@ MetaWaylandSurface * meta_wayland_tablet_tool_get_current_surface (MetaWaylandTa
 
 void meta_wayland_tablet_tool_focus_surface (MetaWaylandTabletTool *tool,
                                              MetaWaylandSurface    *surface);
+
+void meta_wayland_tablet_tool_set_shape (MetaWaylandTabletTool *tool,
+                                         struct wl_client      *client,
+                                         uint32_t               serial,
+                                         MetaCursor             shape);
