@@ -54,6 +54,7 @@
 #include "wayland/meta-wayland-region.h"
 #include "wayland/meta-wayland-seat.h"
 #include "wayland/meta-wayland-subsurface.h"
+#include "wayland/meta-wayland-system-bell.h"
 #include "wayland/meta-wayland-tablet-manager.h"
 #include "wayland/meta-wayland-transaction.h"
 #include "wayland/meta-wayland-xdg-foreign.h"
@@ -868,6 +869,7 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_activation_init (compositor);
   meta_wayland_transaction_init (compositor);
   meta_wayland_idle_inhibit_init (compositor);
+  meta_wayland_init_system_bell (compositor);
 
 #ifdef HAVE_WAYLAND_EGLSTREAM
   {
