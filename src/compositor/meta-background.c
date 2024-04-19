@@ -653,65 +653,6 @@ texture_has_alpha (CoglTexture *texture)
     }
 }
 
-static gboolean
-ensure_wallpaper_texture (MetaBackground *self,
-                          CoglTexture    *texture)
-{
-  if (self->wallpaper_texture == NULL && !self->wallpaper_allocation_failed)
-    {
-      int width = cogl_texture_get_width (texture);
-      int height = cogl_texture_get_height (texture);
-      CoglOffscreen *offscreen;
-      CoglFramebuffer *fbo;
-      GError *catch_error = NULL;
-      CoglPipeline *pipeline;
-
-      self->wallpaper_texture = meta_create_texture (width, height,
-                                                     COGL_TEXTURE_COMPONENTS_RGBA,
-                                                     META_TEXTURE_FLAGS_NONE);
-      offscreen = cogl_offscreen_new_with_texture (self->wallpaper_texture);
-      fbo = COGL_FRAMEBUFFER (offscreen);
-
-      if (!cogl_framebuffer_allocate (fbo, &catch_error))
-        {
-          /* This probably means that the size of the wallpapered texture is larger
-           * than the maximum texture size; we treat it as permanent until the
-           * background is changed again.
-           */
-          g_error_free (catch_error);
-
-          g_clear_object (&self->wallpaper_texture);
-          g_object_unref (fbo);
-
-          self->wallpaper_allocation_failed = TRUE;
-          return FALSE;
-        }
-
-      cogl_framebuffer_orthographic (fbo, 0, 0,
-                                     width, height, -1., 1.);
-
-      pipeline = create_pipeline (PIPELINE_REPLACE);
-      cogl_pipeline_set_layer_texture (pipeline, 0, texture);
-      cogl_framebuffer_draw_textured_rectangle (fbo, pipeline, 0, 0, width, height,
-                                                0., 0., 1., 1.);
-      g_object_unref (pipeline);
-
-      if (texture_has_alpha (texture))
-        {
-          ensure_color_texture (self);
-
-          pipeline = create_pipeline (PIPELINE_OVER_REVERSE);
-          cogl_pipeline_set_layer_texture (pipeline, 0, self->color_texture);
-          cogl_framebuffer_draw_rectangle (fbo, pipeline, 0, 0, width, height);
-          g_object_unref (pipeline);
-        }
-
-      g_object_unref (fbo);
-    }
-
-  return self->wallpaper_texture != NULL;
-}
-
 static CoglPipelineWrapMode
 get_wrap_mode (GDesktopBackgroundStyle style)
 {
