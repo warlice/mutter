@@ -786,18 +786,6 @@ meta_background_get_texture (MetaBackground       *self,
       return self->color_texture;
     }
 
-  if (texture2 == NULL && self->style == G_DESKTOP_BACKGROUND_STYLE_WALLPAPER &&
-      self->shading_direction == G_DESKTOP_BACKGROUND_SHADING_SOLID &&
-      ensure_wallpaper_texture (self, texture1))
-    {
-      if (texture_area)
-        get_texture_area (self, &monitor_area, monitor_scale,
-                          self->wallpaper_texture, texture_area);
-      if (wrap_mode)
-        *wrap_mode = COGL_PIPELINE_WRAP_MODE_REPEAT;
-      return self->wallpaper_texture;
-    }
-
   if (monitor->dirty)
     {
       MetaContext *context = meta_display_get_context (self->display);
