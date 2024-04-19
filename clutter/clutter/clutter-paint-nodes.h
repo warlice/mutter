@@ -28,6 +28,8 @@
 #error "Only <clutter/clutter.h> can be included directly."
 #endif
 
+#include <pango/pango.h>
+
 #include "cogl/cogl.h"
 #include "clutter/clutter-types.h"
 
