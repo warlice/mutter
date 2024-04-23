@@ -63,6 +63,7 @@ enum
 
   PROP_VENDOR_ID,
   PROP_PRODUCT_ID,
+  PROP_BUS_TYPE,
 
   PROP_N_STRIPS,
   PROP_N_RINGS,
@@ -89,6 +90,7 @@ struct _ClutterInputDevicePrivate
 
   char *vendor_id;
   char *product_id;
+  char *bus_type;
   char *node_path;
 
   int n_rings;
@@ -158,6 +160,7 @@ clutter_input_device_dispose (GObject *gobject)
   g_clear_pointer (&priv->device_name, g_free);
   g_clear_pointer (&priv->vendor_id, g_free);
   g_clear_pointer (&priv->product_id, g_free);
+  g_clear_pointer (&priv->bus_type, g_free);
   g_clear_pointer (&priv->node_path, g_free);
 
   if (device->accessibility_virtual_device)
@@ -208,6 +211,10 @@ clutter_input_device_set_property (GObject      *gobject,
 
     case PROP_PRODUCT_ID:
       priv->product_id = g_value_dup_string (value);
+      break;
+
+    case PROP_BUS_TYPE:
+      priv->bus_type = g_value_dup_string (value);
       break;
 
     case PROP_N_RINGS:
@@ -278,6 +285,10 @@ clutter_input_device_get_property (GObject    *gobject,
 
     case PROP_PRODUCT_ID:
       g_value_set_string (value, priv->product_id);
+      break;
+
+    case PROP_BUS_TYPE:
+      g_value_set_string (value, priv->bus_type);
       break;
 
     case PROP_N_RINGS:
@@ -404,6 +415,18 @@ clutter_input_device_class_init (ClutterInputDeviceClass *klass)
    */
   obj_props[PROP_PRODUCT_ID] =
     g_param_spec_string ("product-id", NULL, NULL,
+                         NULL,
+                         G_PARAM_READWRITE |
+                         G_PARAM_STATIC_STRINGS |
+                         G_PARAM_CONSTRUCT_ONLY);
+
+  /**
+   * ClutterInputDevice:bus-type:
+   *
+   * Bus type of this device.
+   */
+  obj_props[PROP_BUS_TYPE] =
+    g_param_spec_string ("bus-type", NULL, NULL,
                          NULL,
                          G_PARAM_READWRITE |
                          G_PARAM_STATIC_STRINGS |
@@ -598,6 +621,26 @@ clutter_input_device_get_product_id (ClutterInputDevice *device)
   g_return_val_if_fail (clutter_input_device_get_device_mode (device) != CLUTTER_INPUT_MODE_LOGICAL, NULL);
 
   return priv->product_id;
+}
+
+/**
+ * clutter_input_device_get_bus_type:
+ * @device: a physical #ClutterInputDevice
+ *
+ * Gets the bus type of this device.
+ *
+ * Returns: the bus type
+ */
+const gchar *
+clutter_input_device_get_bus_type (ClutterInputDevice *device)
+{
+  ClutterInputDevicePrivate *priv =
+    clutter_input_device_get_instance_private (device);
+
+  g_return_val_if_fail (CLUTTER_IS_INPUT_DEVICE (device), NULL);
+  g_return_val_if_fail (clutter_input_device_get_device_mode (device) != CLUTTER_INPUT_MODE_LOGICAL, NULL);
+
+  return priv->bus_type;
 }
 
 gint
