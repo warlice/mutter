@@ -1093,7 +1093,7 @@ if have_wayland
     ['primary-selection', 'unstable', 'v1', ],
     ['relative-pointer', 'unstable', 'v1', ],
     ['single-pixel-buffer', 'staging', 'v1', ],
-    ['tablet', 'unstable', 'v2', ],
+    ['tablet', 'stable', 'v2', ],
     ['text-input', 'unstable', 'v3', ],
     ['viewporter', 'stable', ],
     ['xdg-activation', 'staging', 'v1', ],
