@@ -82,8 +82,8 @@ meta_wayland_tablet_notify (MetaWaylandTablet  *tablet,
                             struct wl_resource *resource)
 {
   ClutterInputDevice *device = tablet->device;
-  const gchar *node_path, *vendor, *product;
-  guint vid, pid;
+  const gchar *node_path, *vendor, *product, *bustype;
+  guint vid, pid, bus;
 
   zwp_tablet_v2_send_name (resource, clutter_input_device_get_device_name (device));
 
@@ -93,10 +93,17 @@ meta_wayland_tablet_notify (MetaWaylandTablet  *tablet,
 
   vendor = clutter_input_device_get_vendor_id (device);
   product = clutter_input_device_get_product_id (device);
+  bustype = clutter_input_device_get_bus_type (device);
 
   if (vendor && sscanf (vendor, "%x", &vid) == 1 &&
       product && sscanf (product, "%x", &pid) == 1)
     zwp_tablet_v2_send_id (resource, vid, pid);
+
+  if (wl_resource_get_version (resource) >= ZWP_TABLET_V2_BUSTYPE_SINCE_VERSION)
+    {
+      if (bustype && sscanf (bustype, "%x", &bus) == 1)
+        zwp_tablet_v2_send_bustype (resource, bus);
+    }
 
   zwp_tablet_v2_send_done (resource);
 }
