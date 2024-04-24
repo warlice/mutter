@@ -283,6 +283,16 @@ meta_wayland_transaction_maybe_apply (MetaWaylandTransaction *transaction)
     }
 }
 
+void
+meta_wayland_transaction_consider_surface (MetaWaylandSurface *surface)
+{
+  MetaWaylandTransaction *transaction;
+
+  transaction = surface->transaction.first_committed;
+  if (transaction)
+    meta_wayland_transaction_maybe_apply (transaction);
+}
+
 static void
 meta_wayland_transaction_dma_buf_dispatch (MetaWaylandBuffer *buffer,
                                            gpointer           user_data)
