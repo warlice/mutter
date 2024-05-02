@@ -49,6 +49,7 @@ struct _CallyUtilClass
 
 void _cally_util_override_atk_util (void);
 
+CLUTTER_EXPORT
 gboolean cally_snoop_key_event (ClutterStage    *stage,
                                 ClutterKeyEvent *key);
 
