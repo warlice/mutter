@@ -543,6 +543,9 @@ add_drm_device (MetaBackendNative  *backend_native,
   if (meta_is_udev_device_preferred_primary (device))
     flags |= META_KMS_DEVICE_FLAG_PREFERRED_PRIMARY;
 
+  if (meta_is_udev_device_disable_kms (device))
+    flags |= META_KMS_DEVICE_FLAG_NO_MODE_SETTING;
+
   device_path = g_udev_device_get_device_file (device);
 
   render_device = create_render_device (backend_native, device_path, error);

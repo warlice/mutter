@@ -133,6 +133,13 @@ meta_is_udev_device_preferred_primary (GUdevDevice *device)
 }
 
 gboolean
+meta_is_udev_device_disable_kms (GUdevDevice *device)
+{
+  return meta_has_udev_device_tag (device,
+                                   "mutter-device-disable-kms");
+}
+
+gboolean
 meta_udev_is_drm_device (MetaUdev    *udev,
                          GUdevDevice *device)
 {
