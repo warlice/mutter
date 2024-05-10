@@ -135,6 +135,9 @@ struct _MetaWaylandSurfaceState
     MetaWaylandSyncPoint *acquire;
     MetaWaylandSyncPoint *release;
   } drm_syncobj;
+
+  gboolean has_new_allow_async_presentation;
+  gboolean allow_async_presentation;
 };
 
 struct _MetaWaylandDragDestFuncs
@@ -272,6 +275,8 @@ struct _MetaWaylandSurface
     MetaWaylandTransaction *first_committed;
     MetaWaylandTransaction *last_committed;
   } transaction;
+
+  gboolean allow_async_presentation;
 };
 
 void                meta_wayland_shell_init     (MetaWaylandCompositor *compositor);

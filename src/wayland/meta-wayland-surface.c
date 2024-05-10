@@ -423,6 +423,7 @@ meta_wayland_surface_state_set_default (MetaWaylandSurfaceState *state)
   state->dx = 0;
   state->dy = 0;
   state->scale = 0;
+  state->has_new_allow_async_presentation = FALSE;
 
   state->input_region = NULL;
   state->input_region_set = FALSE;
@@ -583,6 +584,12 @@ meta_wayland_surface_state_merge_into (MetaWaylandSurfaceState *from,
 
   if (from->scale > 0)
     to->scale = from->scale;
+
+  if (from->has_new_allow_async_presentation)
+    {
+      to->allow_async_presentation = from->allow_async_presentation;
+      to->has_new_allow_async_presentation = TRUE;
+    }
 
   if (from->has_new_buffer_transform)
     {
@@ -787,6 +794,9 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
 
   if (state->has_new_buffer_transform)
     surface->buffer_transform = state->buffer_transform;
+
+  if (state->has_new_allow_async_presentation)
+    surface->allow_async_presentation = state->allow_async_presentation;
 
   if (state->has_new_viewport_src_rect)
     {
