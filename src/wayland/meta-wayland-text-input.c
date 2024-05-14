@@ -302,9 +302,6 @@ meta_wayland_text_input_focus_set_preedit_text (ClutterInputFocus *focus,
 
   text_input = META_WAYLAND_TEXT_INPUT_FOCUS (focus)->text_input;
 
-  if (text)
-    pos = g_utf8_offset_to_pointer (text, cursor) - text;
-
   g_clear_pointer (&text_input->preedit.string, g_free);
   text_input->preedit.string = g_strdup (text);
 
