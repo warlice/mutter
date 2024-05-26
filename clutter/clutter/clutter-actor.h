@@ -224,6 +224,9 @@ struct _ClutterActorClass
   void     (* paint_node)           (ClutterActor         *self,
                                      ClutterPaintNode     *root);
 
+  void     (* snapshot)             (ClutterActor          *self,
+                                     ClutterSnapshot       *snapshot);
+
   gboolean (* touch_event)          (ClutterActor         *self,
                                      ClutterEvent         *event);
   gboolean (* has_accessible)       (ClutterActor         *self);
@@ -289,6 +292,10 @@ void                            clutter_actor_paint                             
 CLUTTER_EXPORT
 void                            clutter_actor_continue_paint                    (ClutterActor                *self,
                                                                                  ClutterPaintContext         *paint_context);
+CLUTTER_EXPORT
+void                            clutter_actor_snapshot_child                    (ClutterActor                *self,
+                                                                                 ClutterActor                *child,
+                                                                                 ClutterSnapshot             *snapshot);
 CLUTTER_EXPORT
 ClutterPaintNode *              clutter_actor_create_texture_paint_node         (ClutterActor                *self,
                                                                                  CoglTexture                 *texture);
