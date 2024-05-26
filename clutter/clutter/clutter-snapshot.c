@@ -712,6 +712,28 @@ clutter_snapshot_push_pipeline (ClutterSnapshot *snapshot,
   push_state (snapshot, collect_default, pipeline_node);
 }
 
+/*<private>
+ * clutter_snapshot_push_layer: (skip)
+ * @snapshot: a #ClutterSnapshot
+ * @framebuffer: a #CoglFramebuffer
+ * @pipeline: a #CoglPipeline
+ *
+ * Pushes a layer node to @snapshot.
+ */
+void
+clutter_snapshot_push_layer (ClutterSnapshot *snapshot,
+                             CoglFramebuffer *framebuffer,
+                             CoglPipeline    *pipeline)
+{
+  ClutterPaintNode *layer_node;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
+
+  layer_node = clutter_layer_node_new_to_framebuffer (framebuffer, pipeline);
+  push_state (snapshot, collect_default, layer_node);
+}
+
 /**
  * clutter_snapshot_save:
  * @snapshot: a #ClutterSnapshot
