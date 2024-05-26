@@ -42,6 +42,10 @@ CLUTTER_EXPORT
 void clutter_snapshot_pop (ClutterSnapshot *snapshot);
 
 CLUTTER_EXPORT
+void clutter_snapshot_add_node (ClutterSnapshot  *snapshot,
+                                ClutterPaintNode *node);
+
+CLUTTER_EXPORT
 void clutter_snapshot_push_clip (ClutterSnapshot *snapshot);
 
 CLUTTER_EXPORT

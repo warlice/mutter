@@ -431,6 +431,35 @@ clutter_snapshot_add_primitive (ClutterSnapshot *snapshot,
 }
 
 /**
+ * clutter_snapshot_add_node:
+ * @snapshot: a #ClutterSnapshot
+ * @node: a #ClutterPaintNode
+ *
+ * Adds the @snapshot to the previously saved state.
+ *
+ * It is a programming error to call this function without a prior call
+ * to clutter_snapshot_save().
+ */
+void
+clutter_snapshot_add_node (ClutterSnapshot  *snapshot,
+                           ClutterPaintNode *node)
+{
+  const ClutterSnapshotState *current_state;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_if_fail (node != NULL);
+
+  if (snapshot->states->len == 0)
+    {
+      g_warning ("Cannot add node to an empty snapshot");
+      return;
+    }
+
+  current_state = get_current_state (snapshot);
+  clutter_paint_node_add_child (current_state->node, node);
+}
+
+/**
  * clutter_snapshot_push_clip:
  * @snapshot: a #ClutterSnapshot
  *
