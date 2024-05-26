@@ -299,13 +299,10 @@ update_fbo (ClutterEffect *effect,
 }
 
 static gboolean
-clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
-                                    ClutterPaintNode    *node,
-                                    ClutterPaintContext *paint_context)
+prepare_offscreen (ClutterOffscreenEffect *offscreen_effect)
 {
-  ClutterOffscreenEffect *self = CLUTTER_OFFSCREEN_EFFECT (effect);
   ClutterOffscreenEffectPrivate *priv =
-    clutter_offscreen_effect_get_instance_private (self);
+    clutter_offscreen_effect_get_instance_private (offscreen_effect);
   CoglFramebuffer *offscreen;
   ClutterActorBox raw_box, box;
   ClutterActor *stage;
@@ -315,12 +312,6 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
   gfloat target_width = -1, target_height = -1;
   float resource_scale;
   float ceiled_resource_scale;
-
-  if (!clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (effect)))
-    goto disable_effect;
-
-  if (priv->actor == NULL)
-    goto disable_effect;
 
   stage = _clutter_actor_get_stage_internal (priv->actor);
   clutter_actor_get_size (stage, &stage_width, &stage_height);
@@ -370,8 +361,8 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
   target_height = ceilf (target_height);
 
   /* First assert that the framebuffer is the right size... */
-  if (!update_fbo (effect, target_width, target_height, resource_scale))
-    goto disable_effect;
+  if (!update_fbo (CLUTTER_EFFECT (offscreen_effect), target_width, target_height, resource_scale))
+    return FALSE;
 
   offscreen = COGL_FRAMEBUFFER (priv->offscreen);
 
@@ -408,6 +399,27 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
                                         &projection);
 
   cogl_framebuffer_set_projection_matrix (offscreen, &projection);
+
+  return TRUE;
+}
+
+static gboolean
+clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
+                                    ClutterPaintNode    *node,
+                                    ClutterPaintContext *paint_context)
+{
+  ClutterOffscreenEffect *self = CLUTTER_OFFSCREEN_EFFECT (effect);
+  ClutterOffscreenEffectPrivate *priv =
+    clutter_offscreen_effect_get_instance_private (self);
+
+  if (!clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (effect)))
+    goto disable_effect;
+
+  if (priv->actor == NULL)
+    goto disable_effect;
+
+  if (!prepare_offscreen (self))
+    goto disable_effect;
 
   return TRUE;
 
