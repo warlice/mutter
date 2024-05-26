@@ -38,4 +38,8 @@ void            _clutter_content_paint_content          (ClutterContent      *co
                                                          ClutterPaintNode    *node,
                                                          ClutterPaintContext *paint_context);
 
+void            _clutter_content_snapshot               (ClutterContent      *content,
+                                                         ClutterActor        *actor,
+                                                         ClutterSnapshot     *snapshot);
+
 G_END_DECLS

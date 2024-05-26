@@ -67,6 +67,11 @@ struct _ClutterContentInterface
                                          ClutterPaintNode    *node,
                                          ClutterPaintContext *paint_context);
 
+  // TODO: Remove the 'actor' parameter
+  void          (* snapshot)            (ClutterContent      *content,
+                                         ClutterActor        *actor,
+                                         ClutterSnapshot     *snapshot);
+
   void          (* attached)            (ClutterContent   *content,
                                          ClutterActor     *actor);
   void          (* detached)            (ClutterContent   *content,

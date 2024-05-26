@@ -3764,6 +3764,10 @@ clutter_actor_snapshot_effects_and_children (ClutterActor    *self,
           clutter_snapshot_pop (snapshot);
         }
 
+      /* No effects to snapshot, paint the content and the actor children */
+      if (priv->content != NULL)
+        _clutter_content_snapshot (priv->content, self, snapshot);
+
       CLUTTER_ACTOR_GET_CLASS (self)->snapshot (self, snapshot);
     }
 }
