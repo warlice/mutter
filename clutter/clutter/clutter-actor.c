@@ -3004,18 +3004,14 @@ static void
 _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                                        ClutterPaintVolume *pv,
                                        const CoglColor   *color,
-                                       ClutterPaintNode   *node)
+                                       ClutterSnapshot    *snapshot)
 {
   g_autoptr (ClutterPaintNode) pipeline_node = NULL;
-  static CoglPipeline *outline = NULL;
   CoglPrimitive *prim;
   graphene_point3d_t line_ends[12 * 2];
   int n_vertices;
   CoglContext *ctx =
     clutter_backend_get_cogl_context (clutter_get_default_backend ());
-
-  if (outline == NULL)
-    outline = cogl_pipeline_new (ctx);
 
   _clutter_paint_volume_complete (pv);
 
@@ -3046,19 +3042,16 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                                 n_vertices,
                                 (CoglVertexP3 *)line_ends);
 
-  cogl_pipeline_set_color (outline, color);
+  clutter_snapshot_push_color (snapshot, color);
+  clutter_snapshot_add_primitive (snapshot, prim);
+  clutter_snapshot_pop (snapshot);
 
-  pipeline_node = clutter_pipeline_node_new (outline);
-  clutter_paint_node_set_static_name (pipeline_node,
-                                      "ClutterActor (paint volume outline)");
-  clutter_paint_node_add_primitive (pipeline_node, prim);
-  clutter_paint_node_add_child (node, pipeline_node);
   g_object_unref (prim);
 }
 
 static void
-_clutter_actor_draw_paint_volume (ClutterActor     *self,
-                                  ClutterPaintNode *node)
+_clutter_actor_draw_paint_volume (ClutterActor    *self,
+                                  ClutterSnapshot *snapshot)
 {
   ClutterPaintVolume *pv;
 
@@ -3077,7 +3070,7 @@ _clutter_actor_draw_paint_volume (ClutterActor     *self,
 
       _clutter_actor_draw_paint_volume_full (self, &fake_pv,
                                              &COGL_COLOR_INIT (0, 0, 255, 255),
-                                             node);
+                                             snapshot);
 
       clutter_paint_volume_free (&fake_pv);
     }
@@ -3085,7 +3078,7 @@ _clutter_actor_draw_paint_volume (ClutterActor     *self,
     {
       _clutter_actor_draw_paint_volume_full (self, pv,
                                              &COGL_COLOR_INIT (0, 255, 0, 255),
-                                             node);
+                                             snapshot);
     }
 }
 
@@ -3093,7 +3086,7 @@ static void
 _clutter_actor_paint_cull_result (ClutterActor      *self,
                                   gboolean           success,
                                   ClutterCullResult  result,
-                                  ClutterPaintNode  *node)
+                                  ClutterSnapshot   *snapshot)
 {
   ClutterPaintVolume *pv;
   CoglColor color;
@@ -3119,7 +3112,7 @@ _clutter_actor_paint_cull_result (ClutterActor      *self,
   if (success && (pv = _clutter_actor_get_paint_volume_mutable (self)))
     _clutter_actor_draw_paint_volume_full (self, pv,
                                            &color,
-                                           node);
+                                           snapshot);
 }
 
 static int clone_paint_level = 0;
@@ -3571,9 +3564,7 @@ clutter_actor_paint (ClutterActor        *self,
         ? cull_actor (self, paint_context, &result)
         : FALSE;
 
-      if (G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_REDRAWS))
-        _clutter_actor_paint_cull_result (self, success, result, actor_node);
-      else if (result == CLUTTER_CULL_RESULT_OUT && success)
+      if (result == CLUTTER_CULL_RESULT_OUT && success)
         return;
     }
 
@@ -3582,9 +3573,6 @@ clutter_actor_paint (ClutterActor        *self,
   else
     priv->next_effect_to_paint =
       _clutter_meta_group_peek_metas (priv->effects);
-
-  if (G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_VOLUMES))
-    _clutter_actor_draw_paint_volume (self, actor_node);
 
   clutter_paint_node_paint (root_node, paint_context);
 
@@ -3808,7 +3796,9 @@ clutter_actor_do_snapshot (ClutterActor    *self,
 
       success = should_cull_out ? cull_actor (self, paint_context, &result) : FALSE;
 
-      if (result == CLUTTER_CULL_RESULT_OUT && success)
+      if (G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_REDRAWS))
+        _clutter_actor_paint_cull_result (self, success, result, snapshot);
+      else if (result == CLUTTER_CULL_RESULT_OUT && success)
         return;
     }
 
@@ -3859,6 +3849,9 @@ clutter_actor_do_snapshot (ClutterActor    *self,
   clutter_actor_snapshot_effects_and_children (self, snapshot);
 
   CLUTTER_UNSET_PRIVATE_FLAGS (self, CLUTTER_IN_PAINT);
+
+  if (G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_VOLUMES))
+    _clutter_actor_draw_paint_volume (self, snapshot);
 
   if (transform_set)
     clutter_snapshot_pop (snapshot);
