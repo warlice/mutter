@@ -268,4 +268,7 @@ const GList * clutter_actor_peek_actions (ClutterActor *self);
 void clutter_actor_set_implicitly_grabbed (ClutterActor *actor,
                                            gboolean      is_implicitly_grabbed);
 
+void clutter_actor_snapshot_effects_and_children (ClutterActor    *self,
+                                                  ClutterSnapshot *snapshot);
+
 G_END_DECLS

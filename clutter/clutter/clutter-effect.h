@@ -66,6 +66,10 @@ struct _ClutterEffectClass
                                     ClutterPaintNode        *node,
                                     ClutterPaintContext     *paint_context);
 
+  void     (* snapshot)            (ClutterEffect           *effect,
+                                    ClutterSnapshot         *snapshot,
+                                    ClutterEffectPaintFlags  flags);
+
   gboolean (* modify_paint_volume) (ClutterEffect           *effect,
                                     ClutterPaintVolume      *volume);
 

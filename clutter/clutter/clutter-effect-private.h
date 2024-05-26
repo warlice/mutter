@@ -13,5 +13,8 @@ void            _clutter_effect_paint                   (ClutterEffect          
                                                          ClutterEffectPaintFlags  flags);
 void            _clutter_effect_pick                    (ClutterEffect           *effect,
                                                          ClutterPickContext      *pick_context);
+void            _clutter_effect_snapshot                (ClutterEffect           *effect,
+                                                         ClutterSnapshot         *snapshot,
+                                                         ClutterEffectPaintFlags  flags);
 
 G_END_DECLS

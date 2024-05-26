@@ -3691,6 +3691,83 @@ clutter_actor_continue_paint (ClutterActor        *self,
     }
 }
 
+void
+clutter_actor_snapshot_effects_and_children (ClutterActor    *self,
+                                             ClutterSnapshot *snapshot)
+{
+  ClutterActorPrivate *priv;
+
+  g_assert (CLUTTER_IS_ACTOR (self));
+  g_assert (CLUTTER_ACTOR_IN_PAINT (self));
+
+  priv = self->priv;
+
+  /* Skip any effects that are disabled */
+  while (priv->next_effect_to_paint &&
+         !clutter_actor_meta_get_enabled (priv->next_effect_to_paint->data))
+    priv->next_effect_to_paint = priv->next_effect_to_paint->next;
+
+  if (priv->next_effect_to_paint != NULL)
+    {
+      ClutterEffectPaintFlags effect_flags = 0;
+      ClutterEffect *old_current_effect;
+
+      old_current_effect = priv->current_effect;
+
+      priv->current_effect = priv->next_effect_to_paint->data;
+      priv->next_effect_to_paint = priv->next_effect_to_paint->next;
+
+      if (priv->is_dirty)
+        {
+          /* If there's an effect queued with this redraw then all
+           * effects up to that one will be considered dirty. It
+           * is expected the queued effect will paint the cached
+           * image and not call clutter_actor_continue_paint again
+           * (although it should work ok if it does)
+           */
+          if (priv->effect_to_redraw == NULL ||
+              priv->current_effect != priv->effect_to_redraw)
+            effect_flags |= CLUTTER_EFFECT_PAINT_ACTOR_DIRTY;
+        }
+
+      if (priv->current_effect == priv->flatten_effect &&
+          priv->offscreen_redirect & CLUTTER_OFFSCREEN_REDIRECT_ON_IDLE &&
+          effect_flags & CLUTTER_EFFECT_PAINT_ACTOR_DIRTY)
+        effect_flags |= CLUTTER_EFFECT_PAINT_BYPASS_EFFECT;
+
+      _clutter_effect_snapshot (priv->current_effect, snapshot, effect_flags);
+
+      priv->current_effect = old_current_effect;
+    }
+  else
+    {
+      ClutterActorBox box;
+      CoglColor background_color;
+
+      /* Actor background */
+      box.x1 = 0.f;
+      box.y1 = 0.f;
+      box.x2 = clutter_actor_box_get_width (&priv->allocation);
+      box.y2 = clutter_actor_box_get_height (&priv->allocation);
+
+      background_color = priv->bg_color;
+
+      if (!CLUTTER_ACTOR_IS_TOPLEVEL (self) &&
+          priv->bg_color_set &&
+          !cogl_color_equal (&priv->bg_color, &transparent))
+        {
+          background_color.alpha =
+            clutter_actor_get_paint_opacity_internal (self) * priv->bg_color.alpha / 255;
+
+          clutter_snapshot_push_color (snapshot, &background_color);
+          clutter_snapshot_add_rectangle (snapshot, &box);
+          clutter_snapshot_pop (snapshot);
+        }
+
+      CLUTTER_ACTOR_GET_CLASS (self)->snapshot (self, snapshot);
+    }
+}
+
 static void
 clutter_actor_do_snapshot (ClutterActor    *self,
                            ClutterSnapshot *snapshot)
@@ -3698,8 +3775,6 @@ clutter_actor_do_snapshot (ClutterActor    *self,
   g_autoptr (GList) snapshotted_effects = NULL;
   ClutterActorPrivate *priv;
   ClutterActorBox clip;
-  ClutterActorBox box;
-  CoglColor background_color;
   gboolean transform_set = FALSE;
   gboolean clip_set = FALSE;
 
@@ -3775,29 +3850,9 @@ clutter_actor_do_snapshot (ClutterActor    *self,
         }
     }
 
-  /* Actor background */
-  box.x1 = 0.f;
-  box.y1 = 0.f;
-  box.x2 = clutter_actor_box_get_width (&priv->allocation);
-  box.y2 = clutter_actor_box_get_height (&priv->allocation);
-
-  background_color = priv->bg_color;
-
-  if (!CLUTTER_ACTOR_IS_TOPLEVEL (self) &&
-      priv->bg_color_set &&
-      !cogl_color_equal (&priv->bg_color, &transparent))
-    {
-      background_color.alpha =
-        clutter_actor_get_paint_opacity_internal (self) * priv->bg_color.alpha / 255;
-
-      clutter_snapshot_push_color (snapshot, &background_color);
-      clutter_snapshot_add_rectangle (snapshot, &box);
-      clutter_snapshot_pop (snapshot);
-    }
-
   CLUTTER_SET_PRIVATE_FLAGS (self, CLUTTER_IN_PAINT);
 
-  CLUTTER_ACTOR_GET_CLASS (self)->snapshot (self, snapshot);
+  clutter_actor_snapshot_effects_and_children (self, snapshot);
 
   CLUTTER_UNSET_PRIVATE_FLAGS (self, CLUTTER_IN_PAINT);
 

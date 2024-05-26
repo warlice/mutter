@@ -174,6 +174,7 @@
 #include "clutter/clutter-paint-node-private.h"
 #include "clutter/clutter-paint-nodes.h"
 #include "clutter/clutter-private.h"
+#include "clutter/clutter-snapshot.h"
 #include "clutter/clutter-actor-private.h"
 
 G_DEFINE_ABSTRACT_TYPE (ClutterEffect,
@@ -264,6 +265,16 @@ clutter_effect_real_pick (ClutterEffect      *effect,
 }
 
 static void
+clutter_effect_real_snapshot (ClutterEffect           *effect,
+                              ClutterSnapshot         *snapshot,
+                              ClutterEffectPaintFlags  flags)
+{
+  ClutterActor *actor = clutter_actor_meta_get_actor (CLUTTER_ACTOR_META (effect));
+
+  clutter_actor_snapshot_effects_and_children (actor, snapshot);
+}
+
+static void
 clutter_effect_set_enabled (ClutterActorMeta *meta,
                             gboolean          is_enabled)
 {
@@ -291,6 +302,7 @@ clutter_effect_class_init (ClutterEffectClass *klass)
   klass->paint = clutter_effect_real_paint;
   klass->paint_node = clutter_effect_real_paint_node;
   klass->pick = clutter_effect_real_pick;
+  klass->snapshot = clutter_effect_real_snapshot;
 }
 
 static void
@@ -338,6 +350,17 @@ _clutter_effect_has_custom_paint_volume (ClutterEffect *effect)
   g_return_val_if_fail (CLUTTER_IS_EFFECT (effect), FALSE);
 
   return CLUTTER_EFFECT_GET_CLASS (effect)->modify_paint_volume != clutter_effect_real_modify_paint_volume;
+}
+
+void
+_clutter_effect_snapshot (ClutterEffect           *effect,
+                          ClutterSnapshot         *snapshot,
+                          ClutterEffectPaintFlags  flags)
+{
+  g_assert (CLUTTER_IS_EFFECT (effect));
+  g_assert (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  CLUTTER_EFFECT_GET_CLASS (effect)->snapshot (effect, snapshot, flags);
 }
 
 /**
