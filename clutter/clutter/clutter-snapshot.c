@@ -17,7 +17,7 @@
 
 #include "config.h"
 
-#include "clutter-snapshot.h"
+#include "clutter/clutter-snapshot-private.h"
 
 #include "clutter/clutter-paint-context-private.h"
 #include "clutter/clutter-paint-node-private.h"
@@ -726,4 +726,20 @@ clutter_snapshot_restore (ClutterSnapshot *snapshot)
 
   while (n_pops-- > 0)
     clutter_snapshot_pop (snapshot);
+}
+
+/*<private>
+ * clutter_snapshot_get_paint_context: (skip)
+ * @snapshot: a #ClutterSnapshot
+ *
+ * Retrieves the #ClutterPaintContext that @snapshot was created with.
+ *
+ * Returns: (transfer none): a #ClutterPaintContext
+ */
+ClutterPaintContext *
+clutter_snapshot_get_paint_context (ClutterSnapshot *snapshot)
+{
+  g_assert (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  return snapshot->paint_context;
 }

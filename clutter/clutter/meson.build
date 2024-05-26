@@ -198,6 +198,7 @@ clutter_private_headers = [
   'clutter-paint-volume-private.h',
   'clutter-private.h',
   'clutter-settings-private.h',
+  'clutter-snapshot-private.h',
   'clutter-stage-manager-private.h',
   'clutter-stage-private.h',
   'clutter-stage-view-private.h',
