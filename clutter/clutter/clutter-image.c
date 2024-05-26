@@ -41,6 +41,7 @@
 #include "clutter/clutter-paint-node.h"
 #include "clutter/clutter-paint-nodes.h"
 #include "clutter/clutter-private.h"
+#include "clutter/clutter-snapshot-private.h"
 
 typedef struct
 {
@@ -124,6 +125,24 @@ clutter_image_init (ClutterImage *self)
 }
 
 static void
+clutter_image_snapshot (ClutterContent  *content,
+                        ClutterActor    *actor,
+                        ClutterSnapshot *snapshot)
+{
+  ClutterImage *image = CLUTTER_IMAGE (content);
+  ClutterImagePrivate *priv = clutter_image_get_instance_private (image);
+  ClutterPaintNode *node;
+
+  if (priv->texture == NULL)
+    return;
+
+  node = clutter_actor_create_texture_paint_node (actor, priv->texture);
+  clutter_paint_node_set_static_name (node, "Image Content");
+  clutter_snapshot_add_node (snapshot, node);
+  clutter_paint_node_unref (node);
+}
+
+static void
 clutter_image_paint_content (ClutterContent      *content,
                              ClutterActor        *actor,
                              ClutterPaintNode    *root,
@@ -167,6 +186,7 @@ clutter_content_iface_init (ClutterContentInterface *iface)
 {
   iface->get_preferred_size = clutter_image_get_preferred_size;
   iface->paint_content = clutter_image_paint_content;
+  iface->snapshot = clutter_image_snapshot;
 }
 
 /**
