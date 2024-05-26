@@ -403,6 +403,42 @@ out:
 }
 
 static void
+clutter_shader_effect_snapshot_target (ClutterOffscreenEffect *effect,
+                                       ClutterSnapshot        *snapshot)
+{
+  ClutterShaderEffect *self = CLUTTER_SHADER_EFFECT (effect);
+  ClutterShaderEffectPrivate *priv =
+    clutter_shader_effect_get_instance_private (self);
+  ClutterOffscreenEffectClass *parent;
+  CoglPipeline *pipeline;
+
+  /* If the source hasn't been set then we'll try to get it from the
+     static source instead */
+  if (priv->shader == NULL)
+    clutter_shader_effect_try_static_source (self);
+
+  /* we haven't been prepared or we don't have support for
+   * GLSL shaders in Clutter
+   */
+  if (priv->program == NULL)
+    goto out;
+
+  CLUTTER_NOTE (SHADER, "Applying the shader effect of type '%s'",
+                G_OBJECT_TYPE_NAME (effect));
+
+  clutter_shader_effect_update_uniforms (CLUTTER_SHADER_EFFECT (effect));
+
+  /* associate the program to the offscreen target pipeline */
+  pipeline = clutter_offscreen_effect_get_pipeline (effect);
+  cogl_pipeline_set_user_program (pipeline, priv->program);
+
+out:
+  /* paint the offscreen buffer */
+  parent = CLUTTER_OFFSCREEN_EFFECT_CLASS (clutter_shader_effect_parent_class);
+  parent->snapshot_target (effect, snapshot);
+}
+
+static void
 clutter_shader_effect_set_property (GObject      *gobject,
                                     guint         prop_id,
                                     const GValue *value,
@@ -466,6 +502,7 @@ clutter_shader_effect_class_init (ClutterShaderEffectClass *klass)
   meta_class->set_actor = clutter_shader_effect_set_actor;
 
   offscreen_class->paint_target = clutter_shader_effect_paint_target;
+  offscreen_class->snapshot_target = clutter_shader_effect_snapshot_target;
 }
 
 static void
