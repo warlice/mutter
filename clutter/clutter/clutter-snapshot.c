@@ -692,6 +692,26 @@ clutter_snapshot_push_translate_3d (ClutterSnapshot          *snapshot,
   clutter_snapshot_push_transform (snapshot, &translate);
 }
 
+/*<private>
+ * clutter_snapshot_push_pipeline: (skip)
+ * @snapshot: a #ClutterSnapshot
+ * @pipeline: a #CoglPipeline
+ *
+ * Pushes a #CoglPipeline node to @snapshot.
+ */
+void
+clutter_snapshot_push_pipeline (ClutterSnapshot *snapshot,
+                                CoglPipeline    *pipeline)
+{
+  ClutterPaintNode *pipeline_node;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_if_fail (COGL_IS_PIPELINE (pipeline));
+
+  pipeline_node = clutter_pipeline_node_new (pipeline);
+  push_state (snapshot, collect_default, pipeline_node);
+}
+
 /**
  * clutter_snapshot_save:
  * @snapshot: a #ClutterSnapshot

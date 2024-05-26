@@ -19,5 +19,9 @@
 
 #include "clutter/clutter-snapshot.h"
 
+void
+clutter_snapshot_push_pipeline (ClutterSnapshot *snapshot,
+                                CoglPipeline    *pipeline);
+
 ClutterPaintContext *
 clutter_snapshot_get_paint_context (ClutterSnapshot *snapshot);
