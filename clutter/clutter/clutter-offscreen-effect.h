@@ -63,6 +63,8 @@ struct _ClutterOffscreenEffectClass
   void (* paint_target) (ClutterOffscreenEffect *effect,
                          ClutterPaintNode       *node,
                          ClutterPaintContext    *paint_context);
+  void (* snapshot_target) (ClutterOffscreenEffect *effect,
+                            ClutterSnapshot        *snapshot);
 };
 
 CLUTTER_EXPORT
@@ -75,6 +77,9 @@ CLUTTER_EXPORT
 void            clutter_offscreen_effect_paint_target           (ClutterOffscreenEffect *effect,
                                                                  ClutterPaintNode       *node,
                                                                  ClutterPaintContext    *paint_context);
+CLUTTER_EXPORT
+void            clutter_offscreen_effect_snapshot_target        (ClutterOffscreenEffect *effect,
+                                                                 ClutterSnapshot        *snapshot);
 CLUTTER_EXPORT
 CoglTexture* clutter_offscreen_effect_create_texture         (ClutterOffscreenEffect *effect,
                                                               gfloat                  width,
