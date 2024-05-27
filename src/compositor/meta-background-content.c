@@ -654,6 +654,40 @@ paint_clipped_rectangle (MetaBackgroundContent *self,
 }
 
 static void
+add_clipped_rectangle_to_snapshot (MetaBackgroundContent *self,
+                                   ClutterSnapshot       *snapshot,
+                                   ClutterActorBox       *actor_box,
+                                   MtkRectangle          *rect)
+{
+  float h_scale, v_scale;
+  float x1, y1, x2, y2;
+  float tx1, ty1, tx2, ty2;
+
+  h_scale = self->texture_area.width / clutter_actor_box_get_width (actor_box);
+  v_scale = self->texture_area.height / clutter_actor_box_get_height (actor_box);
+
+  x1 = rect->x;
+  y1 = rect->y;
+  x2 = rect->x + rect->width;
+  y2 = rect->y + rect->height;
+
+  tx1 = (x1 * h_scale - self->texture_area.x) / (float)self->texture_area.width;
+  ty1 = (y1 * v_scale - self->texture_area.y) / (float)self->texture_area.height;
+  tx2 = (x2 * h_scale - self->texture_area.x) / (float)self->texture_area.width;
+  ty2 = (y2 * v_scale - self->texture_area.y) / (float)self->texture_area.height;
+
+  clutter_snapshot_add_texture_rectangle (snapshot,
+                                          &(ClutterActorBox) {
+                                            .x1 = x1,
+                                            .y1 = y1,
+                                            .x2 = x2,
+                                            .y2 = y2,
+                                          },
+                                          tx1, ty1,
+                                          tx2, ty2);
+}
+
+static void
 meta_background_content_paint_content (ClutterContent      *content,
                                        ClutterActor        *actor,
                                        ClutterPaintNode    *node,
@@ -770,6 +804,126 @@ meta_background_content_paint_content (ClutterContent      *content,
     }
 }
 
+static void
+meta_background_content_snapshot (ClutterContent  *content,
+                                  ClutterActor    *actor,
+                                  ClutterSnapshot *snapshot)
+{
+  MetaBackgroundContent *self = META_BACKGROUND_CONTENT (content);
+  ClutterPaintContext *paint_context =
+    clutter_snapshot_get_paint_context (snapshot);
+  ClutterActorBox actor_box;
+  MtkRectangle rect_within_actor;
+  MtkRectangle rect_within_stage;
+  g_autoptr (MtkRegion) region = NULL;
+  int i, n_rects;
+  float transformed_x, transformed_y, transformed_width, transformed_height;
+  gboolean untransformed;
+
+  if ((self->clip_region && mtk_region_is_empty (self->clip_region)))
+    return;
+
+  clutter_actor_get_content_box (actor, &actor_box);
+  rect_within_actor.x = actor_box.x1;
+  rect_within_actor.y = actor_box.y1;
+  rect_within_actor.width = actor_box.x2 - actor_box.x1;
+  rect_within_actor.height = actor_box.y2 - actor_box.y1;
+
+  if (clutter_actor_is_in_clone_paint (actor))
+    {
+      untransformed = FALSE;
+    }
+  else
+    {
+      clutter_actor_get_transformed_position (actor,
+                                              &transformed_x,
+                                              &transformed_y);
+      rect_within_stage.x = floorf (transformed_x);
+      rect_within_stage.y = floorf (transformed_y);
+
+      clutter_actor_get_transformed_size (actor,
+                                          &transformed_width,
+                                          &transformed_height);
+      rect_within_stage.width = ceilf (transformed_width);
+      rect_within_stage.height = ceilf (transformed_height);
+
+      untransformed =
+        rect_within_actor.x == rect_within_stage.x &&
+        rect_within_actor.y == rect_within_stage.y &&
+        rect_within_actor.width == rect_within_stage.width &&
+        rect_within_actor.height == rect_within_stage.height;
+    }
+
+  if (untransformed) /* actor and stage space are the same */
+    {
+      if (self->clip_region)
+        {
+          region = mtk_region_copy (self->clip_region);
+          mtk_region_intersect_rectangle (region, &rect_within_stage);
+        }
+      else
+        {
+          const MtkRegion *redraw_clip;
+
+          redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
+          if (redraw_clip)
+            {
+              region = mtk_region_copy (redraw_clip);
+              mtk_region_intersect_rectangle (region, &rect_within_stage);
+            }
+          else
+            {
+              region = mtk_region_create_rectangle (&rect_within_stage);
+            }
+        }
+    }
+  else /* actor and stage space are different but we need actor space */
+    {
+      if (self->clip_region)
+        {
+          region = mtk_region_copy (self->clip_region);
+          mtk_region_intersect_rectangle (region, &rect_within_actor);
+        }
+      else
+        {
+          region = mtk_region_create_rectangle (&rect_within_actor);
+        }
+    }
+
+  if (self->unobscured_region)
+    mtk_region_intersect (region, self->unobscured_region);
+
+  /* region is now in actor space */
+  if (mtk_region_is_empty (region))
+    return;
+
+  setup_pipeline (self, actor, paint_context, &rect_within_actor);
+  set_glsl_parameters (self, &rect_within_actor);
+
+  /* Limit to how many separate rectangles we'll draw; beyond this just
+   * fall back and draw the whole thing */
+#define MAX_RECTS 64
+
+  clutter_snapshot_push_pipeline (snapshot, self->pipeline);
+
+  n_rects = mtk_region_num_rectangles (region);
+  if (n_rects <= MAX_RECTS)
+    {
+      for (i = 0; i < n_rects; i++)
+        {
+          MtkRectangle rect = mtk_region_get_rectangle (region, i);
+          add_clipped_rectangle_to_snapshot (self, snapshot, &actor_box, &rect);
+        }
+    }
+  else
+    {
+      MtkRectangle rect = mtk_region_get_extents (region);
+      add_clipped_rectangle_to_snapshot (self, snapshot, &actor_box, &rect);
+    }
+
+  clutter_snapshot_pop (snapshot);
+}
+
 static gboolean
 meta_background_content_get_preferred_size (ClutterContent *content,
                                             float          *width,
@@ -796,6 +950,7 @@ static void
 clutter_content_iface_init (ClutterContentInterface *iface)
 {
   iface->paint_content = meta_background_content_paint_content;
+  iface->snapshot = meta_background_content_snapshot;
   iface->get_preferred_size = meta_background_content_get_preferred_size;
 }
 
