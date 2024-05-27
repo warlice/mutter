@@ -36,6 +36,10 @@ CLUTTER_EXPORT
 ClutterSnapshot * clutter_snapshot_new (ClutterPaintContext *paint_context);
 
 CLUTTER_EXPORT
+ClutterPaintContext *
+clutter_snapshot_get_paint_context (ClutterSnapshot *snapshot);
+
+CLUTTER_EXPORT
 ClutterPaintNode * clutter_snapshot_free_to_node (ClutterSnapshot *snapshot);
 
 CLUTTER_EXPORT

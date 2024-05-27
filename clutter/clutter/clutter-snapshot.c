@@ -820,8 +820,8 @@ clutter_snapshot_restore (ClutterSnapshot *snapshot)
     clutter_snapshot_pop (snapshot);
 }
 
-/*<private>
- * clutter_snapshot_get_paint_context: (skip)
+/**
+ * clutter_snapshot_get_paint_context:
  * @snapshot: a #ClutterSnapshot
  *
  * Retrieves the #ClutterPaintContext that @snapshot was created with.
@@ -831,7 +831,7 @@ clutter_snapshot_restore (ClutterSnapshot *snapshot)
 ClutterPaintContext *
 clutter_snapshot_get_paint_context (ClutterSnapshot *snapshot)
 {
-  g_assert (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_val_if_fail (CLUTTER_IS_SNAPSHOT (snapshot), NULL);
 
   return snapshot->paint_context;
 }
