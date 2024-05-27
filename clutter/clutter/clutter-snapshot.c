@@ -713,8 +713,8 @@ clutter_snapshot_push_translate_3d (ClutterSnapshot          *snapshot,
   clutter_snapshot_push_transform (snapshot, &translate);
 }
 
-/*<private>
- * clutter_snapshot_push_pipeline: (skip)
+/**
+ * clutter_snapshot_push_pipeline:
  * @snapshot: a #ClutterSnapshot
  * @pipeline: a #CoglPipeline
  *

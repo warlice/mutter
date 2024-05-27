@@ -24,10 +24,6 @@ clutter_snapshot_new_onscreen (ClutterPaintContext *paint_context,
                                const CoglColor     *clear_color);
 
 void
-clutter_snapshot_push_pipeline (ClutterSnapshot *snapshot,
-                                CoglPipeline    *pipeline);
-
-void
 clutter_snapshot_push_layer (ClutterSnapshot *snapshot,
                              CoglFramebuffer *framebuffer,
                              CoglPipeline    *pipeline);

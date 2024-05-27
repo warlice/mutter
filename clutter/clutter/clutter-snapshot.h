@@ -73,6 +73,10 @@ void clutter_snapshot_push_scale_3d (ClutterSnapshot *snapshot,
                                      float            factor_z);
 
 CLUTTER_EXPORT
+void clutter_snapshot_push_pipeline (ClutterSnapshot *snapshot,
+                                     CoglPipeline    *pipeline);
+
+CLUTTER_EXPORT
 void clutter_snapshot_push_texture (ClutterSnapshot *snapshot,
                                     CoglTexture     *texture);
 

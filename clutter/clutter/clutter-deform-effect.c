@@ -58,7 +58,7 @@
 #include "clutter/clutter-paint-node.h"
 #include "clutter/clutter-paint-nodes.h"
 #include "clutter/clutter-private.h"
-#include "clutter/clutter-snapshot-private.h"
+#include "clutter/clutter-snapshot.h"
 
 #define DEFAULT_N_TILES         32
 
