@@ -19,6 +19,10 @@
 
 #include "clutter/clutter-snapshot.h"
 
+ClutterSnapshot *
+clutter_snapshot_new_onscreen (ClutterPaintContext *paint_context,
+                               const CoglColor     *clear_color);
+
 void
 clutter_snapshot_push_pipeline (ClutterSnapshot *snapshot,
                                 CoglPipeline    *pipeline);

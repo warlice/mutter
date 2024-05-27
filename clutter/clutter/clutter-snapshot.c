@@ -145,6 +145,27 @@ clutter_snapshot_new (ClutterPaintContext *paint_context)
   return snapshot;
 }
 
+ClutterSnapshot *
+clutter_snapshot_new_onscreen (ClutterPaintContext *paint_context,
+                               const CoglColor     *clear_color)
+{
+  ClutterPaintNode *root_node;
+  ClutterSnapshot *snapshot;
+  CoglFramebuffer *framebuffer;
+
+  g_return_val_if_fail (paint_context != NULL, NULL);
+
+  snapshot = g_object_new (CLUTTER_TYPE_SNAPSHOT, NULL);
+  snapshot->paint_context = clutter_paint_context_ref (paint_context);
+
+  /* Ensure at least one node */
+  framebuffer = clutter_paint_context_get_framebuffer (paint_context);
+  root_node = clutter_root_node_new (framebuffer, clear_color, COGL_BUFFER_BIT_DEPTH);
+  push_state (snapshot, collect_default, root_node);
+
+  return snapshot;
+}
+
 /**
  * clutter_snapshot_free_to_node:
  * @snapshot: a #ClutterSnapshot
