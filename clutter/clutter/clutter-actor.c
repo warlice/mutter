@@ -3905,6 +3905,17 @@ clutter_actor_snapshot_child (ClutterActor    *self,
   clutter_actor_do_snapshot (child, snapshot);
 }
 
+
+void
+clutter_actor_snapshot (ClutterActor    *self,
+                        ClutterSnapshot *snapshot)
+{
+  if (!(self->flags & CLUTTER_ACTOR_MAPPED))
+    return;
+
+  clutter_actor_do_snapshot (self, snapshot);
+}
+
 /**
  * clutter_actor_pick:
  * @actor: A #ClutterActor

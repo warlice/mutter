@@ -248,5 +248,7 @@ CLUTTER_EXPORT
 gboolean clutter_stage_pointing_input_foreach (ClutterStage                 *self,
                                                ClutterStageInputForeachFunc  func,
                                                gpointer                      user_data);
+CLUTTER_EXPORT
+void clutter_stage_enable_snapshots (ClutterStage *stage);
 
 G_END_DECLS

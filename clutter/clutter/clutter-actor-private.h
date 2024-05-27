@@ -271,4 +271,7 @@ void clutter_actor_set_implicitly_grabbed (ClutterActor *actor,
 void clutter_actor_snapshot_effects_and_children (ClutterActor    *self,
                                                   ClutterSnapshot *snapshot);
 
+void clutter_actor_snapshot (ClutterActor    *self,
+                             ClutterSnapshot *snapshot);
+
 G_END_DECLS
