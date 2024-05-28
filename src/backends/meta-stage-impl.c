@@ -39,6 +39,7 @@
 #include "cogl/cogl.h"
 #include "core/util-private.h"
 #include "meta/meta-backend.h"
+#include "mtk/mtk.h"
 
 #define MAX_STACK_RECTS 256
 
@@ -367,9 +368,9 @@ offset_scale_and_clamp_region (MtkRegion       *region,
   graphene_rect_t fb_rect;
   g_autofree MtkRectangle *freeme = NULL;
   g_autoptr (MtkRegion) owned_region = NULL;
+  gboolean is_scaled = !G_APPROX_VALUE (scale, 1.0f, FLT_EPSILON);
 
-  if (offset_x == 0 && offset_y == 0 &&
-      G_APPROX_VALUE (scale, 1.0f, FLT_EPSILON))
+  if (offset_x == 0 && offset_y == 0 && !is_scaled)
     return g_steal_pointer (&region);
 
   owned_region = g_steal_pointer (&region);
@@ -377,6 +378,22 @@ offset_scale_and_clamp_region (MtkRegion       *region,
 
   if (n_rects == 0)
     return mtk_region_create ();
+
+  if (!is_scaled)
+    {
+      /* WARNING: we're changing the region in place, so this assumes that
+       * the caller is fully passing the ownership of the region to this
+       * function.
+       */
+      mtk_region_translate (owned_region, offset_x, offset_y);
+      mtk_region_intersect_rectangle (owned_region, &(MtkRectangle) {
+        .x = 0,
+        .y = 0,
+        .width = (int) max_size->width,
+        .height = (int) max_size->height,
+      });
+      return g_steal_pointer (&owned_region);
+    }
 
   if (n_rects < MAX_STACK_RECTS)
     rects = g_newa (MtkRectangle, n_rects);
@@ -427,9 +444,9 @@ scale_offset_and_clamp_region (MtkRegion       *region,
   graphene_rect_t fb_rect;
   g_autofree MtkRectangle *freeme = NULL;
   g_autoptr (MtkRegion) owned_region = NULL;
+  gboolean is_scaled = !G_APPROX_VALUE (scale, 1.0f, FLT_EPSILON);
 
-  if (offset_x == 0 && offset_y == 0 &&
-      G_APPROX_VALUE (scale, 1.0f, FLT_EPSILON))
+  if (offset_x == 0 && offset_y == 0 && !is_scaled)
     return g_steal_pointer (&region);
 
   owned_region = g_steal_pointer (&region);
@@ -437,6 +454,22 @@ scale_offset_and_clamp_region (MtkRegion       *region,
 
   if (n_rects == 0)
     return mtk_region_create ();
+
+  if (!is_scaled)
+    {
+      /* NOTE: We can't modify the region in place because callers do not fully
+       * pass the ownership of the region to us. But only of the container.
+       */
+      MtkRegion *new_region = mtk_region_copy (owned_region);
+      mtk_region_translate (new_region, offset_x, offset_y);
+      mtk_region_intersect_rectangle (new_region, &(MtkRectangle) {
+        .x = offset_x,
+        .y = offset_y,
+        .width = (int) max_size->width,
+        .height = (int) max_size->height,
+      });
+      return new_region;
+    }
 
   if (n_rects < MAX_STACK_RECTS)
     rects = g_newa (MtkRectangle, n_rects);
