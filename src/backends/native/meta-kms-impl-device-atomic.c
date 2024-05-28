@@ -762,6 +762,11 @@ process_plane_assignment (MetaKmsImplDevice  *impl_device,
                           rect_width, rect_height,
                           fb_damage->rects[i].x1, fb_damage->rects[i].y1,
                           meta_kms_plane_get_id (plane));
+
+              g_warn_if_fail (fb_damage->rects[i].x1 >= 0);
+              g_warn_if_fail (fb_damage->rects[i].y1 >= 0);
+              g_warn_if_fail (rect_width <= plane_assignment->src_rect.width);
+              g_warn_if_fail (rect_height <= plane_assignment->src_rect.height);
             }
         }
 
