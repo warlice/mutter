@@ -516,6 +516,29 @@ clutter_snapshot_push_color (ClutterSnapshot *snapshot,
 }
 
 /**
+ * clutter_snapshot_push_layout:
+ * @snapshot: a #ClutterSnapshot
+ * @layout: a #PangoLayout
+ * @color: a #CoglColor
+ *
+ * Pushes a text node to @snapshot.
+ */
+void
+clutter_snapshot_push_layout (ClutterSnapshot *snapshot,
+                              PangoLayout     *layout,
+                              const CoglColor *color)
+{
+  ClutterPaintNode *text_node;
+
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_if_fail (PANGO_IS_LAYOUT (layout));
+  g_return_if_fail (color != NULL);
+
+  text_node = clutter_text_node_new (layout, color);
+  push_state (snapshot, collect_default, text_node);
+}
+
+/**
  * clutter_snapshot_push_rotate:
  * @snapshot: a #ClutterSnapshot
  * @angle: the rotation angle

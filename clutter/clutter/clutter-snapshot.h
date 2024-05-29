@@ -25,6 +25,8 @@
 #include <clutter/clutter-types.h>
 #include <clutter/clutter-paint-context.h>
 
+#include <pango/pango.h>
+
 G_BEGIN_DECLS
 
 #define CLUTTER_TYPE_SNAPSHOT (clutter_snapshot_get_type())
@@ -55,6 +57,11 @@ void clutter_snapshot_push_clip (ClutterSnapshot *snapshot);
 CLUTTER_EXPORT
 void clutter_snapshot_push_color (ClutterSnapshot *snapshot,
                                   const CoglColor *color);
+
+CLUTTER_EXPORT
+void clutter_snapshot_push_layout (ClutterSnapshot *snapshot,
+                                   PangoLayout     *layout,
+                                   const CoglColor *color);
 
 CLUTTER_EXPORT
 void clutter_snapshot_push_rotate (ClutterSnapshot *snapshot,
