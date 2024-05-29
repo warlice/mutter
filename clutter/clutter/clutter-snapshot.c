@@ -835,3 +835,32 @@ clutter_snapshot_get_paint_context (ClutterSnapshot *snapshot)
 
   return snapshot->paint_context;
 }
+
+/**
+ * clutter_snapshot_get_framebuffer:
+ * @snapshot: a #ClutterSnapshot
+ *
+ * Retrieves the current #CoglFramebuffer that @snapshot is painting at.
+ *
+ * FIXME: this function is an auxiliary tool during the transition to
+ * ClutterSnapshot, and must be removed.
+ *
+ * Returns: (transfer none): a #ClutterPaintContext
+ */
+CoglFramebuffer *
+clutter_snapshot_get_framebuffer (ClutterSnapshot *snapshot)
+{
+  const ClutterSnapshotState *current_state;
+  CoglFramebuffer *framebuffer;
+
+  g_return_val_if_fail (CLUTTER_IS_SNAPSHOT (snapshot), NULL);
+
+  current_state = get_current_state (snapshot);
+  g_assert (current_state != NULL);
+
+  framebuffer = clutter_paint_node_get_framebuffer (current_state->node);
+  if (framebuffer)
+    return framebuffer;
+
+  return clutter_paint_context_get_framebuffer (snapshot->paint_context);
+}

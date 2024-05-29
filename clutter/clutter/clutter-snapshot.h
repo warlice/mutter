@@ -140,6 +140,9 @@ void clutter_snapshot_save (ClutterSnapshot *snapshot);
 CLUTTER_EXPORT
 void clutter_snapshot_restore (ClutterSnapshot *snapshot);
 
+CLUTTER_EXPORT
+CoglFramebuffer * clutter_snapshot_get_framebuffer (ClutterSnapshot *snapshot);
+
 G_END_DECLS
 
 #endif /* CLUTTER_SNAPSHOT_H */
