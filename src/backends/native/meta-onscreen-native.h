@@ -70,3 +70,8 @@ void meta_onscreen_native_request_frame_sync (MetaOnscreenNative *onscreen_nativ
                                               gboolean            enabled);
 
 gboolean meta_onscreen_native_is_frame_sync_enabled (MetaOnscreenNative *onscreen_native);
+
+void meta_onscreen_native_request_tearing (MetaOnscreenNative *onscreen_native,
+                                           gboolean            enabled);
+
+gboolean meta_onscreen_native_is_tearing_enabled (MetaOnscreenNative *onscreen_native);

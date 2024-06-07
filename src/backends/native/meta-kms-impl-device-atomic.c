@@ -968,6 +968,8 @@ commit_flags_string (uint32_t commit_flags)
     commit_flag_strings[i++] = "PAGE_FLIP_EVENT";
   if (commit_flags & DRM_MODE_ATOMIC_TEST_ONLY)
     commit_flag_strings[i++] = "TEST_ONLY";
+  if (commit_flags & DRM_MODE_PAGE_FLIP_ASYNC)
+    commit_flag_strings[i++] = "PAGE_FLIP_ASYNC";
 
   commit_flags_string = g_strjoinv ("|", (char **) commit_flag_strings);
   strncpy (static_commit_flags_string, commit_flags_string,
@@ -1161,6 +1163,9 @@ meta_kms_impl_device_atomic_process_update (MetaKmsImplDevice *impl_device,
 
   if (flags & META_KMS_UPDATE_FLAG_TEST_ONLY)
     commit_flags |= DRM_MODE_ATOMIC_TEST_ONLY;
+
+  if (meta_kms_update_get_is_tearing (update))
+    commit_flags |= DRM_MODE_PAGE_FLIP_ASYNC;
 
   meta_topic (META_DEBUG_KMS,
               "[atomic] Committing update flags: %s",

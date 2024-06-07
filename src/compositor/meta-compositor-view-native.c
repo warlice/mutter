@@ -38,8 +38,8 @@
 #include "wayland/meta-wayland-surface-private.h"
 #endif /* HAVE_WAYLAND */
 
-static void update_frame_sync_surface (MetaCompositorViewNative *view_native,
-                                       MetaSurfaceActor         *surface_actor);
+static void update_frame_sync_or_tearing_surface (MetaCompositorViewNative *view_native,
+                                                  MetaSurfaceActor         *surface_actor);
 
 struct _MetaCompositorViewNative
 {
@@ -49,12 +49,12 @@ struct _MetaCompositorViewNative
   MetaWaylandSurface *scanout_candidate;
 #endif /* HAVE_WAYLAND */
 
-  MetaSurfaceActor *frame_sync_surface;
+  MetaSurfaceActor *frame_sync_or_tearing_surface;
 
-  gulong frame_sync_surface_repaint_scheduled_id;
-  gulong frame_sync_surface_update_scheduled_id;
-  gulong frame_sync_surface_is_frozen_changed_id;
-  gulong frame_sync_surface_destroy_id;
+  gulong frame_sync_or_tearing_surface_repaint_scheduled_id;
+  gulong frame_sync_or_tearing_surface_update_scheduled_id;
+  gulong frame_sync_or_tearing_surface_is_frozen_changed_id;
+  gulong frame_sync_or_tearing_surface_destroy_id;
 };
 
 G_DEFINE_TYPE (MetaCompositorViewNative, meta_compositor_view_native,
@@ -73,7 +73,8 @@ maybe_schedule_update_now (MetaCompositorViewNative *view_native)
   if (!META_IS_ONSCREEN_NATIVE (framebuffer))
     return;
 
-  if (meta_onscreen_native_is_frame_sync_enabled (META_ONSCREEN_NATIVE (framebuffer)))
+  if (meta_onscreen_native_is_frame_sync_enabled (META_ONSCREEN_NATIVE (framebuffer)) ||
+      meta_onscreen_native_is_tearing_enabled (META_ONSCREEN_NATIVE (framebuffer)))
     {
       ClutterFrameClock *frame_clock;
 
@@ -86,33 +87,33 @@ maybe_schedule_update_now (MetaCompositorViewNative *view_native)
 }
 
 static void
-on_frame_sync_surface_repaint_scheduled (MetaSurfaceActor         *surface_actor,
-                                         MetaCompositorViewNative *view_native)
+on_frame_sync_or_tearing_surface_repaint_scheduled (MetaSurfaceActor         *surface_actor,
+                                                    MetaCompositorViewNative *view_native)
 {
   maybe_schedule_update_now (view_native);
 }
 
 static void
-on_frame_sync_surface_update_scheduled (MetaSurfaceActor         *surface_actor,
-                                        MetaCompositorViewNative *view_native)
+on_frame_sync_or_tearing_surface_update_scheduled (MetaSurfaceActor         *surface_actor,
+                                                   MetaCompositorViewNative *view_native)
 {
   maybe_schedule_update_now (view_native);
 }
 
 static void
-on_frame_sync_surface_is_frozen_changed (MetaSurfaceActor         *surface_actor,
-                                         GParamSpec               *pspec,
-                                         MetaCompositorViewNative *view_native)
+on_frame_sync_or_tearing_surface_is_frozen_changed (MetaSurfaceActor         *surface_actor,
+                                                    GParamSpec               *pspec,
+                                                    MetaCompositorViewNative *view_native)
 {
   if (meta_surface_actor_is_frozen (surface_actor))
-    update_frame_sync_surface (view_native, NULL);
+    update_frame_sync_or_tearing_surface (view_native, NULL);
 }
 
 static void
-on_frame_sync_surface_destroyed (MetaSurfaceActor         *surface_actor,
-                                 MetaCompositorViewNative *view_native)
+on_frame_sync_or_tearing_surface_destroyed (MetaSurfaceActor         *surface_actor,
+                                            MetaCompositorViewNative *view_native)
 {
-  update_frame_sync_surface (view_native, NULL);
+  update_frame_sync_or_tearing_surface (view_native, NULL);
 }
 
 #ifdef HAVE_WAYLAND
@@ -371,8 +372,8 @@ meta_compositor_view_native_maybe_assign_scanout (MetaCompositorViewNative *view
 #endif /* HAVE_WAYLAND */
 
 static MetaSurfaceActor *
-find_frame_sync_candidate (MetaCompositorView *compositor_view,
-                           MetaCompositor     *compositor)
+find_frame_sync_or_tearing_candidate (MetaCompositorView *compositor_view,
+                                      MetaCompositor     *compositor)
 {
   MetaWindowActor *window_actor;
   MetaWindow *window;
@@ -383,7 +384,7 @@ find_frame_sync_candidate (MetaCompositorView *compositor_view,
   if (meta_compositor_is_unredirect_inhibited (compositor))
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: unredirect inhibited");
+                  "No frame sync or tearing candidate: unredirect inhibited");
       return NULL;
     }
 
@@ -392,28 +393,28 @@ find_frame_sync_candidate (MetaCompositorView *compositor_view,
   if (!window_actor)
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: no top window actor");
+                  "No frame sync or tearing candidate: no top window actor");
       return NULL;
     }
 
   if (meta_window_actor_is_frozen (window_actor))
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: window-actor is frozen");
+                  "No frame sync or tearing candidate: window-actor is frozen");
       return NULL;
     }
 
   if (meta_window_actor_effect_in_progress (window_actor))
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: window-actor effects in progress");
+                  "No frame sync or tearing candidate: window-actor effects in progress");
       return NULL;
     }
 
   if (clutter_actor_has_transitions (CLUTTER_ACTOR (window_actor)))
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: window-actor has transition");
+                  "No frame sync or tearing candidate: window-actor has transition");
       return NULL;
     }
 
@@ -421,7 +422,7 @@ find_frame_sync_candidate (MetaCompositorView *compositor_view,
   if (!window)
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: no meta-window");
+                  "No frame sync or tearing candidate: no meta-window");
       return NULL;
     }
 
@@ -432,7 +433,7 @@ find_frame_sync_candidate (MetaCompositorView *compositor_view,
   if (!meta_window_geometry_contains_rect (window, &view_layout))
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: stage-view layout not covered "
+                  "No frame sync or tearing candidate: stage-view layout not covered "
                   "by meta-window frame");
       return NULL;
     }
@@ -441,14 +442,14 @@ find_frame_sync_candidate (MetaCompositorView *compositor_view,
   if (!surface_actor)
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: window-actor has no scanout candidate");
+                  "No frame sync or tearing candidate: window-actor has no scanout candidate");
       return NULL;
     }
 
   if (meta_surface_actor_is_frozen (surface_actor))
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: surface-actor is frozen");
+                  "No frame sync or tearing candidate: surface-actor is frozen");
       return NULL;
     }
 
@@ -456,7 +457,7 @@ find_frame_sync_candidate (MetaCompositorView *compositor_view,
                                          &view_layout))
     {
       meta_topic (META_DEBUG_RENDER,
-                  "No frame sync candidate: stage-view layout not covered "
+                  "No frame sync or tearing candidate: stage-view layout not covered "
                   "by surface-actor");
       return NULL;
     }
@@ -465,45 +466,45 @@ find_frame_sync_candidate (MetaCompositorView *compositor_view,
 }
 
 static void
-update_frame_sync_surface (MetaCompositorViewNative *view_native,
-                           MetaSurfaceActor         *surface_actor)
+update_frame_sync_or_tearing_surface (MetaCompositorViewNative *view_native,
+                                      MetaSurfaceActor         *surface_actor)
 {
   MetaCompositorView *compositor_view =
     META_COMPOSITOR_VIEW (view_native);
   ClutterStageView *stage_view;
   CoglFramebuffer *framebuffer;
 
-  g_clear_signal_handler (&view_native->frame_sync_surface_repaint_scheduled_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_update_scheduled_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_is_frozen_changed_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_destroy_id,
-                          view_native->frame_sync_surface);
+  g_clear_signal_handler (&view_native->frame_sync_or_tearing_surface_repaint_scheduled_id,
+                          view_native->frame_sync_or_tearing_surface);
+  g_clear_signal_handler (&view_native->frame_sync_or_tearing_surface_update_scheduled_id,
+                          view_native->frame_sync_or_tearing_surface);
+  g_clear_signal_handler (&view_native->frame_sync_or_tearing_surface_is_frozen_changed_id,
+                          view_native->frame_sync_or_tearing_surface);
+  g_clear_signal_handler (&view_native->frame_sync_or_tearing_surface_destroy_id,
+                          view_native->frame_sync_or_tearing_surface);
 
   if (surface_actor)
     {
-      view_native->frame_sync_surface_repaint_scheduled_id =
+      view_native->frame_sync_or_tearing_surface_repaint_scheduled_id =
         g_signal_connect (surface_actor, "repaint-scheduled",
-                          G_CALLBACK (on_frame_sync_surface_repaint_scheduled),
+                          G_CALLBACK (on_frame_sync_or_tearing_surface_repaint_scheduled),
                           view_native);
-      view_native->frame_sync_surface_update_scheduled_id =
+      view_native->frame_sync_or_tearing_surface_update_scheduled_id =
         g_signal_connect (surface_actor, "update-scheduled",
-                          G_CALLBACK (on_frame_sync_surface_update_scheduled),
+                          G_CALLBACK (on_frame_sync_or_tearing_surface_update_scheduled),
                           view_native);
-      view_native->frame_sync_surface_is_frozen_changed_id =
+      view_native->frame_sync_or_tearing_surface_is_frozen_changed_id =
         g_signal_connect (surface_actor,
                           "notify::is-frozen",
-                          G_CALLBACK (on_frame_sync_surface_is_frozen_changed),
+                          G_CALLBACK (on_frame_sync_or_tearing_surface_is_frozen_changed),
                           view_native);
-      view_native->frame_sync_surface_destroy_id =
+      view_native->frame_sync_or_tearing_surface_destroy_id =
         g_signal_connect (surface_actor, "destroy",
-                          G_CALLBACK (on_frame_sync_surface_destroyed),
+                          G_CALLBACK (on_frame_sync_or_tearing_surface_destroyed),
                           view_native);
     }
 
-  view_native->frame_sync_surface = surface_actor;
+  view_native->frame_sync_or_tearing_surface = surface_actor;
 
   stage_view = meta_compositor_view_get_stage_view (compositor_view);
 
@@ -513,23 +514,27 @@ update_frame_sync_surface (MetaCompositorViewNative *view_native,
 
   meta_onscreen_native_request_frame_sync (META_ONSCREEN_NATIVE (framebuffer),
                                            surface_actor != NULL);
+
+  if (meta_wayland_surface_get_is_tearing_enabled (view_native->scanout_candidate))
+    meta_onscreen_native_request_tearing (META_ONSCREEN_NATIVE (framebuffer),
+                                           surface_actor != NULL);
 }
 
 void
-meta_compositor_view_native_maybe_update_frame_sync_surface (MetaCompositorViewNative *view_native,
-                                                             MetaCompositor           *compositor)
+meta_compositor_view_native_maybe_update_frame_sync_or_tearing_surface (MetaCompositorViewNative *view_native,
+                                                                        MetaCompositor           *compositor)
 {
   MetaCompositorView *compositor_view = META_COMPOSITOR_VIEW (view_native);
   MetaSurfaceActor *surface_actor;
 
-  surface_actor = find_frame_sync_candidate (compositor_view,
-                                             compositor);
+  surface_actor = find_frame_sync_or_tearing_candidate (compositor_view,
+                                                        compositor);
 
-  if (G_LIKELY (surface_actor == view_native->frame_sync_surface))
+  if (G_LIKELY (surface_actor == view_native->frame_sync_or_tearing_surface))
     return;
 
-  update_frame_sync_surface (view_native,
-                             surface_actor);
+  update_frame_sync_or_tearing_surface (view_native,
+                                        surface_actor);
 }
 
 MetaCompositorViewNative *
@@ -547,15 +552,15 @@ meta_compositor_view_native_dispose (GObject *object)
 {
   MetaCompositorViewNative *view_native = META_COMPOSITOR_VIEW_NATIVE (object);
 
-  g_clear_signal_handler (&view_native->frame_sync_surface_repaint_scheduled_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_update_scheduled_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_destroy_id,
-                          view_native->frame_sync_surface);
-  g_clear_signal_handler (&view_native->frame_sync_surface_is_frozen_changed_id,
-                          view_native->frame_sync_surface);
-  view_native->frame_sync_surface = NULL;
+  g_clear_signal_handler (&view_native->frame_sync_or_tearing_surface_repaint_scheduled_id,
+                          view_native->frame_sync_or_tearing_surface);
+  g_clear_signal_handler (&view_native->frame_sync_or_tearing_surface_update_scheduled_id,
+                          view_native->frame_sync_or_tearing_surface);
+  g_clear_signal_handler (&view_native->frame_sync_or_tearing_surface_destroy_id,
+                          view_native->frame_sync_or_tearing_surface);
+  g_clear_signal_handler (&view_native->frame_sync_or_tearing_surface_is_frozen_changed_id,
+                          view_native->frame_sync_or_tearing_surface);
+  view_native->frame_sync_or_tearing_surface = NULL;
 
   G_OBJECT_CLASS (meta_compositor_view_native_parent_class)->dispose (object);
 }

@@ -2086,6 +2086,12 @@ meta_wayland_surface_role_is_on_logical_monitor (MetaWaylandSurfaceRole *surface
     return FALSE;
 }
 
+gboolean
+meta_wayland_surface_get_is_tearing_enabled (MetaWaylandSurface *surface)
+{
+  return surface->allow_async_presentation;
+}
+
 static MetaWaylandSurface *
 meta_wayland_surface_role_get_toplevel (MetaWaylandSurfaceRole *surface_role)
 {

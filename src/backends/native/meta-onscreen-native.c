@@ -113,6 +113,9 @@ struct _MetaOnscreenNative
   gboolean frame_sync_requested;
   gboolean frame_sync_enabled;
 
+  gboolean tearing_requested;
+  gboolean tearing_enabled;
+
   MetaRendererView *view;
 
   gboolean is_gamma_lut_invalid;
@@ -1689,15 +1692,28 @@ meta_onscreen_native_request_frame_sync (MetaOnscreenNative *onscreen_native,
   onscreen_native->frame_sync_requested = enabled;
 }
 
+void
+meta_onscreen_native_request_tearing (MetaOnscreenNative *onscreen_native,
+                                      gboolean            enabled)
+{
+  onscreen_native->tearing_requested = enabled;
+}
+
 gboolean
 meta_onscreen_native_is_frame_sync_enabled (MetaOnscreenNative *onscreen_native)
 {
   return onscreen_native->frame_sync_enabled;
 }
 
+gboolean
+meta_onscreen_native_is_tearing_enabled (MetaOnscreenNative *onscreen_native)
+{
+  return onscreen_native->tearing_enabled;
+}
+
 static void
-maybe_update_frame_sync (MetaOnscreenNative *onscreen_native,
-                         ClutterFrame       *frame)
+maybe_update_frame_sync_or_tearing (MetaOnscreenNative *onscreen_native,
+                                    ClutterFrame       *frame)
 {
   MetaCrtcKms *crtc_kms = META_CRTC_KMS (onscreen_native->crtc);
   MetaKmsCrtc *kms_crtc = meta_crtc_kms_get_kms_crtc (crtc_kms);
@@ -1711,23 +1727,40 @@ maybe_update_frame_sync (MetaOnscreenNative *onscreen_native,
   ClutterFrameClockMode frame_clock_mode;
   MetaKmsUpdate *kms_update;
   gboolean frame_sync_enabled = FALSE;
+  gboolean tearing_enabled = FALSE;
 
   if (meta_output_is_vrr_enabled (onscreen_native->output))
-    frame_sync_enabled = onscreen_native->frame_sync_requested;
-
-  if (frame_sync_enabled != onscreen_native->frame_sync_enabled)
     {
-      frame_clock_mode = frame_sync_enabled ? CLUTTER_FRAME_CLOCK_MODE_VARIABLE :
-                                              CLUTTER_FRAME_CLOCK_MODE_FIXED;
-      clutter_frame_clock_set_mode (frame_clock, frame_clock_mode);
-      onscreen_native->frame_sync_enabled = frame_sync_enabled;
+      frame_sync_enabled = onscreen_native->frame_sync_requested;
+
+      if (frame_sync_enabled != onscreen_native->frame_sync_enabled)
+        {
+          frame_clock_mode = frame_sync_enabled ? CLUTTER_FRAME_CLOCK_MODE_VARIABLE :
+                                                  CLUTTER_FRAME_CLOCK_MODE_FIXED;
+          clutter_frame_clock_set_mode (frame_clock, frame_clock_mode);
+          onscreen_native->frame_sync_enabled = frame_sync_enabled;
+        }
+
+      if (crtc_state->vrr.supported &&
+          frame_sync_enabled != crtc_state->vrr.enabled)
+        {
+          kms_update = meta_frame_native_ensure_kms_update (frame_native, kms_device);
+          meta_kms_update_set_vrr (kms_update, kms_crtc, frame_sync_enabled);
+        }
     }
 
-  if (crtc_state->vrr.supported &&
-      frame_sync_enabled != crtc_state->vrr.enabled)
+  if (onscreen_native->tearing_requested)
     {
-      kms_update = meta_frame_native_ensure_kms_update (frame_native, kms_device);
-      meta_kms_update_set_vrr (kms_update, kms_crtc, frame_sync_enabled);
+      tearing_enabled = onscreen_native->tearing_requested;
+
+      kms_update = meta_frame_native_ensure_kms_update (frame_native,
+                                                        kms_device);
+      if (meta_kms_device_supports_tearing (kms_device) &&
+          tearing_enabled != onscreen_native->tearing_enabled)
+        {
+          onscreen_native->tearing_enabled = tearing_enabled;
+          meta_kms_update_set_tearing (kms_update, kms_crtc, tearing_enabled);
+        }
     }
 }
 
@@ -1741,7 +1774,7 @@ meta_onscreen_native_before_redraw (CoglOnscreen *onscreen,
 
   meta_kms_device_await_flush (meta_kms_crtc_get_device (kms_crtc),
                                kms_crtc);
-  maybe_update_frame_sync (onscreen_native, frame);
+  maybe_update_frame_sync_or_tearing (onscreen_native, frame);
 }
 
 void

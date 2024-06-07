@@ -404,6 +404,8 @@ CoglScanout *       meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface
 
 MetaCrtc * meta_wayland_surface_get_scanout_candidate (MetaWaylandSurface *surface);
 
+gboolean meta_wayland_surface_get_is_tearing_enabled (MetaWaylandSurface *surface);
+
 void meta_wayland_surface_set_scanout_candidate (MetaWaylandSurface *surface,
                                                  MetaCrtc           *crtc);
 

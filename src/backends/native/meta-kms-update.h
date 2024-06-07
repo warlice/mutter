@@ -153,6 +153,11 @@ void meta_kms_update_set_vrr (MetaKmsUpdate *update,
                               gboolean       enabled);
 
 META_EXPORT_TEST
+void meta_kms_update_set_tearing (MetaKmsUpdate *update,
+                                  MetaKmsCrtc   *crtc,
+                                  gboolean       enabled);
+
+META_EXPORT_TEST
 void meta_kms_update_set_crtc_gamma (MetaKmsUpdate      *update,
                                      MetaKmsCrtc        *crtc,
                                      const MetaGammaLut *gamma);
