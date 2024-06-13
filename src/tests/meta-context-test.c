@@ -86,6 +86,7 @@ meta_context_test_configure (MetaContext   *context,
     meta_context_test_get_instance_private (context_test);
   MetaContextClass *context_class =
     META_CONTEXT_CLASS (meta_context_test_parent_class);
+  g_autofree char *test_display_name = NULL;
 
   g_test_init (argc, argv, NULL);
 
@@ -97,7 +98,9 @@ meta_context_test_configure (MetaContext   *context,
   if (priv->flags & META_CONTEXT_TEST_FLAG_TEST_CLIENT)
     meta_ensure_test_client_path (*argc, *argv);
 
-  meta_wayland_override_display_name ("mutter-test-display");
+  test_display_name = g_strdup_printf ("mutter-test-display-%d", (int) getpid ());
+
+  meta_wayland_override_display_name (test_display_name);
 #ifdef HAVE_XWAYLAND
   meta_xwayland_override_display_number (512);
 #endif
