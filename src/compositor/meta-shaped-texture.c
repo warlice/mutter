@@ -909,6 +909,321 @@ do_paint_content (MetaShapedTexture   *stex,
 }
 
 static void
+snapshot_clipped_rectangle (MetaShapedTexture *stex,
+                            ClutterSnapshot   *snapshot,
+                            CoglPipeline      *pipeline,
+                            MtkRectangle      *rect,
+                            ClutterActorBox   *alloc)
+{
+  float ratio_h, ratio_v;
+  float x1, y1, x2, y2;
+  float coords[8];
+  float alloc_width;
+  float alloc_height;
+
+  ratio_h = clutter_actor_box_get_width (alloc) / (float) stex->dst_width;
+  ratio_v = clutter_actor_box_get_height (alloc) / (float) stex->dst_height;
+
+  x1 = alloc->x1 + rect->x * ratio_h;
+  y1 = alloc->y1 + rect->y * ratio_v;
+  x2 = alloc->x1 + (rect->x + rect->width) * ratio_h;
+  y2 = alloc->y1 + (rect->y + rect->height) * ratio_v;
+
+  alloc_width = alloc->x2 - alloc->x1;
+  alloc_height = alloc->y2 - alloc->y1;
+
+  coords[0] = rect->x / alloc_width * ratio_h;
+  coords[1] = rect->y / alloc_height * ratio_v;
+  coords[2] = (rect->x + rect->width) / alloc_width * ratio_h;
+  coords[3] = (rect->y + rect->height) / alloc_height * ratio_v;
+
+  coords[4] = coords[0];
+  coords[5] = coords[1];
+  coords[6] = coords[2];
+  coords[7] = coords[3];
+
+  clutter_snapshot_push_pipeline (snapshot, pipeline);
+  clutter_snapshot_add_multitexture_rectangle (snapshot,
+                                               &(ClutterActorBox) {
+                                                 .x1 = x1,
+                                                 .y1 = y1,
+                                                 .x2 = x2,
+                                                 .y2 = y2,
+                                               },
+                                               coords, 8);
+  clutter_snapshot_pop (snapshot);
+}
+
+static void
+do_snapshot_content (MetaShapedTexture *stex,
+                     ClutterSnapshot   *snapshot,
+                     ClutterActorBox   *alloc,
+                     uint8_t            opacity)
+{
+  int dst_width, dst_height;
+  MtkRectangle content_rect;
+  gboolean use_opaque_region;
+  MtkRegion *blended_tex_region;
+  CoglContext *ctx;
+  CoglPipelineFilter min_filter, mag_filter;
+  MetaTransforms transforms;
+  MetaMultiTexture *paint_tex = stex->texture;
+  CoglFramebuffer *framebuffer;
+  int sample_width, sample_height;
+  int texture_width, texture_height;
+  gboolean debug_paint_opaque_region;
+  int n_planes;
+
+  meta_shaped_texture_ensure_size_valid (stex);
+
+  dst_width = stex->dst_width;
+  dst_height = stex->dst_height;
+
+  if (dst_width == 0 || dst_height == 0) /* no contents yet */
+    return;
+
+  texture_width = meta_multi_texture_get_width (stex->texture);
+  texture_height = meta_multi_texture_get_height (stex->texture);
+
+  content_rect = (MtkRectangle) {
+    .x = 0,
+    .y = 0,
+    .width = dst_width,
+    .height = dst_height,
+  };
+
+  debug_paint_opaque_region =
+    meta_get_debug_paint_flags () & META_DEBUG_PAINT_OPAQUE_REGION;
+
+  if (stex->has_viewport_src_rect)
+    {
+      sample_width = stex->viewport_src_rect.size.width * stex->buffer_scale;
+      sample_height = stex->viewport_src_rect.size.height * stex->buffer_scale;
+    }
+  else
+    {
+      sample_width = texture_width;
+      sample_height = texture_height;
+    }
+  if (meta_monitor_transform_is_rotated (stex->transform))
+    flip_ints (&sample_width, &sample_height);
+
+  /* Use nearest-pixel interpolation if the texture is unscaled. This
+   * improves performance, especially with software rendering.
+   */
+  framebuffer = clutter_snapshot_get_framebuffer (snapshot);
+  if (meta_actor_painting_untransformed (framebuffer,
+                                         dst_width, dst_height,
+                                         sample_width, sample_height,
+                                         &transforms) || TRUE)
+    {
+      min_filter = COGL_PIPELINE_FILTER_NEAREST;
+      mag_filter = COGL_PIPELINE_FILTER_NEAREST;
+    }
+  else
+    {
+      min_filter = COGL_PIPELINE_FILTER_LINEAR;
+      mag_filter = COGL_PIPELINE_FILTER_LINEAR;
+
+      /* If we're painting a texture below half its native resolution
+       * then mipmapping is required to avoid aliasing. If it's above
+       * half then sticking with COGL_PIPELINE_FILTER_LINEAR will look
+       * and perform better.
+       */
+      if (stex->create_mipmaps &&
+          transforms.x_scale < 0.5 &&
+          transforms.y_scale < 0.5 &&
+          texture_width >= 8 &&
+          texture_height >= 8)
+        {
+          paint_tex = meta_texture_mipmap_get_paint_texture (stex->texture_mipmap);
+          min_filter = COGL_PIPELINE_FILTER_LINEAR_MIPMAP_NEAREST;
+        }
+    }
+
+  ctx = clutter_backend_get_cogl_context (clutter_get_default_backend ());
+
+  use_opaque_region = stex->opaque_region && opacity == 255;
+
+  if (use_opaque_region)
+    {
+      if (stex->clip_region)
+        blended_tex_region = mtk_region_copy (stex->clip_region);
+      else
+        blended_tex_region = mtk_region_create_rectangle (&content_rect);
+
+      mtk_region_subtract (blended_tex_region, stex->opaque_region);
+    }
+  else
+    {
+      if (stex->clip_region)
+        blended_tex_region = mtk_region_ref (stex->clip_region);
+      else
+        blended_tex_region = NULL;
+    }
+
+  /* Limit to how many separate rectangles we'll draw; beyond this just
+   * fall back and draw the whole thing */
+#define MAX_RECTS 16
+
+  if (blended_tex_region)
+    {
+      int n_rects = mtk_region_num_rectangles (blended_tex_region);
+      if (n_rects > MAX_RECTS)
+        {
+          /* Fall back to taking the fully blended path. */
+          use_opaque_region = FALSE;
+
+          g_clear_pointer (&blended_tex_region, mtk_region_unref);
+        }
+    }
+
+  n_planes = meta_multi_texture_get_n_planes (paint_tex);
+
+  /* First, paint the unblended parts, which are part of the opaque region. */
+  if (use_opaque_region)
+    {
+      g_autoptr (MtkRegion) region = NULL;
+      int n_rects;
+      int i;
+
+      if (stex->clip_region)
+        {
+          region = mtk_region_copy (stex->clip_region);
+          mtk_region_intersect (region, stex->opaque_region);
+        }
+      else
+        {
+          region = mtk_region_ref (stex->opaque_region);
+        }
+
+      if (!mtk_region_is_empty (region))
+        {
+          CoglPipeline *opaque_pipeline;
+
+          opaque_pipeline = get_unblended_pipeline (stex, ctx, paint_tex);
+
+          for (i = 0; i < n_planes; i++)
+            {
+              CoglTexture *plane = meta_multi_texture_get_plane (paint_tex, i);
+
+              cogl_pipeline_set_layer_texture (opaque_pipeline, i, plane);
+              cogl_pipeline_set_layer_filters (opaque_pipeline, i,
+                                               min_filter, mag_filter);
+            }
+
+          n_rects = mtk_region_num_rectangles (region);
+          for (i = 0; i < n_rects; i++)
+            {
+              MtkRectangle rect;
+              rect = mtk_region_get_rectangle (region, i);
+              snapshot_clipped_rectangle (stex, snapshot,
+                                          opaque_pipeline,
+                                          &rect, alloc);
+
+              if (G_UNLIKELY (debug_paint_opaque_region))
+                {
+                  CoglPipeline *opaque_overlay_pipeline;
+
+                  opaque_overlay_pipeline = get_opaque_overlay_pipeline (ctx);
+                  snapshot_clipped_rectangle (stex, snapshot,
+                                              opaque_overlay_pipeline,
+                                              &rect, alloc);
+                }
+            }
+        }
+    }
+
+  /* Now, go ahead and paint the blended parts. */
+
+  /* We have three cases:
+   *   1) blended_tex_region has rectangles - paint the rectangles.
+   *   2) blended_tex_region is empty - don't paint anything
+   *   3) blended_tex_region is NULL - paint fully-blended.
+   *
+   *   1) and 3) are the times where we have to paint stuff. This tests
+   *   for 1) and 3).
+   */
+  if (!blended_tex_region || !mtk_region_is_empty (blended_tex_region))
+    {
+      CoglPipeline *blended_pipeline;
+      CoglColor color;
+      int i;
+
+      if (stex->mask_texture == NULL)
+        {
+          blended_pipeline = get_unmasked_pipeline (stex, ctx, paint_tex);
+        }
+      else
+        {
+          blended_pipeline = get_masked_pipeline (stex, ctx, paint_tex);
+          cogl_pipeline_set_layer_texture (blended_pipeline, n_planes, stex->mask_texture);
+          cogl_pipeline_set_layer_filters (blended_pipeline, n_planes, min_filter, mag_filter);
+        }
+
+      for (i = 0; i < n_planes; i++)
+        {
+          CoglTexture *plane = meta_multi_texture_get_plane (paint_tex, i);
+
+          cogl_pipeline_set_layer_texture (blended_pipeline, i, plane);
+          cogl_pipeline_set_layer_filters (blended_pipeline, i, min_filter, mag_filter);
+        }
+
+      cogl_color_init_from_4f (&color, opacity / 255.0, opacity / 255.0,
+                               opacity / 255.0, opacity / 255.0);
+      cogl_pipeline_set_color (blended_pipeline, &color);
+
+      if (blended_tex_region)
+        {
+          /* 1) blended_tex_region is not empty. Paint the rectangles. */
+          int n_rects = mtk_region_num_rectangles (blended_tex_region);
+
+          for (i = 0; i < n_rects; i++)
+            {
+              MtkRectangle rect;
+              rect = mtk_region_get_rectangle (blended_tex_region, i);
+
+              if (!mtk_rectangle_intersect (&content_rect, &rect, &rect))
+                continue;
+
+              snapshot_clipped_rectangle (stex, snapshot,
+                                          blended_pipeline,
+                                          &rect, alloc);
+
+              if (G_UNLIKELY (debug_paint_opaque_region))
+                {
+                  CoglPipeline *blended_overlay_pipeline;
+
+                  blended_overlay_pipeline = get_blended_overlay_pipeline (ctx);
+                  snapshot_clipped_rectangle (stex, snapshot,
+                                              blended_overlay_pipeline,
+                                              &rect, alloc);
+                }
+            }
+        }
+      else
+        {
+          /* 3) blended_tex_region is NULL. Do a full paint. */
+          clutter_snapshot_push_pipeline (snapshot, blended_pipeline);
+          clutter_snapshot_add_rectangle (snapshot, alloc);
+          clutter_snapshot_pop (snapshot);
+
+          if (G_UNLIKELY (debug_paint_opaque_region))
+            {
+              CoglPipeline *blended_overlay_pipeline =
+                get_blended_overlay_pipeline (ctx);
+
+              clutter_snapshot_push_pipeline (snapshot, blended_overlay_pipeline);
+              clutter_snapshot_add_rectangle (snapshot, alloc);
+              clutter_snapshot_pop (snapshot);
+            }
+        }
+    }
+
+  g_clear_pointer (&blended_tex_region, mtk_region_unref);
+}
+
+static void
 meta_shaped_texture_paint_content (ClutterContent      *content,
                                    ClutterActor        *actor,
                                    ClutterPaintNode    *root_node,
@@ -945,6 +1260,42 @@ meta_shaped_texture_paint_content (ClutterContent      *content,
   do_paint_content (stex, root_node, paint_context, &alloc, opacity);
 }
 
+static void
+meta_shaped_texture_snapshot (ClutterContent  *content,
+                              ClutterActor    *actor,
+                              ClutterSnapshot *snapshot)
+{
+  MetaShapedTexture *stex = META_SHAPED_TEXTURE (content);
+  ClutterActorBox alloc;
+  uint8_t opacity;
+
+  if (stex->clip_region && mtk_region_is_empty (stex->clip_region))
+    return;
+
+  /* The GL EXT_texture_from_pixmap extension does allow for it to be
+   * used together with SGIS_generate_mipmap, however this is very
+   * rarely supported. Also, even when it is supported there
+   * are distinct performance implications from:
+   *
+   *  - Updating mipmaps that we don't need
+   *  - Having to reallocate pixmaps on the server into larger buffers
+   *
+   * So, we just unconditionally use our mipmap emulation code. If we
+   * wanted to use SGIS_generate_mipmap, we'd have to  query COGL to
+   * see if it was supported (no API currently), and then if and only
+   * if that was the case, set the clutter texture quality to HIGH.
+   * Setting the texture quality to high without SGIS_generate_mipmap
+   * support for TFP textures will result in fallbacks to XGetImage.
+   */
+  if (stex->texture == NULL)
+    return;
+
+  opacity = clutter_actor_get_paint_opacity (actor);
+  clutter_actor_get_content_box (actor, &alloc);
+
+  do_snapshot_content (stex, snapshot, &alloc, opacity);
+}
+
 static gboolean
 meta_shaped_texture_get_preferred_size (ClutterContent *content,
                                         float          *width,
@@ -967,6 +1318,7 @@ static void
 clutter_content_iface_init (ClutterContentInterface *iface)
 {
   iface->paint_content = meta_shaped_texture_paint_content;
+  iface->snapshot = meta_shaped_texture_snapshot;
   iface->get_preferred_size = meta_shaped_texture_get_preferred_size;
 }
 
