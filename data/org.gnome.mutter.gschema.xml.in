@@ -5,6 +5,7 @@
     <value nick="kms-modifiers" value="2"/>
     <value nick="autoclose-xwayland" value="4"/>
     <value nick="variable-refresh-rate" value="8"/>
+    <value nick="snapshot" value="16"/>
   </flags>
 
   <schema id="org.gnome.mutter" path="/org/gnome/mutter/"
@@ -135,6 +136,10 @@
                                         applicable if supported by the monitor,
                                         GPU and DRM driver. Configurable in
                                         Settings. Requires a restart.
+
+        • “snapshot”                  — render using Clutter snapshots. Warning!
+                                        This is highly unstable and incomplete.
+                                        Requires a restart.
 
       </description>
     </key>

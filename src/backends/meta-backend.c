@@ -543,6 +543,10 @@ meta_backend_real_post_init (MetaBackend *backend)
   clutter_actor_realize (priv->stage);
   META_BACKEND_GET_CLASS (backend)->select_stage_events (backend);
 
+  if (meta_settings_is_experimental_feature_enabled (priv->settings,
+                                                     META_EXPERIMENTAL_FEATURE_SNAPSHOT))
+    clutter_stage_enable_snapshots (CLUTTER_STAGE (priv->stage));
+
   meta_monitor_manager_setup (priv->monitor_manager);
 
   meta_backend_update_stage (backend);
