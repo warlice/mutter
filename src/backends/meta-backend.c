@@ -538,14 +538,23 @@ meta_backend_real_post_init (MetaBackend *backend)
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
   ClutterSeat *seat = priv->default_seat;
   MetaInputSettings *input_settings;
+  const char *enable_snapshot;
 
   priv->stage = meta_stage_new (backend);
   clutter_actor_realize (priv->stage);
   META_BACKEND_GET_CLASS (backend)->select_stage_events (backend);
 
-  if (meta_settings_is_experimental_feature_enabled (priv->settings,
-                                                     META_EXPERIMENTAL_FEATURE_SNAPSHOT))
-    clutter_stage_enable_snapshots (CLUTTER_STAGE (priv->stage));
+  enable_snapshot = g_getenv ("META_ENABLE_SNAPSHOT");
+  if (enable_snapshot)
+    {
+      if (g_strcmp0 (enable_snapshot, "1") == 0)
+        clutter_stage_enable_snapshots (CLUTTER_STAGE (priv->stage));
+    }
+  else if (meta_settings_is_experimental_feature_enabled (priv->settings,
+                                                          META_EXPERIMENTAL_FEATURE_SNAPSHOT))
+    {
+      clutter_stage_enable_snapshots (CLUTTER_STAGE (priv->stage));
+    }
 
   meta_monitor_manager_setup (priv->monitor_manager);
 
