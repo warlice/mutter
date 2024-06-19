@@ -877,19 +877,31 @@ meta_create_test_monitor (MetaContext *context,
 }
 
 #ifdef HAVE_NATIVE_BACKEND
-static gboolean
-callback_idle (gpointer user_data)
+static void
+task_callback (GObject      *source_object,
+               GAsyncResult *res,
+               gpointer      user_data)
 {
-  GMainLoop *loop = user_data;
+  GTask *task = G_TASK (res);
+  GMainLoop *loop = g_task_get_task_data (task);
+
+  g_assert_true (g_task_get_source_tag (task) == meta_flush_input);
+  g_assert_true (g_task_propagate_boolean (task, NULL));
 
   g_main_loop_quit (loop);
-  return G_SOURCE_REMOVE;
+}
+
+static void
+callback_idle (gpointer user_data)
+{
+  GTask *task = user_data;
+  g_task_return_boolean (task, TRUE);
 }
 
 static gboolean
-queue_callback (GTask *task)
+queue_callback (gpointer user_data)
 {
-  g_idle_add (callback_idle, g_task_get_task_data (task));
+  g_idle_add_once (callback_idle, user_data);
   return G_SOURCE_REMOVE;
 }
 #endif
@@ -909,12 +921,13 @@ meta_flush_input (MetaContext *context)
   seat = meta_backend_get_default_seat (backend);
   seat_native = META_SEAT_NATIVE (seat);
 
-  task = g_task_new (backend, NULL, NULL, NULL);
+  task = g_task_new (backend, NULL, task_callback, NULL);
+  g_task_set_source_tag (task, meta_flush_input);
   loop = g_main_loop_new (NULL, FALSE);
   g_task_set_task_data (task, loop, NULL);
 
   meta_seat_impl_run_input_task (seat_native->impl, task,
-                                 (GSourceFunc) queue_callback);
+                                 queue_callback);
 
   g_main_loop_run (loop);
 #endif
