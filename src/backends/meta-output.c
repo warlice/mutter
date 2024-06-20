@@ -611,6 +611,16 @@ meta_output_is_vrr_enabled (MetaOutput *output)
          META_CRTC_REFRESH_RATE_MODE_VARIABLE;
 }
 
+gboolean
+meta_output_is_hdr_enabled (MetaOutput *output)
+{
+  MetaOutputPrivate *priv = meta_output_get_instance_private (output);
+
+  meta_verbose ("\nFile: %s, Function: %s, is_hdr_enabled=%d\n",
+		 __FILE__, __FUNCTION__, priv->hdr_metadata.active);
+  return priv->hdr_metadata.active == TRUE;
+}
+
 static void
 meta_output_init (MetaOutput *output)
 {

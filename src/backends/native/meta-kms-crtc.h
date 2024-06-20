@@ -40,6 +40,18 @@ typedef struct _MetaKmsCrtcState
   } vrr;
 
   struct {
+    MetaDegammaLut *value;
+    int size;
+    gboolean supported;
+  } degamma;
+
+  struct {
+    MetaCtm *value;
+    int size;
+    gboolean supported;
+  } ctm;
+
+  struct {
     MetaGammaLut *value;
     int size;
     gboolean supported;
@@ -65,3 +77,14 @@ int meta_kms_crtc_get_idx (MetaKmsCrtc *crtc);
 
 META_EXPORT_TEST
 gboolean meta_kms_crtc_is_active (MetaKmsCrtc *crtc);
+
+META_EXPORT_TEST
+MetaDegammaLut * meta_kms_crtc_get_degamma (MetaKmsCrtc *crtc);
+
+META_EXPORT_TEST
+MetaCtm * meta_kms_crtc_get_ctm (MetaKmsCrtc *crtc,
+                                 uint16_t src_cs,
+                                 uint16_t dst_cs);
+
+META_EXPORT_TEST
+MetaGammaLut * meta_kms_crtc_get_gamma (MetaKmsCrtc *crtc);

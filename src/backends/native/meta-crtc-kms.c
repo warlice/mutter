@@ -70,6 +70,29 @@ monitor_manager_from_crtc (MetaCrtc *crtc)
   return META_MONITOR_MANAGER_NATIVE (monitor_manager);
 }
 
+const MetaDegammaLut *
+meta_crtc_kms_peek_degamma_lut (MetaCrtcKms *crtc_kms)
+{
+  MetaDegammaLut *degamma;
+
+  degamma = meta_kms_crtc_get_degamma (meta_crtc_kms_get_kms_crtc (crtc_kms));
+
+  return degamma;
+}
+
+const MetaCtm *
+meta_crtc_kms_peek_ctm (MetaCrtcKms *crtc_kms,
+                        MetaOutputColorspace src_cs,
+                        MetaOutputColorspace dst_cs)
+{
+  MetaCtm *ctm;
+
+  ctm = meta_kms_crtc_get_ctm (meta_crtc_kms_get_kms_crtc (crtc_kms),
+                               src_cs, dst_cs);
+
+  return ctm;
+}
+
 static size_t
 meta_crtc_kms_get_gamma_lut_size (MetaCrtc *crtc)
 {
@@ -85,11 +108,20 @@ meta_crtc_kms_get_gamma_lut_size (MetaCrtc *crtc)
 const MetaGammaLut *
 meta_crtc_kms_peek_gamma_lut (MetaCrtcKms *crtc_kms)
 {
-  MetaMonitorManagerNative *monitor_manager_native =
-    monitor_manager_from_crtc (META_CRTC (crtc_kms));
+  MetaGammaLut *gamma;
 
-  return meta_monitor_manager_native_get_cached_crtc_gamma (monitor_manager_native,
-                                                            crtc_kms);
+  gamma = meta_kms_crtc_get_gamma (meta_crtc_kms_get_kms_crtc (crtc_kms));
+
+  if (!gamma)
+    {
+      MetaMonitorManagerNative *monitor_manager_native =
+        monitor_manager_from_crtc (META_CRTC (crtc_kms));
+
+      return meta_monitor_manager_native_get_cached_crtc_gamma (monitor_manager_native,
+                                                                crtc_kms);
+    }
+
+  return gamma;
 }
 
 static MetaGammaLut *
