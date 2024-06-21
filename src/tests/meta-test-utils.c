@@ -57,6 +57,8 @@ struct _MetaTestClient
 
   MetaAsyncWaiter *waiter;
   MetaX11AlarmFilter *alarm_filter;
+
+  gboolean blocking_calls;
 };
 
 struct _MetaAsyncWaiter
@@ -259,14 +261,24 @@ meta_test_client_do_line (MetaTestClient  *client,
                                         client->cancellable, error))
     return FALSE;
 
-  g_data_input_stream_read_line_async (client->out,
-                                       G_PRIORITY_DEFAULT,
-                                       client->cancellable,
-                                       test_client_line_read,
-                                       client);
+  if (client->blocking_calls)
+    {
+      client->line = g_data_input_stream_read_line (client->out,
+                                                    G_PRIORITY_DEFAULT,
+                                                    client->cancellable,
+                                                    NULL);
+    }
+  else
+    {
+      g_data_input_stream_read_line_async (client->out,
+                                           G_PRIORITY_DEFAULT,
+                                           client->cancellable,
+                                           test_client_line_read,
+                                           client);
+      client->error = &local_error;
+      g_main_loop_run (client->loop);
+    }
 
-  client->error = &local_error;
-  g_main_loop_run (client->loop);
   line = client->line;
   client->line = NULL;
   client->error = NULL;
@@ -405,6 +417,13 @@ meta_test_client_wait (MetaTestClient  *client,
       meta_async_waiter_wait (client->waiter, wait_value);
       return TRUE;
     }
+}
+
+void
+meta_test_client_set_blocking_client_calls (MetaTestClient *client,
+                                            gboolean        blocking_calls)
+{
+  client->blocking_calls = blocking_calls;
 }
 
 MetaWindow *

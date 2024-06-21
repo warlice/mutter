@@ -16,11 +16,11 @@ fullscreen w/1
 wait_reconfigure w/1
 assert_size w/1 MONITOR_WIDTH MONITOR_HEIGHT
 
-stop_after_next w
+set_client_frozen_while_mutter_active w true
 unfullscreen w/1
 wait
 set_strut 0 0 1 1 top
-continue w
+set_client_frozen_while_mutter_active w false
 wait_reconfigure w/1
 assert_size w/1 500 400
 
@@ -40,10 +40,10 @@ fullscreen x/1
 wait_reconfigure x/1
 assert_size x/1 MONITOR_WIDTH MONITOR_HEIGHT
 
-stop_after_next x
+set_client_frozen_while_mutter_active x true
 unfullscreen x/1
 wait
 set_strut 0 0 1 1 top
-continue x
+set_client_frozen_while_mutter_active x false
 wait_reconfigure x/1
 assert_size x/1 500 400

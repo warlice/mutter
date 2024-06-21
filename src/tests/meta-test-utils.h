@@ -85,6 +85,10 @@ gboolean meta_test_client_do (MetaTestClient  *client,
                               ...) G_GNUC_NULL_TERMINATED;
 
 META_EXPORT
+void meta_test_client_set_blocking_client_calls (MetaTestClient *client,
+                                                 gboolean        blocking_calls);
+
+META_EXPORT
 MetaWindow * meta_find_window_from_title (MetaContext *context,
                                           const char  *title);
 

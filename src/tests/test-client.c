@@ -36,7 +36,7 @@ GHashTable *windows;
 GQuark event_source_quark;
 GQuark event_handlers_quark;
 GQuark can_take_focus_quark;
-gboolean sync_after_lines = -1;
+gboolean block_while_waiting = FALSE;
 
 typedef void (*XEventHandler) (GtkWidget *window, XEvent *event);
 
@@ -843,25 +843,18 @@ process_line (const char *line)
           goto fail;
         }
     }
-  else if (strcmp (argv[0], "stop_after_next") == 0)
+  else if (strcmp (argv[0], "set_client_frozen_while_mutter_active") == 0)
     {
-      if (sync_after_lines != -1)
+      if (argc != 2)
         {
-          g_print ("Can't invoke 'stop_after_next' while already stopped");
+          g_print ("usage: set_client_frozen_while_mutter_active [true/false]\n");
           goto fail;
         }
 
-      sync_after_lines = 1;
-    }
-  else if (strcmp (argv[0], "continue") == 0)
-    {
-      if (sync_after_lines != 0)
-        {
-          g_print ("Can only invoke 'continue' while stopped");
-          goto fail;
-        }
-
-      sync_after_lines = -1;
+      if (strcmp (argv[1], "true") == 0)
+        block_while_waiting = TRUE;
+      else if (strcmp (argv[1], "false") == 0)
+        block_while_waiting = FALSE;
     }
   else if (strcmp (argv[0], "clipboard-set") == 0)
     {
@@ -943,7 +936,7 @@ on_line_received (GObject      *source,
 static void
 read_next_line (GDataInputStream *in)
 {
-  while (sync_after_lines == 0)
+  while (block_while_waiting)
     {
       GdkDisplay *display = gdk_display_get_default ();
       g_autoptr (GError) error = NULL;
@@ -969,9 +962,6 @@ read_next_line (GDataInputStream *in)
           gdk_display_flush (display);
         }
     }
-
-  if (sync_after_lines >= 0)
-    sync_after_lines--;
 
   g_data_input_stream_read_line_async (in, G_PRIORITY_DEFAULT, NULL,
                                        on_line_received, NULL);
