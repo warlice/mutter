@@ -854,6 +854,7 @@ test_case_do (TestCase    *test,
               GError     **error)
 {
   g_autofree char *command = NULL;
+  MetaWaylandCompositor *compositor = meta_context_get_wayland_compositor (test->context);
 
   command = g_strjoinv (" ", argv);
   g_debug ("%s:%d: '%s'", filename, line_no, command);
@@ -1944,6 +1945,8 @@ test_case_do (TestCase    *test,
     {
       BAD_COMMAND("Unknown command %s", argv[0]);
     }
+
+  meta_wayland_compositor_flush_clients (compositor);
 
   return TRUE;
 }
