@@ -30,8 +30,11 @@
 #include "backends/native/meta-backend-native.h"
 #include "backends/native/meta-input-thread.h"
 #include "backends/native/meta-seat-native.h"
+#include "compositor/meta-window-actor-private.h"
 #include "core/display-private.h"
 #include "core/window-private.h"
+#include "meta/meta-window-actor.h"
+#include "meta/compositor-mutter.h"
 #include "meta-test/meta-context-test.h"
 #include "wayland/meta-wayland.h"
 #include "wayland/meta-xwayland.h"
@@ -446,6 +449,47 @@ meta_test_client_find_window (MetaTestClient  *client,
     }
 
   return window;
+}
+
+MetaWindowActor *
+meta_test_client_find_window_actor (MetaTestClient  *client,
+                                    const char      *window_id,
+                                    GError         **error)
+{
+  MetaDisplay *display = meta_context_get_display (client->context);
+  g_autofree char *expected_title = NULL;
+  MetaWindow *window;
+  MetaWindowActor *window_actor = NULL;
+  ClutterActor *window_group, *child;
+
+  expected_title = g_strdup_printf ("test/%s/%s", client->id, window_id);
+  window = meta_find_window_from_title (meta_display_get_context (display),
+                                        expected_title);
+  window_actor = window ? meta_window_actor_from_window (window) : NULL;
+  if (window_actor)
+    return window_actor;
+
+  window_group = meta_get_window_group_for_display (display);
+
+  for (child = clutter_actor_get_first_child (window_group);
+       child != NULL;
+       child = clutter_actor_get_next_sibling (child))
+    {
+      if (META_IS_WINDOW_ACTOR (child))
+        {
+          window = meta_window_actor_get_meta_window (META_WINDOW_ACTOR (child));
+
+          if (g_strcmp0 (window->title, expected_title) == 0)
+            return META_WINDOW_ACTOR (child);
+        }
+    }
+
+  g_set_error (error,
+               META_TEST_CLIENT_ERROR,
+               META_TEST_CLIENT_ERROR_RUNTIME_ERROR,
+               "window actor for %s/%s isn't known to Mutter", client->id, window_id);
+
+  return NULL;
 }
 
 typedef struct _WaitForShownData
