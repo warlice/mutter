@@ -675,8 +675,6 @@ test_case_add_strut (TestCase    *test,
       meta_workspace_set_builtin_struts (workspace, struts);
     }
 
-  wait_for_signal_emission (display, "workareas-changed");
-
   return TRUE;
 }
 
