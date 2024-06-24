@@ -773,7 +773,7 @@ test_case_parse_signal (TestCase *test,
   *out_signal_instance = NULL;
   *out_signal_name = NULL;
 
-  if (argc < 3 || !g_str_equal (argv[1], "=>"))
+  if (argc >= 3 && !g_str_equal (argv[1], "=>"))
     BAD_COMMAND ("usage: [window-id]::signal => command");
 
   signal_start = strstr (argv[0], "::");
@@ -1899,6 +1899,20 @@ test_case_do (TestCase    *test,
           g_object_remove_weak_pointer (G_OBJECT (window_actor),
                                         (gpointer *) &window_actor);
         }
+    }
+  else if (strcmp (argv[0], "wait_for_signal") == 0)
+    {
+      g_autoptr (GObject) signal_instance = NULL;
+      g_autofree char *signal_name = NULL;
+
+      if (argc != 2)
+        BAD_COMMAND("usage: %s [window-id]::signal", argv[0]);
+
+      if (!test_case_parse_signal (test, argc - 1, argv + 1,
+                                   &signal_name, &signal_instance, error))
+        return FALSE;
+
+      wait_for_signal_emission (signal_instance, signal_name);
     }
   else if (argc > 2 && g_str_equal (argv[1], "=>"))
     {
