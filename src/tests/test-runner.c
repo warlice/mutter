@@ -813,6 +813,12 @@ test_case_parse_signal (TestCase *test,
 
           instance_obj = G_OBJECT (monitor_manager);
         }
+      else if (g_str_equal (signal_name, "workareas-changed"))
+        {
+          MetaDisplay *display = meta_context_get_display (test->context);
+
+          instance_obj = G_OBJECT (display);
+        }
       else
         {
           BAD_COMMAND ("Unknown global signal name '%s'", signal_name);
