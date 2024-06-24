@@ -42,10 +42,7 @@
  * signal, which is emitted each time a timeline is advanced during the maste
  * clock iteration. The [signal@Timeline::new-frame] signal provides the time
  * elapsed since the beginning of the timeline, in milliseconds. A normalized
- * progress value can be obtained by calling [method@Timeline.get_progress].
- * By using [method@Timeline.get_delta] it is possible to obtain the wallclock
- * time elapsed since the last emission of the [signal@Timeline::new-frame]
- * signal.
+ * progress value can be obtained by calling [method@Clutter.Timeline.get_progress].
  *
  * Initial state can be set up by using the [signal@Timeline::started] signal,
  * while final state can be set up by using the [signal@Timeline::stopped]
@@ -53,10 +50,6 @@
  * [signal@Timeline::new-frame] signal, as well as the emission of the
  * [signal@Timeline::completed] signal every time the #ClutterTimeline reaches
  * its [property@Timeline:duration].
- *
- * It is possible to connect to specific points in the timeline progress by
- * adding markers using [method@Timeline.add_marker_at_time] and connecting
- * to the [signal@Timeline::marker-reached] signal.
  *
  * Timelines can be made to loop once they reach the end of their duration, by
  * using clutter_timeline_set_repeat_count(); a looping timeline will still
@@ -107,16 +100,11 @@ typedef struct _ClutterTimelinePrivate
   guint delay_id;
 
   /* The total length in milliseconds of this timeline */
-  guint duration;
-  guint delay;
+  uint32_t duration;
+  uint32_t delay;
 
   /* The current amount of elapsed time */
   gint64 elapsed_time;
-
-  /* The elapsed time since the last frame was fired */
-  gint64 msecs_delta;
-
-  GHashTable *markers_by_name;
 
   /* Time we last advanced the elapsed time and showed a frame */
   gint64 last_frame_time;
@@ -149,18 +137,6 @@ typedef struct _ClutterTimelinePrivate
   guint auto_reverse       : 1;
 } ClutterTimelinePrivate;
 
-typedef struct {
-  gchar *name;
-  GQuark quark;
-
-  union {
-    guint msecs;
-    gdouble progress;
-  } data;
-
-  guint is_relative : 1;
-} TimelineMarker;
-
 enum
 {
   PROP_0,
@@ -185,7 +161,6 @@ enum
   STARTED,
   PAUSED,
   COMPLETED,
-  MARKER_REACHED,
   STOPPED,
 
   LAST_SIGNAL
@@ -195,94 +170,7 @@ static guint timeline_signals[LAST_SIGNAL] = { 0, };
 
 static void update_frame_clock (ClutterTimeline *timeline);
 
-
-G_DEFINE_TYPE_WITH_CODE (ClutterTimeline, clutter_timeline, G_TYPE_OBJECT,
-                         G_ADD_PRIVATE (ClutterTimeline))
-
-static TimelineMarker *
-timeline_marker_new_time (const gchar *name,
-                          guint        msecs)
-{
-  TimelineMarker *marker = g_new0 (TimelineMarker, 1);
-
-  marker->name = g_strdup (name);
-  marker->quark = g_quark_from_string (marker->name);
-  marker->is_relative = FALSE;
-  marker->data.msecs = msecs;
-
-  return marker;
-}
-
-static TimelineMarker *
-timeline_marker_new_progress (const gchar *name,
-                              gdouble      progress)
-{
-  TimelineMarker *marker = g_new0 (TimelineMarker, 1);
-
-  marker->name = g_strdup (name);
-  marker->quark = g_quark_from_string (marker->name);
-  marker->is_relative = TRUE;
-  marker->data.progress = CLAMP (progress, 0.0, 1.0);
-
-  return marker;
-}
-
-static void
-timeline_marker_free (gpointer data)
-{
-  if (G_LIKELY (data))
-    {
-      TimelineMarker *marker = data;
-
-      g_free (marker->name);
-      g_free (marker);
-    }
-}
-
-/*< private >
- * clutter_timeline_add_marker_internal:
- * @timeline: a #ClutterTimeline
- * @marker: a TimelineMarker
- *
- * Adds @marker into the hash table of markers for @timeline.
- *
- * The TimelineMarker will either be added or, in case of collisions
- * with another existing marker, freed. In any case, this function
- * assumes the ownership of the passed @marker.
- */
-static inline void
-clutter_timeline_add_marker_internal (ClutterTimeline *timeline,
-                                      TimelineMarker  *marker)
-{
-  ClutterTimelinePrivate *priv =
-    clutter_timeline_get_instance_private (timeline);
-  TimelineMarker *old_marker;
-
-  /* create the hash table that will hold the markers */
-  if (G_UNLIKELY (priv->markers_by_name == NULL))
-    priv->markers_by_name = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                   NULL,
-                                                   timeline_marker_free);
-
-  old_marker = g_hash_table_lookup (priv->markers_by_name, marker->name);
-  if (old_marker != NULL)
-    {
-      guint msecs;
-
-      if (old_marker->is_relative)
-        msecs = old_marker->data.progress * priv->duration;
-      else
-        msecs = old_marker->data.msecs;
-
-      g_warning ("A marker named '%s' already exists at time %d",
-                 old_marker->name,
-                 msecs);
-      timeline_marker_free (marker);
-      return;
-    }
-
-  g_hash_table_insert (priv->markers_by_name, marker->name, marker);
-}
+G_DEFINE_TYPE_WITH_PRIVATE (ClutterTimeline, clutter_timeline, G_TYPE_OBJECT)
 
 static void
 on_actor_destroyed (ClutterActor    *actor,
@@ -599,9 +487,6 @@ clutter_timeline_finalize (GObject *object)
   ClutterTimelinePrivate *priv =
     clutter_timeline_get_instance_private (self);
 
-  if (priv->markers_by_name)
-    g_hash_table_destroy (priv->markers_by_name);
-
   if (priv->is_playing)
     maybe_remove_timeline (self);
 
@@ -829,46 +714,6 @@ clutter_timeline_class_init (ClutterTimelineClass *klass)
 		  NULL, NULL, NULL,
 		  G_TYPE_NONE, 0);
   /**
-   * ClutterTimeline::marker-reached:
-   * @timeline: the #ClutterTimeline which received the signal
-   * @marker_name: the name of the marker reached
-   * @msecs: the elapsed time
-   *
-   * The signal is emitted each time a timeline
-   * reaches a marker set with [method@Timeline.add_marker_at_time].
-   * 
-   * This signal is detailed with the name of the marker as well,
-   * so it is possible to connect a callback to the [signal@Timeline::marker-reached] 
-   * signal for a specific marker with:
-   *
-   * ```c
-   *   clutter_timeline_add_marker_at_time (timeline, "foo", 500);
-   *   clutter_timeline_add_marker_at_time (timeline, "bar", 750);
-   *
-   *   g_signal_connect (timeline, "marker-reached",
-   *                     G_CALLBACK (each_marker_reached), NULL);
-   *   g_signal_connect (timeline, "marker-reached::foo",
-   *                     G_CALLBACK (foo_marker_reached), NULL);
-   *   g_signal_connect (timeline, "marker-reached::bar",
-   *                     G_CALLBACK (bar_marker_reached), NULL);
-   * ```
-   *
-   * In the example, the first callback will be invoked for both
-   * the "foo" and "bar" marker, while the second and third callbacks
-   * will be invoked for the "foo" or "bar" markers, respectively.
-   */
-  timeline_signals[MARKER_REACHED] =
-    g_signal_new (I_("marker-reached"),
-                  G_TYPE_FROM_CLASS (object_class),
-                  G_SIGNAL_RUN_LAST | G_SIGNAL_NO_RECURSE |
-                  G_SIGNAL_DETAILED | G_SIGNAL_NO_HOOKS,
-                  G_STRUCT_OFFSET (ClutterTimelineClass, marker_reached),
-                  NULL, NULL,
-                  _clutter_marshal_VOID__STRING_INT,
-                  G_TYPE_NONE, 2,
-                  G_TYPE_STRING,
-                  G_TYPE_INT);
-  /**
    * ClutterTimeline::stopped:
    * @timeline: the #ClutterTimeline that emitted the signal
    * @is_finished: %TRUE if the signal was emitted at the end of the
@@ -909,101 +754,6 @@ clutter_timeline_init (ClutterTimeline *self)
   /* default cubic-bezier() paramereters are (0, 0, 1, 1) */
   graphene_point_init (&priv->cb_1, 0, 0);
   graphene_point_init (&priv->cb_2, 1, 1);
-}
-
-struct CheckIfMarkerHitClosure
-{
-  ClutterTimeline *timeline;
-  ClutterTimelineDirection direction;
-  gint new_time;
-  gint duration;
-  gint delta;
-};
-
-static gboolean
-have_passed_time (const struct CheckIfMarkerHitClosure *data,
-                  gint msecs)
-{
-  /* Ignore markers that are outside the duration of the timeline */
-  if (msecs < 0 || msecs > data->duration)
-    return FALSE;
-
-  if (data->direction == CLUTTER_TIMELINE_FORWARD)
-    {
-      /* We need to special case when a marker is added at the
-         beginning of the timeline */
-      if (msecs == 0 &&
-          data->delta > 0 &&
-          data->new_time - data->delta <= 0)
-        return TRUE;
-
-      /* Otherwise it's just a simple test if the time is in range of
-         the previous time and the new time */
-      return (msecs > data->new_time - data->delta &&
-              msecs <= data->new_time);
-    }
-  else
-    {
-      /* We need to special case when a marker is added at the
-         end of the timeline */
-      if (msecs == data->duration &&
-          data->delta > 0 &&
-          data->new_time + data->delta >= data->duration)
-        return TRUE;
-
-      /* Otherwise it's just a simple test if the time is in range of
-         the previous time and the new time */
-      return (msecs >= data->new_time &&
-              msecs < data->new_time + data->delta);
-    }
-}
-
-static void
-check_if_marker_hit (const gchar *name,
-                     TimelineMarker *marker,
-                     struct CheckIfMarkerHitClosure *data)
-{
-  gint msecs;
-
-  if (marker->is_relative)
-    msecs = (gdouble) data->duration * marker->data.progress;
-  else
-    msecs = marker->data.msecs;
-
-  if (have_passed_time (data, msecs))
-    {
-      CLUTTER_NOTE (SCHEDULER, "Marker '%s' reached", name);
-
-      g_signal_emit (data->timeline, timeline_signals[MARKER_REACHED],
-                     marker->quark,
-                     name,
-                     msecs);
-    }
-}
-
-static void
-check_markers (ClutterTimeline *timeline,
-               gint             delta)
-{
-  ClutterTimelinePrivate *priv =
-    clutter_timeline_get_instance_private (timeline);
-  struct CheckIfMarkerHitClosure data;
-
-  /* shortcircuit here if we don't have any marker installed */
-  if (priv->markers_by_name == NULL)
-    return;
-
-  /* store the details of the timeline so that changing them in a
-     marker signal handler won't affect which markers are hit */
-  data.timeline = timeline;
-  data.direction = priv->direction;
-  data.new_time = priv->elapsed_time;
-  data.duration = priv->duration;
-  data.delta = delta;
-
-  g_hash_table_foreach (priv->markers_by_name,
-                        (GHFunc) check_if_marker_hit,
-                        &data);
 }
 
 static void
@@ -1061,7 +811,8 @@ set_is_playing (ClutterTimeline *timeline,
 }
 
 static gboolean
-clutter_timeline_do_frame (ClutterTimeline *timeline)
+clutter_timeline_do_frame (ClutterTimeline *timeline,
+                           unsigned int     delta_ms)
 {
   ClutterTimelinePrivate *priv;
 
@@ -1070,24 +821,23 @@ clutter_timeline_do_frame (ClutterTimeline *timeline)
   g_object_ref (timeline);
 
   CLUTTER_NOTE (SCHEDULER, "Timeline [%p] activated (elapsed time: %ld, "
-                "duration: %ld, msecs_delta: %ld)\n",
+                "duration: %ld, delta_ms: %ld)\n",
                 timeline,
                 (long) priv->elapsed_time,
                 (long) priv->duration,
-                (long) priv->msecs_delta);
+                (long) delta_ms);
 
   /* Advance time */
   if (priv->direction == CLUTTER_TIMELINE_FORWARD)
-    priv->elapsed_time += priv->msecs_delta;
+    priv->elapsed_time += delta_ms;
   else
-    priv->elapsed_time -= priv->msecs_delta;
+    priv->elapsed_time -= delta_ms;
 
   /* If we have not reached the end of the timeline: */
   if (!is_complete (timeline))
     {
       /* Emit the signal */
       emit_frame_signal (timeline);
-      check_markers (timeline, priv->msecs_delta);
 
       g_object_unref (timeline);
 
@@ -1097,7 +847,7 @@ clutter_timeline_do_frame (ClutterTimeline *timeline)
     {
       /* Handle loop or stop */
       ClutterTimelineDirection saved_direction = priv->direction;
-      gint elapsed_time_delta = priv->msecs_delta;
+      gint elapsed_time_delta = delta_ms;
       guint overflow_msecs = priv->elapsed_time;
       gint end_msecs;
 
@@ -1120,7 +870,6 @@ clutter_timeline_do_frame (ClutterTimeline *timeline)
 
       /* Emit the signal */
       emit_frame_signal (timeline);
-      check_markers (timeline, elapsed_time_delta);
 
       /* Did the signal handler modify the elapsed time? */
       if (priv->elapsed_time != end_msecs)
@@ -1136,7 +885,7 @@ clutter_timeline_do_frame (ClutterTimeline *timeline)
                     "Timeline [%p] completed (cur: %ld, tot: %ld)",
                     timeline,
                     (long) priv->elapsed_time,
-                    (long) priv->msecs_delta);
+                    (long) delta_ms);
 
       if (priv->is_playing &&
           (priv->repeat_count == 0 ||
@@ -1197,14 +946,6 @@ clutter_timeline_do_frame (ClutterTimeline *timeline)
           if (priv->direction != saved_direction)
             priv->elapsed_time = priv->duration - priv->elapsed_time;
 
-          /* If we have overflowed then we are changing the elapsed
-             time without emitting the new frame signal so we need to
-             check for markers again */
-          check_markers (timeline,
-                         priv->direction == CLUTTER_TIMELINE_FORWARD
-                           ? priv->elapsed_time
-                           : priv->duration - priv->elapsed_time);
-
           g_object_unref (timeline);
           return TRUE;
         }
@@ -1226,7 +967,6 @@ delay_timeout_func (gpointer data)
     clutter_timeline_get_instance_private (timeline);
 
   priv->delay_id = 0;
-  priv->msecs_delta = 0;
   set_is_playing (timeline, TRUE);
 
   g_signal_emit (timeline, timeline_signals[STARTED], 0);
@@ -1264,7 +1004,6 @@ clutter_timeline_start (ClutterTimeline *timeline)
                                                   timeline);
   else
     {
-      priv->msecs_delta = 0;
       set_is_playing (timeline, TRUE);
 
       g_signal_emit (timeline, timeline_signals[STARTED], 0);
@@ -1291,7 +1030,6 @@ clutter_timeline_pause (ClutterTimeline *timeline)
   if (!priv->is_playing)
     return;
 
-  priv->msecs_delta = 0;
   set_is_playing (timeline, FALSE);
 
   g_signal_emit (timeline, timeline_signals[PAUSED], 0);
@@ -1345,61 +1083,25 @@ clutter_timeline_rewind (ClutterTimeline *timeline)
   priv = clutter_timeline_get_instance_private (timeline);
 
   if (priv->direction == CLUTTER_TIMELINE_FORWARD)
-    clutter_timeline_advance (timeline, 0);
+    clutter_timeline_seek (timeline, 0);
   else if (priv->direction == CLUTTER_TIMELINE_BACKWARD)
-    clutter_timeline_advance (timeline, priv->duration);
+    clutter_timeline_seek (timeline, priv->duration);
 }
 
 /**
- * clutter_timeline_skip:
+ * clutter_timeline_seek:
  * @timeline: A #ClutterTimeline
- * @msecs: Amount of time to skip
+ * @msecs: Time to seek to
  *
- * Advance timeline by the requested time in milliseconds
- */
-void
-clutter_timeline_skip (ClutterTimeline *timeline,
-                       guint            msecs)
-{
-  ClutterTimelinePrivate *priv;
-
-  g_return_if_fail (CLUTTER_IS_TIMELINE (timeline));
-
-  priv = clutter_timeline_get_instance_private (timeline);
-
-  if (priv->direction == CLUTTER_TIMELINE_FORWARD)
-    {
-      priv->elapsed_time += msecs;
-
-      if (priv->elapsed_time > priv->duration)
-        priv->elapsed_time = 1;
-    }
-  else if (priv->direction == CLUTTER_TIMELINE_BACKWARD)
-    {
-      priv->elapsed_time -= msecs;
-
-      if (priv->elapsed_time < 1)
-        priv->elapsed_time = priv->duration - 1;
-    }
-
-  priv->msecs_delta = 0;
-}
-
-/**
- * clutter_timeline_advance:
- * @timeline: A #ClutterTimeline
- * @msecs: Time to advance to
- *
- * Advance timeline to the requested point. The point is given as a
+ * Seek timeline to the requested point. The point is given as a
  * time in milliseconds since the timeline started.
  *
  * The @timeline will not emit the [signal@Timeline::new-frame]
- * signal for the given time. The first [signal@Timeline::new-frame] signal
- * after the call to [method@Timeline.advance] will be emit the skipped markers.
+ * signal for the given time.
  */
 void
-clutter_timeline_advance (ClutterTimeline *timeline,
-                          guint            msecs)
+clutter_timeline_seek (ClutterTimeline *timeline,
+                       uint32_t         msecs)
 {
   ClutterTimelinePrivate *priv;
 
@@ -1418,7 +1120,7 @@ clutter_timeline_advance (ClutterTimeline *timeline,
  *
  * Return value: current elapsed time in milliseconds.
  */
-guint
+uint32_t
 clutter_timeline_get_elapsed_time (ClutterTimeline *timeline)
 {
   ClutterTimelinePrivate *priv;
@@ -1462,7 +1164,7 @@ clutter_timeline_is_playing (ClutterTimeline *timeline)
  */
 ClutterTimeline *
 clutter_timeline_new_for_actor (ClutterActor *actor,
-                                unsigned int  duration_ms)
+                                uint32_t      duration_ms)
 {
   return g_object_new (CLUTTER_TYPE_TIMELINE,
                        "duration", duration_ms,
@@ -1482,7 +1184,7 @@ clutter_timeline_new_for_actor (ClutterActor *actor,
  */
 ClutterTimeline *
 clutter_timeline_new_for_frame_clock (ClutterFrameClock *frame_clock,
-                                      unsigned int       duration_ms)
+                                      uint32_t           duration_ms)
 {
   return g_object_new (CLUTTER_TYPE_TIMELINE,
                        "duration", duration_ms,
@@ -1498,7 +1200,7 @@ clutter_timeline_new_for_frame_clock (ClutterFrameClock *frame_clock,
  *
  * Return value: the delay in milliseconds.
  */
-guint
+uint32_t
 clutter_timeline_get_delay (ClutterTimeline *timeline)
 {
   ClutterTimelinePrivate *priv;
@@ -1519,7 +1221,7 @@ clutter_timeline_get_delay (ClutterTimeline *timeline)
  */
 void
 clutter_timeline_set_delay (ClutterTimeline *timeline,
-                            guint            msecs)
+                            uint32_t         msecs)
 {
   ClutterTimelinePrivate *priv;
 
@@ -1543,7 +1245,7 @@ clutter_timeline_set_delay (ClutterTimeline *timeline,
  *
  * Return value: the duration of the timeline, in milliseconds.
  */
-guint
+uint32_t
 clutter_timeline_get_duration (ClutterTimeline *timeline)
 {
   ClutterTimelinePrivate *priv;
@@ -1560,12 +1262,11 @@ clutter_timeline_get_duration (ClutterTimeline *timeline)
  * @timeline: a #ClutterTimeline
  * @msecs: duration of the timeline in milliseconds
  *
- * Sets the duration of the timeline, in milliseconds. The speed
- * of the timeline depends on the [property@Timeline:frame-clock] setting.
+ * Sets the duration of the timeline, in milliseconds.
  */
 void
 clutter_timeline_set_duration (ClutterTimeline *timeline,
-                               guint            msecs)
+                               uint32_t         msecs)
 {
   ClutterTimelinePrivate *priv;
 
@@ -1664,34 +1365,6 @@ clutter_timeline_set_direction (ClutterTimeline          *timeline,
     }
 }
 
-/**
- * clutter_timeline_get_delta:
- * @timeline: a #ClutterTimeline
- *
- * Retrieves the amount of time elapsed since the last
- * [signal@Timeline::new-frame] signal.
- *
- * This function is only useful inside handlers for the ::new-frame
- * signal, and its behaviour is undefined if the timeline is not
- * playing.
- *
- * Return value: the amount of time in milliseconds elapsed since the
- * last frame
- */
-guint
-clutter_timeline_get_delta (ClutterTimeline *timeline)
-{
-  ClutterTimelinePrivate *priv;
-
-  g_return_val_if_fail (CLUTTER_IS_TIMELINE (timeline), 0);
-
-  priv = clutter_timeline_get_instance_private (timeline);
-  if (!clutter_timeline_is_playing (timeline))
-    return 0;
-
-  return priv->msecs_delta;
-}
-
 void
 _clutter_timeline_advance (ClutterTimeline *timeline,
                            gint64           tick_time)
@@ -1702,17 +1375,14 @@ _clutter_timeline_advance (ClutterTimeline *timeline,
   g_object_ref (timeline);
 
   CLUTTER_NOTE (SCHEDULER,
-                "Timeline [%p] advancing (cur: %ld, tot: %ld, "
-                "tick_time: %lu)",
+                "Timeline [%p] advancing (cur: %ld, tick_time: %lu)",
                 timeline,
                 (long) priv->elapsed_time,
-                (long) priv->msecs_delta,
                 (long) tick_time);
 
-  priv->msecs_delta = tick_time;
   priv->is_playing = TRUE;
 
-  clutter_timeline_do_frame (timeline);
+  clutter_timeline_do_frame (timeline, tick_time);
 
   priv->is_playing = FALSE;
 
@@ -1742,11 +1412,10 @@ _clutter_timeline_do_tick (ClutterTimeline *timeline,
   priv = clutter_timeline_get_instance_private (timeline);
 
   CLUTTER_NOTE (SCHEDULER,
-                "Timeline [%p] ticked (elapsed_time: %ld, msecs_delta: %ld, "
+                "Timeline [%p] ticked (elapsed_time: %ld, "
                 "last_frame_time: %ld, tick_time: %ld)",
                 timeline,
                 (long) priv->elapsed_time,
-                (long) priv->msecs_delta,
                 (long) priv->last_frame_time,
                 (long) tick_time);
 
@@ -1761,9 +1430,8 @@ _clutter_timeline_do_tick (ClutterTimeline *timeline,
   if (priv->waiting_first_tick)
     {
       priv->last_frame_time = tick_time;
-      priv->msecs_delta = 0;
       priv->waiting_first_tick = FALSE;
-      clutter_timeline_do_frame (timeline);
+      clutter_timeline_do_frame (timeline, 0);
     }
   else
     {
@@ -1786,281 +1454,9 @@ _clutter_timeline_do_tick (ClutterTimeline *timeline,
         {
           /* Avoid accumulating error */
           priv->last_frame_time += msecs;
-          priv->msecs_delta = msecs;
-          clutter_timeline_do_frame (timeline);
+          clutter_timeline_do_frame (timeline, msecs);
         }
     }
-}
-
-/**
- * clutter_timeline_add_marker:
- * @timeline: a #ClutterTimeline
- * @marker_name: the unique name for this marker
- * @progress: the normalized value of the position of the martke
- *
- * Adds a named marker that will be hit when the timeline has reached
- * the specified @progress.
- *
- * Markers are unique string identifiers for a given position on the
- * timeline. Once @timeline reaches the given @progress of its duration,
- * if will emit a [signal@Timeline::marker-reached] signal for each marker
- * attached to that particular point.
- *
- * A marker can be removed with [method@Timeline.remove_marker]. The
- * timeline can be advanced to a marker using
- * [method@Timeline.advance_to_marker].
- *
- * See also: [method@Timeline.add_marker_at_time]
- */
-void
-clutter_timeline_add_marker (ClutterTimeline *timeline,
-                             const gchar     *marker_name,
-                             gdouble          progress)
-{
-  TimelineMarker *marker;
-
-  g_return_if_fail (CLUTTER_IS_TIMELINE (timeline));
-  g_return_if_fail (marker_name != NULL);
-
-  marker = timeline_marker_new_progress (marker_name, progress);
-  clutter_timeline_add_marker_internal (timeline, marker);
-}
-
-/**
- * clutter_timeline_add_marker_at_time:
- * @timeline: a #ClutterTimeline
- * @marker_name: the unique name for this marker
- * @msecs: position of the marker in milliseconds
- *
- * Adds a named marker that will be hit when the timeline has been
- * running for @msecs milliseconds.
- *
- * Markers are unique string identifiers for a given position on the
- * timeline. Once @timeline reaches the given @msecs, it will emit
- * a [signal@Timeline::marker-reached] signal for each marker attached to that position.
- *
- * A marker can be removed with [method@Timeline.remove_marker]. The
- * timeline can be advanced to a marker using
- * [method@Timeline.advance_to_marker].
- *
- * See also: [method@Timeline.add_marker]
- */
-void
-clutter_timeline_add_marker_at_time (ClutterTimeline *timeline,
-                                     const gchar     *marker_name,
-                                     guint            msecs)
-{
-  TimelineMarker *marker;
-
-  g_return_if_fail (CLUTTER_IS_TIMELINE (timeline));
-  g_return_if_fail (marker_name != NULL);
-  g_return_if_fail (msecs <= clutter_timeline_get_duration (timeline));
-
-  marker = timeline_marker_new_time (marker_name, msecs);
-  clutter_timeline_add_marker_internal (timeline, marker);
-}
-
-struct CollectMarkersClosure
-{
-  guint duration;
-  guint msecs;
-  GArray *markers;
-};
-
-static void
-collect_markers (const gchar *key,
-                 TimelineMarker *marker,
-                 struct CollectMarkersClosure *data)
-{
-  guint msecs;
-
-  if (marker->is_relative)
-    msecs = marker->data.progress * data->duration;
-  else
-    msecs = marker->data.msecs;
-
-  if (msecs == data->msecs)
-    {
-      gchar *name_copy = g_strdup (key);
-      g_array_append_val (data->markers, name_copy);
-    }
-}
-
-/**
- * clutter_timeline_list_markers:
- * @timeline: a #ClutterTimeline
- * @msecs: the time to check, or -1
- * @n_markers: the number of markers returned
- *
- * Retrieves the list of markers at time @msecs. If @msecs is a
- * negative integer, all the markers attached to @timeline will be
- * returned.
- *
- * Return value: (transfer full) (array zero-terminated=1 length=n_markers):
- *   a newly allocated, %NULL terminated string array containing the names
- *   of the markers. Use [func@GLib.strfreev] when done.
- */
-gchar **
-clutter_timeline_list_markers (ClutterTimeline *timeline,
-                               gint             msecs,
-                               gsize           *n_markers)
-{
-  ClutterTimelinePrivate *priv;
-  gchar **retval = NULL;
-  gsize i;
-
-  g_return_val_if_fail (CLUTTER_IS_TIMELINE (timeline), NULL);
-
-  priv = clutter_timeline_get_instance_private (timeline);
-
-  if (G_UNLIKELY (priv->markers_by_name == NULL))
-    {
-      if (n_markers)
-        *n_markers = 0;
-
-      return NULL;
-    }
-
-  if (msecs < 0)
-    {
-      GList *markers, *l;
-
-      markers = g_hash_table_get_keys (priv->markers_by_name);
-      retval = g_new0 (gchar*, g_list_length (markers) + 1);
-
-      for (i = 0, l = markers; l != NULL; i++, l = l->next)
-        retval[i] = g_strdup (l->data);
-
-      g_list_free (markers);
-    }
-  else
-    {
-      struct CollectMarkersClosure data;
-
-      data.duration = priv->duration;
-      data.msecs = msecs;
-      data.markers = g_array_new (TRUE, FALSE, sizeof (gchar *));
-
-      g_hash_table_foreach (priv->markers_by_name,
-                            (GHFunc) collect_markers,
-                            &data);
-
-      i = data.markers->len;
-      retval = (gchar **) (void *) g_array_free (data.markers, FALSE);
-    }
-
-  if (n_markers)
-    *n_markers = i;
-
-  return retval;
-}
-
-/**
- * clutter_timeline_advance_to_marker:
- * @timeline: a #ClutterTimeline
- * @marker_name: the name of the marker
- *
- * Advances @timeline to the time of the given @marker_name.
- *
- * Like [method@Timeline.advance], this function will not
- * emit the [signal@Timeline::new-frame] for the time where @marker_name
- * is set, nor it will emit [signal@Timeline::marker-reached] for
- * @marker_name.
- */
-void
-clutter_timeline_advance_to_marker (ClutterTimeline *timeline,
-                                    const gchar     *marker_name)
-{
-  ClutterTimelinePrivate *priv;
-  TimelineMarker *marker;
-  guint msecs;
-
-  g_return_if_fail (CLUTTER_IS_TIMELINE (timeline));
-  g_return_if_fail (marker_name != NULL);
-
-  priv = clutter_timeline_get_instance_private (timeline);
-
-  if (G_UNLIKELY (priv->markers_by_name == NULL))
-    {
-      g_warning ("No marker named '%s' found.", marker_name);
-      return;
-    }
-
-  marker = g_hash_table_lookup (priv->markers_by_name, marker_name);
-  if (marker == NULL)
-    {
-      g_warning ("No marker named '%s' found.", marker_name);
-      return;
-    }
-
-  if (marker->is_relative)
-    msecs = marker->data.progress * priv->duration;
-  else
-    msecs = marker->data.msecs;
-
-  clutter_timeline_advance (timeline, msecs);
-}
-
-/**
- * clutter_timeline_remove_marker:
- * @timeline: a #ClutterTimeline
- * @marker_name: the name of the marker to remove
- *
- * Removes @marker_name, if found, from @timeline.
- */
-void
-clutter_timeline_remove_marker (ClutterTimeline *timeline,
-                                const gchar     *marker_name)
-{
-  ClutterTimelinePrivate *priv;
-  TimelineMarker *marker;
-
-  g_return_if_fail (CLUTTER_IS_TIMELINE (timeline));
-  g_return_if_fail (marker_name != NULL);
-
-  priv = clutter_timeline_get_instance_private (timeline);
-
-  if (G_UNLIKELY (priv->markers_by_name == NULL))
-    {
-      g_warning ("No marker named '%s' found.", marker_name);
-      return;
-    }
-
-  marker = g_hash_table_lookup (priv->markers_by_name, marker_name);
-  if (!marker)
-    {
-      g_warning ("No marker named '%s' found.", marker_name);
-      return;
-    }
-
-  /* this will take care of freeing the marker as well */
-  g_hash_table_remove (priv->markers_by_name, marker_name);
-}
-
-/**
- * clutter_timeline_has_marker:
- * @timeline: a #ClutterTimeline
- * @marker_name: the name of the marker
- *
- * Checks whether @timeline has a marker set with the given name.
- *
- * Return value: %TRUE if the marker was found
- */
-gboolean
-clutter_timeline_has_marker (ClutterTimeline *timeline,
-                             const gchar     *marker_name)
-{
-  ClutterTimelinePrivate *priv;
-
-  g_return_val_if_fail (CLUTTER_IS_TIMELINE (timeline), FALSE);
-  g_return_val_if_fail (marker_name != NULL, FALSE);
-
-  priv = clutter_timeline_get_instance_private (timeline);
-  if (G_UNLIKELY (priv->markers_by_name == NULL))
-    return FALSE;
-
-  return NULL != g_hash_table_lookup (priv->markers_by_name,
-                                      marker_name);
 }
 
 /**
@@ -2360,38 +1756,6 @@ clutter_timeline_get_progress_mode (ClutterTimeline *timeline)
   priv = clutter_timeline_get_instance_private (timeline);
 
   return priv->progress_mode;
-}
-
-/**
- * clutter_timeline_get_duration_hint:
- * @timeline: a #ClutterTimeline
- *
- * Retrieves the full duration of the @timeline, taking into account the
- * current value of the [property@Timeline:repeat-count] property.
- *
- * If the [property@Timeline:repeat-count] property is set to -1, this function
- * will return %G_MAXINT64.
- *
- * The returned value is to be considered a hint, and it's only valid
- * as long as the @timeline hasn't been changed.
- *
- * Return value: the full duration of the #ClutterTimeline
- */
-gint64
-clutter_timeline_get_duration_hint (ClutterTimeline *timeline)
-{
-  ClutterTimelinePrivate *priv;
-
-  g_return_val_if_fail (CLUTTER_IS_TIMELINE (timeline), 0);
-
-  priv = clutter_timeline_get_instance_private (timeline);
-
-  if (priv->repeat_count == 0)
-    return priv->duration;
-  else if (priv->repeat_count < 0)
-    return G_MAXINT64;
-  else
-    return priv->repeat_count * priv->duration;
 }
 
 /**

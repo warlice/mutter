@@ -32,15 +32,6 @@ static const ClutterFrameListenerIface timeline_frame_listener_iface = {
 };
 
 static void
-on_marker_reached (ClutterTimeline *timeline,
-                   const char      *marker_name,
-                   unsigned int     frame_number,
-                   gboolean        *marker_reached)
-{
-  *marker_reached = TRUE;
-}
-
-static void
 on_timeline_new_frame (ClutterTimeline *timeline,
                        int              time_ms,
                        int             *frame_counter)
@@ -61,7 +52,6 @@ frame_clock_timeline_basic (void)
   GMainLoop *main_loop;
   ClutterFrameClock *frame_clock;
   ClutterTimeline *timeline;
-  gboolean marker1_reached;
   int frame_counter;
   int64_t before_us;
   int64_t after_us;
@@ -82,14 +72,8 @@ frame_clock_timeline_basic (void)
                            NULL);
   g_object_add_weak_pointer (G_OBJECT (timeline), (gpointer *) &timeline);
 
-  clutter_timeline_add_marker_at_time (timeline, "marker1", 500);
-
-  marker1_reached = FALSE;
   frame_counter = 0;
 
-  g_signal_connect (timeline, "marker-reached::marker1",
-                    G_CALLBACK (on_marker_reached),
-                    &marker1_reached);
   g_signal_connect (timeline, "new-frame",
                     G_CALLBACK (on_timeline_new_frame),
                     &frame_counter);
@@ -109,8 +93,6 @@ frame_clock_timeline_basic (void)
 
   g_assert_cmpint (lateness_us, >, -refresh_interval_us);
 
-  g_assert_true (marker1_reached);
-
   /* Just check that we got at least a few frames. Require too high and we'll be
    * flaky.
    */
@@ -124,17 +106,21 @@ frame_clock_timeline_basic (void)
 }
 
 static void
-on_switch_reached (ClutterTimeline   *timeline,
-                   const char        *marker_name,
-                   unsigned int       frame_number,
-                   ClutterFrameClock *new_frame_clock)
+switch_frame_clock_at_500ms (ClutterTimeline   *timeline,
+                             int                time_ms,
+                             ClutterFrameClock *new_frame_clock)
 {
-  ClutterFrameClock *old_frame_clock;
+  ClutterFrameClock *current_frame_clock;
 
-  old_frame_clock = clutter_timeline_get_frame_clock (timeline);
-  clutter_frame_clock_inhibit (old_frame_clock);
+  current_frame_clock = clutter_timeline_get_frame_clock (timeline);
+  if (current_frame_clock == new_frame_clock)
+    return;
 
-  clutter_timeline_set_frame_clock (timeline, new_frame_clock);
+  if (time_ms >= 500)
+    {
+      clutter_frame_clock_inhibit (current_frame_clock);
+      clutter_timeline_set_frame_clock (timeline, new_frame_clock);
+    }
 }
 
 static void
@@ -171,12 +157,10 @@ frame_clock_timeline_switch (void)
                            NULL);
   g_object_add_weak_pointer (G_OBJECT (timeline), (gpointer *) &timeline);
 
-  clutter_timeline_add_marker_at_time (timeline, "switch", 500);
-
   frame_counter = 0;
 
-  g_signal_connect (timeline, "marker-reached::switch",
-                    G_CALLBACK (on_switch_reached),
+  g_signal_connect (timeline, "new-frame",
+                    G_CALLBACK (switch_frame_clock_at_500ms),
                     frame_clock2);
   g_signal_connect (timeline, "new-frame",
                     G_CALLBACK (on_timeline_new_frame),
