@@ -666,15 +666,15 @@ process_line (const char *line)
 
       g_hash_table_remove_all (windows);
     }
-  else if (strcmp (argv[0], "sync") == 0)
+  else if (strcmp (argv[0], "flush") == 0)
     {
       if (argc != 1)
         {
-          g_print ("usage: sync\n");
+          g_print ("usage: flush\n");
           goto fail;
         }
 
-      gdk_display_sync (gdk_display_get_default ());
+      gdk_display_flush (gdk_display_get_default ());
     }
   else if (strcmp (argv[0], "set_counter") == 0)
     {

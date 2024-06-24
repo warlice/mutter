@@ -385,7 +385,7 @@ meta_test_client_wait (MetaTestClient  *client,
 {
   if (client->type == META_WINDOW_CLIENT_TYPE_WAYLAND)
     {
-      return meta_test_client_do (client, error, "sync", NULL);
+      return meta_test_client_do (client, error, "flush", NULL);
     }
   else
     {
