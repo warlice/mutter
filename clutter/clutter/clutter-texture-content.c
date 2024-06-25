@@ -31,6 +31,7 @@
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-content-private.h"
 #include "clutter/clutter-paint-node.h"
+#include "clutter/clutter-snapshot.h"
 
 struct _ClutterTextureContent
 {
@@ -83,6 +84,21 @@ clutter_texture_content_paint_content (ClutterContent      *content,
   clutter_paint_node_unref (node);
 }
 
+static void
+clutter_texture_content_snapshot (ClutterContent  *content,
+                                  ClutterActor    *actor,
+                                  ClutterSnapshot *snapshot)
+{
+  ClutterTextureContent *texture_content = CLUTTER_TEXTURE_CONTENT (content);
+  ClutterPaintNode *node;
+
+  node = clutter_actor_create_texture_paint_node (actor,
+                                                  texture_content->texture);
+  clutter_paint_node_set_static_name (node, "Texture Content");
+  clutter_snapshot_add_node (snapshot, node);
+  clutter_paint_node_unref (node);
+}
+
 static gboolean
 clutter_texture_content_get_preferred_size (ClutterContent *content,
                                             float          *width,
@@ -104,6 +120,7 @@ clutter_content_iface_init (ClutterContentInterface *iface)
 {
   iface->get_preferred_size = clutter_texture_content_get_preferred_size;
   iface->paint_content = clutter_texture_content_paint_content;
+  iface->snapshot = clutter_texture_content_snapshot;
 }
 
 /**

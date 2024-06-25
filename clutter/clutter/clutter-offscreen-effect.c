@@ -101,6 +101,7 @@
 #include "clutter/clutter-paint-node-private.h"
 #include "clutter/clutter-paint-nodes.h"
 #include "clutter/clutter-paint-volume-private.h"
+#include "clutter/clutter-snapshot-private.h"
 #include "clutter/clutter-actor-box-private.h"
 
 typedef struct _ClutterOffscreenEffectPrivate
@@ -299,13 +300,10 @@ update_fbo (ClutterEffect *effect,
 }
 
 static gboolean
-clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
-                                    ClutterPaintNode    *node,
-                                    ClutterPaintContext *paint_context)
+prepare_offscreen (ClutterOffscreenEffect *offscreen_effect)
 {
-  ClutterOffscreenEffect *self = CLUTTER_OFFSCREEN_EFFECT (effect);
   ClutterOffscreenEffectPrivate *priv =
-    clutter_offscreen_effect_get_instance_private (self);
+    clutter_offscreen_effect_get_instance_private (offscreen_effect);
   CoglFramebuffer *offscreen;
   ClutterActorBox raw_box, box;
   ClutterActor *stage;
@@ -315,12 +313,6 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
   gfloat target_width = -1, target_height = -1;
   float resource_scale;
   float ceiled_resource_scale;
-
-  if (!clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (effect)))
-    goto disable_effect;
-
-  if (priv->actor == NULL)
-    goto disable_effect;
 
   stage = _clutter_actor_get_stage_internal (priv->actor);
   clutter_actor_get_size (stage, &stage_width, &stage_height);
@@ -370,8 +362,8 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
   target_height = ceilf (target_height);
 
   /* First assert that the framebuffer is the right size... */
-  if (!update_fbo (effect, target_width, target_height, resource_scale))
-    goto disable_effect;
+  if (!update_fbo (CLUTTER_EFFECT (offscreen_effect), target_width, target_height, resource_scale))
+    return FALSE;
 
   offscreen = COGL_FRAMEBUFFER (priv->offscreen);
 
@@ -408,6 +400,27 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
                                         &projection);
 
   cogl_framebuffer_set_projection_matrix (offscreen, &projection);
+
+  return TRUE;
+}
+
+static gboolean
+clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
+                                    ClutterPaintNode    *node,
+                                    ClutterPaintContext *paint_context)
+{
+  ClutterOffscreenEffect *self = CLUTTER_OFFSCREEN_EFFECT (effect);
+  ClutterOffscreenEffectPrivate *priv =
+    clutter_offscreen_effect_get_instance_private (self);
+
+  if (!clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (effect)))
+    goto disable_effect;
+
+  if (priv->actor == NULL)
+    goto disable_effect;
+
+  if (!prepare_offscreen (self))
+    goto disable_effect;
 
   return TRUE;
 
@@ -455,6 +468,39 @@ clutter_offscreen_effect_real_paint_target (ClutterOffscreenEffect *effect,
 }
 
 static void
+clutter_offscreen_effect_real_snapshot_target (ClutterOffscreenEffect *offscreen_effect,
+                                               ClutterSnapshot        *snapshot)
+{
+  ClutterOffscreenEffectPrivate *priv =
+    clutter_offscreen_effect_get_instance_private (offscreen_effect);
+  CoglColor color;
+  float paint_opacity;
+
+  paint_opacity = clutter_actor_get_paint_opacity (priv->actor) / 255.0;
+
+  cogl_color_init_from_4f (&color,
+                           paint_opacity, paint_opacity,
+                           paint_opacity, paint_opacity);
+  cogl_pipeline_set_color (priv->pipeline, &color);
+
+  clutter_snapshot_push_pipeline (snapshot, priv->pipeline);
+
+  /* At this point we are in stage coordinates translated so if
+   * we draw our texture using a textured quad the size of the paint
+   * box then we will overlay where the actor would have drawn if it
+   * hadn't been redirected offscreen.
+   */
+  clutter_snapshot_add_rectangle (snapshot,
+                                  &(ClutterActorBox) {
+                                      0.f, 0.f,
+                                      cogl_texture_get_width (priv->texture),
+                                      cogl_texture_get_height (priv->texture),
+                                  });
+
+  clutter_snapshot_pop (snapshot);
+}
+
+static void
 clutter_offscreen_effect_paint_texture (ClutterOffscreenEffect *effect,
                                         ClutterPaintNode       *node,
                                         ClutterPaintContext    *paint_context)
@@ -488,6 +534,38 @@ clutter_offscreen_effect_paint_texture (ClutterOffscreenEffect *effect,
    * sub-classes that require special hand-holding
    */
   clutter_offscreen_effect_paint_target (effect, node, paint_context);
+}
+
+static void
+clutter_offscreen_effect_snapshot_texture (ClutterOffscreenEffect *effect,
+                                           ClutterSnapshot        *snapshot)
+{
+  ClutterOffscreenEffectPrivate *priv =
+    clutter_offscreen_effect_get_instance_private (effect);
+  graphene_matrix_t transform;
+  gboolean transform_set = FALSE;
+  float unscale;
+
+  unscale = 1.0 / clutter_actor_get_resource_scale (priv->actor);
+  graphene_matrix_init_scale (&transform, unscale, unscale, 1.0);
+  graphene_matrix_translate (&transform,
+                             &GRAPHENE_POINT3D_INIT (priv->fbo_offset_x,
+                                                     priv->fbo_offset_y,
+                                                     0.0));
+
+  if (!graphene_matrix_is_identity (&transform))
+    {
+      clutter_snapshot_push_transform (snapshot, &transform);
+      transform_set = TRUE;
+    }
+
+  /* paint the target material; this is virtualized for
+   * sub-classes that require special hand-holding
+   */
+  clutter_offscreen_effect_snapshot_target (effect, snapshot);
+
+  if (transform_set)
+    clutter_snapshot_pop (snapshot);
 }
 
 static void
@@ -540,6 +618,46 @@ clutter_offscreen_effect_paint_node (ClutterEffect           *effect,
   clutter_paint_node_unref (layer_node);
 
   add_actor_node (offscreen_effect, layer_node, 255);
+}
+
+static void
+clutter_offscreen_effect_snapshot (ClutterEffect           *effect,
+                                   ClutterSnapshot         *snapshot,
+                                   ClutterEffectPaintFlags  flags)
+{
+  ClutterOffscreenEffect *offscreen_effect = CLUTTER_OFFSCREEN_EFFECT (effect);
+  ClutterOffscreenEffectPrivate *priv =
+    clutter_offscreen_effect_get_instance_private (offscreen_effect);
+
+  if (flags & CLUTTER_EFFECT_PAINT_BYPASS_EFFECT)
+    {
+      clutter_actor_snapshot_effects_and_children (priv->actor, snapshot);
+      g_clear_object (&priv->offscreen);
+      return;
+    }
+
+  /* If we've already got a cached image and the actor hasn't been redrawn
+   * then we can just use the cached image in the FBO.
+   */
+  if (priv->offscreen == NULL || (flags & CLUTTER_EFFECT_PAINT_ACTOR_DIRTY))
+    {
+      if (!prepare_offscreen (offscreen_effect))
+        {
+          clutter_actor_snapshot_effects_and_children (priv->actor, snapshot);
+          g_clear_object (&priv->offscreen);
+          return;
+        }
+
+      clutter_snapshot_push_layer (snapshot,
+                                   COGL_FRAMEBUFFER (priv->offscreen),
+                                   priv->pipeline);
+
+      clutter_actor_snapshot_effects_and_children (priv->actor, snapshot);
+
+      clutter_snapshot_pop (snapshot);
+    }
+
+  clutter_offscreen_effect_snapshot_texture (offscreen_effect, snapshot);
 }
 
 static void
@@ -609,6 +727,7 @@ clutter_offscreen_effect_class_init (ClutterOffscreenEffectClass *klass)
   klass->create_texture = clutter_offscreen_effect_real_create_texture;
   klass->create_pipeline = clutter_offscreen_effect_real_create_pipeline;
   klass->paint_target = clutter_offscreen_effect_real_paint_target;
+  klass->snapshot_target = clutter_offscreen_effect_real_snapshot_target;
 
   meta_class->set_actor = clutter_offscreen_effect_set_actor;
   meta_class->set_enabled = clutter_offscreen_effect_set_enabled;
@@ -617,6 +736,7 @@ clutter_offscreen_effect_class_init (ClutterOffscreenEffectClass *klass)
   effect_class->post_paint = clutter_offscreen_effect_post_paint;
   effect_class->paint = clutter_offscreen_effect_paint;
   effect_class->paint_node = clutter_offscreen_effect_paint_node;
+  effect_class->snapshot = clutter_offscreen_effect_snapshot;
 
   gobject_class->finalize = clutter_offscreen_effect_finalize;
 }
@@ -700,6 +820,23 @@ clutter_offscreen_effect_paint_target (ClutterOffscreenEffect *effect,
   CLUTTER_OFFSCREEN_EFFECT_GET_CLASS (effect)->paint_target (effect,
                                                              node,
                                                              paint_context);
+}
+
+/**
+ * clutter_offscreen_effect_snapshot_target:
+ * @effect: a #ClutterOffscreenEffect
+ * @snapshot: a #ClutterSnapshot
+ *
+ * Calls the [vfunc@OffscreenEffect.snapshot_target] virtual function of the @effect
+ */
+void
+clutter_offscreen_effect_snapshot_target (ClutterOffscreenEffect *effect,
+                                          ClutterSnapshot        *snapshot)
+{
+  g_return_if_fail (CLUTTER_IS_OFFSCREEN_EFFECT (effect));
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  CLUTTER_OFFSCREEN_EFFECT_GET_CLASS (effect)->snapshot_target (effect, snapshot);
 }
 
 /**

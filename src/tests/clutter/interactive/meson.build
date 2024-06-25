@@ -24,6 +24,7 @@ clutter_tests_interactive_test_sources = [
   'test-binding-pool.c',
   'test-text.c',
   'test-text-field.c',
+  'test-snapshot.c',
   'test-stage-sizing.c',
   'test-swipe-action.c',
   'test-cogl-point-sprites.c',

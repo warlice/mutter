@@ -155,6 +155,40 @@ meta_overlay_paint (MetaOverlay         *overlay,
 }
 
 static void
+meta_overlay_snapshot (MetaOverlay     *overlay,
+                       ClutterSnapshot *snapshot)
+{
+  ClutterPaintContext *paint_context =
+    clutter_snapshot_get_paint_context (snapshot);
+  ClutterActorBox rect;
+
+  if (!overlay->texture)
+    return;
+
+  if (!overlay->is_visible &&
+      !(clutter_paint_context_get_paint_flags (paint_context) &
+        CLUTTER_PAINT_FLAG_FORCE_CURSORS))
+    return;
+
+  rect = (ClutterActorBox) {
+    .x1 = overlay->current_rect.origin.x,
+    .y1 = overlay->current_rect.origin.y,
+    .x2 = overlay->current_rect.origin.x + overlay->current_rect.size.width,
+    .y2 = overlay->current_rect.origin.y + overlay->current_rect.size.height,
+  };
+
+  clutter_snapshot_push_pipeline (snapshot, overlay->pipeline);
+  clutter_snapshot_add_rectangle (snapshot, &rect);
+  clutter_snapshot_pop (snapshot);
+
+  if (!graphene_rect_equal (&overlay->previous_rect, &overlay->current_rect))
+    {
+      overlay->previous_rect = overlay->current_rect;
+      overlay->previous_is_valid = TRUE;
+    }
+}
+
+static void
 meta_stage_finalize (GObject *object)
 {
   MetaStage *stage = META_STAGE (object);
@@ -258,6 +292,39 @@ meta_stage_paint (ClutterActor        *actor,
 }
 
 static void
+meta_stage_snapshot (ClutterActor    *actor,
+                     ClutterSnapshot *snapshot)
+{
+  MetaStage *stage = META_STAGE (actor);
+  ClutterPaintContext *paint_context =
+    clutter_snapshot_get_paint_context (snapshot);
+
+  CLUTTER_ACTOR_CLASS (meta_stage_parent_class)->snapshot (actor, snapshot);
+
+  if ((clutter_paint_context_get_paint_flags (paint_context) &
+       CLUTTER_PAINT_FLAG_FORCE_CURSORS))
+    {
+      MetaCursorTracker *cursor_tracker =
+        meta_backend_get_cursor_tracker (stage->backend);
+
+      meta_cursor_tracker_track_position (cursor_tracker);
+    }
+
+  if (!(clutter_paint_context_get_paint_flags (paint_context) &
+        CLUTTER_PAINT_FLAG_NO_CURSORS))
+    g_list_foreach (stage->overlays, (GFunc) meta_overlay_snapshot, snapshot);
+
+  if ((clutter_paint_context_get_paint_flags (paint_context) &
+       CLUTTER_PAINT_FLAG_FORCE_CURSORS))
+    {
+      MetaCursorTracker *cursor_tracker =
+        meta_backend_get_cursor_tracker (stage->backend);
+
+      meta_cursor_tracker_untrack_position (cursor_tracker);
+    }
+}
+
+static void
 meta_stage_paint_view (ClutterStage     *stage,
                        ClutterStageView *view,
                        const MtkRegion  *redraw_clip,
@@ -313,6 +380,7 @@ meta_stage_class_init (MetaStageClass *klass)
   object_class->finalize = meta_stage_finalize;
 
   actor_class->paint = meta_stage_paint;
+  actor_class->snapshot = meta_stage_snapshot;
 
   stage_class->activate = meta_stage_activate;
   stage_class->deactivate = meta_stage_deactivate;

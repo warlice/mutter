@@ -58,6 +58,7 @@
 #include "clutter/clutter-paint-node.h"
 #include "clutter/clutter-paint-nodes.h"
 #include "clutter/clutter-private.h"
+#include "clutter/clutter-snapshot.h"
 
 #define DEFAULT_N_TILES         32
 
@@ -332,6 +333,157 @@ clutter_deform_effect_paint_target (ClutterOffscreenEffect *effect,
       clutter_paint_node_add_child (node, lines_node);
       clutter_paint_node_add_primitive (lines_node, priv->lines_primitive);
       clutter_paint_node_unref (lines_node);
+    }
+}
+
+static void
+clutter_deform_effect_snapshot_target (ClutterOffscreenEffect *effect,
+                                       ClutterSnapshot        *snapshot)
+{
+  ClutterDeformEffect *self = CLUTTER_DEFORM_EFFECT (effect);
+  ClutterDeformEffectPrivate *priv =
+    clutter_deform_effect_get_instance_private (self);
+  CoglPipeline *pipeline;
+  CoglDepthState depth_state;
+
+  if (priv->is_dirty)
+    {
+      gboolean mapped_buffer;
+      CoglVertexP3T2C4 *verts;
+      ClutterActor *actor;
+      gfloat width, height;
+      guint opacity;
+      gint i, j;
+
+      actor = clutter_actor_meta_get_actor (CLUTTER_ACTOR_META (effect));
+      opacity = clutter_actor_get_paint_opacity (actor);
+
+      /* if we don't have a target size, fall back to the actor's
+       * allocation, though wrong it might be
+       */
+      if (!clutter_offscreen_effect_get_target_size (effect, &width, &height))
+        clutter_actor_get_size (actor, &width, &height);
+
+      /* XXX ideally, the sub-classes should tell us what they
+       * changed in the texture vertices; we then would be able to
+       * avoid resubmitting the same data, if it did not change. for
+       * the time being, we resubmit everything
+       */
+      verts = cogl_buffer_map (COGL_BUFFER (priv->buffer),
+                               COGL_BUFFER_ACCESS_WRITE,
+                               COGL_BUFFER_MAP_HINT_DISCARD);
+
+      /* If the map failed then we'll resort to allocating a temporary
+         buffer */
+      if (verts == NULL)
+        {
+          mapped_buffer = FALSE;
+          verts = g_malloc (sizeof (*verts) * priv->n_vertices);
+        }
+      else
+        mapped_buffer = TRUE;
+
+      for (i = 0; i < priv->y_tiles + 1; i++)
+        {
+          for (j = 0; j < priv->x_tiles + 1; j++)
+            {
+              CoglVertexP3T2C4 *vertex_out;
+              CoglTextureVertex vertex;
+
+              /* CoglTextureVertex isn't an ideal structure to use for
+                 this because it contains a CoglColor. The internal
+                 layout of CoglColor is mean to be private so Clutter
+                 can not pass a pointer to it as a vertex
+                 attribute. Also it contains padding so we end up
+                 storing more data in the vertex buffer than we need
+                 to. Instead we let the application modify a dummy
+                 vertex and then copy the details back out to a more
+                 well-defined struct */
+
+              vertex.tx = (float) j / priv->x_tiles;
+              vertex.ty = (float) i / priv->y_tiles;
+
+              vertex.x = width * vertex.tx;
+              vertex.y = height * vertex.ty;
+              vertex.z = 0.0f;
+
+              cogl_color_init_from_4f (&vertex.color, 1.0, 1.0, 1.0, opacity / 255.0);
+
+              clutter_deform_effect_deform_vertex (self,
+                                                   width, height,
+                                                   &vertex);
+
+              vertex_out = verts + i * (priv->x_tiles + 1) + j;
+
+              vertex_out->x = vertex.x;
+              vertex_out->y = vertex.y;
+              vertex_out->z = vertex.z;
+              vertex_out->s = vertex.tx;
+              vertex_out->t = vertex.ty;
+              vertex_out->r = cogl_color_get_red (&vertex.color) * 255.0;
+              vertex_out->g = cogl_color_get_green (&vertex.color) * 255.0;
+              vertex_out->b = cogl_color_get_blue (&vertex.color) * 255.0;
+              vertex_out->a = cogl_color_get_alpha (&vertex.color) * 255.0;
+            }
+        }
+
+      if (mapped_buffer)
+        cogl_buffer_unmap (COGL_BUFFER (priv->buffer));
+      else
+        {
+          cogl_buffer_set_data (COGL_BUFFER (priv->buffer),
+                                0, /* offset */
+                                verts,
+                                sizeof (*verts) * priv->n_vertices);
+          g_free (verts);
+        }
+
+      priv->is_dirty = FALSE;
+    }
+
+  pipeline = clutter_offscreen_effect_get_pipeline (effect);
+
+  /* enable depth testing */
+  cogl_depth_state_init (&depth_state);
+  cogl_depth_state_set_test_enabled (&depth_state, TRUE);
+  cogl_depth_state_set_test_function (&depth_state, COGL_DEPTH_TEST_FUNCTION_LEQUAL);
+  cogl_pipeline_set_depth_state (pipeline, &depth_state, NULL);
+
+  /* enable backface culling if we have a back material */
+  if (priv->back_pipeline != NULL)
+    cogl_pipeline_set_cull_face_mode (pipeline,
+                                      COGL_PIPELINE_CULL_FACE_MODE_BACK);
+
+  /* draw the front */
+  if (pipeline != NULL)
+    {
+      clutter_snapshot_push_pipeline (snapshot, pipeline);
+      clutter_snapshot_add_primitive (snapshot, priv->primitive);
+      clutter_snapshot_pop (snapshot);
+    }
+
+  /* draw the back */
+  if (priv->back_pipeline != NULL)
+    {
+      g_autoptr (CoglPipeline) back_pipeline = NULL;
+
+      /* We probably shouldn't be modifying the user's material so
+         instead we make a temporary copy */
+      back_pipeline = cogl_pipeline_copy (priv->back_pipeline);
+      cogl_pipeline_set_depth_state (back_pipeline, &depth_state, NULL);
+      cogl_pipeline_set_cull_face_mode (back_pipeline,
+                                        COGL_PIPELINE_CULL_FACE_MODE_FRONT);
+
+      clutter_snapshot_push_pipeline (snapshot, back_pipeline);
+      clutter_snapshot_add_primitive (snapshot, priv->primitive);
+      clutter_snapshot_pop (snapshot);
+    }
+
+  if (G_UNLIKELY (priv->lines_primitive != NULL))
+    {
+      clutter_snapshot_push_color (snapshot, &COGL_COLOR_INIT (255, 0, 0, 255));
+      clutter_snapshot_add_primitive (snapshot, priv->lines_primitive);
+      clutter_snapshot_pop (snapshot);
     }
 }
 
@@ -628,6 +780,7 @@ clutter_deform_effect_class_init (ClutterDeformEffectClass *klass)
   meta_class->set_actor = clutter_deform_effect_set_actor;
 
   offscreen_class->paint_target = clutter_deform_effect_paint_target;
+  offscreen_class->snapshot_target = clutter_deform_effect_snapshot_target;
 }
 
 static void

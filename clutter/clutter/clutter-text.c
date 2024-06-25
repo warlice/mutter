@@ -2006,6 +2006,97 @@ selection_paint (ClutterText     *self,
     }
 }
 
+static void
+snapshot_selection_rectangle (ClutterText           *self,
+                              const ClutterActorBox *box,
+                              gpointer               user_data)
+{
+  ClutterTextPrivate *priv = clutter_text_get_instance_private (self);
+  ClutterSnapshot *snapshot = CLUTTER_SNAPSHOT (user_data);
+  PangoLayout *layout = clutter_text_get_layout (self);
+  const CoglColor *background_color;
+
+  clutter_snapshot_push_clip (snapshot);
+  clutter_snapshot_add_rectangle (snapshot, box);
+
+  /* Selection background */
+  if (priv->selection_color_set)
+    background_color = &priv->selection_color;
+  else if (priv->cursor_color_set)
+    background_color = &priv->cursor_color;
+  else
+    background_color = &priv->text_color;
+
+  clutter_snapshot_push_color (snapshot, background_color);
+  clutter_snapshot_add_rectangle (snapshot, box);
+  clutter_snapshot_pop (snapshot);
+
+  clutter_snapshot_push_translate (snapshot, &GRAPHENE_POINT_INIT (priv->text_x, priv->text_y));
+    {
+      const CoglColor *text_color;
+      PangoRectangle extents;
+
+      /* Text */
+      if (priv->selected_text_color_set)
+        text_color = &priv->selected_text_color;
+      else
+        text_color = &priv->text_color;
+
+      pango_layout_get_pixel_extents (layout, NULL, &extents);
+
+      clutter_snapshot_push_layout (snapshot, layout, text_color);
+      clutter_snapshot_add_rectangle (snapshot,
+                                      &(ClutterActorBox) {
+                                        .x1 = 0,
+                                        .y1 = 0,
+                                        .x2 = extents.width,
+                                        .y2 = extents.height,
+                                      });
+      clutter_snapshot_pop (snapshot);
+    }
+  clutter_snapshot_pop (snapshot);
+
+  clutter_snapshot_pop (snapshot);
+}
+
+
+static void
+snapshot_selection (ClutterText     *self,
+                    ClutterSnapshot *snapshot)
+{
+  ClutterTextPrivate *priv = clutter_text_get_instance_private (self);
+
+  if (!clutter_text_should_draw_cursor (self))
+    return;
+
+  if (priv->position == priv->selection_bound)
+    {
+      const CoglColor *color;
+
+      /* No selection, just draw the cursor */
+      if (priv->cursor_color_set)
+        color = &priv->cursor_color;
+      else
+        color = &priv->text_color;
+
+      clutter_snapshot_push_color (snapshot, color);
+      clutter_snapshot_add_rectangle (snapshot,
+                                      &(ClutterActorBox) {
+                                        .x1 = priv->cursor_rect.origin.x,
+                                        .y1 = priv->cursor_rect.origin.y,
+                                        .x2 = priv->cursor_rect.origin.x + priv->cursor_rect.size.width,
+                                        .y2 = priv->cursor_rect.origin.y + priv->cursor_rect.size.height,
+                                      });
+      clutter_snapshot_pop (snapshot);
+    }
+  else
+    {
+      clutter_text_foreach_selection_rectangle_prescaled (self,
+                                                          snapshot_selection_rectangle,
+                                                          snapshot);
+    }
+}
+
 static gint
 clutter_text_move_word_backward (ClutterText *self,
                                  gint         start)
@@ -2766,6 +2857,202 @@ clutter_text_paint (ClutterActor        *self,
 
   if (clip_set)
     cogl_framebuffer_pop_clip (fb);
+}
+
+static void
+clutter_text_snapshot (ClutterActor    *self,
+                       ClutterSnapshot *snapshot)
+{
+  ClutterText *text = CLUTTER_TEXT (self);
+  ClutterTextPrivate *priv = clutter_text_get_instance_private (text);
+  PangoLayout *layout;
+  ClutterActorBox alloc = { 0, };
+  gint text_x = priv->text_x;
+  gint text_y = priv->text_y;
+  gboolean clip_set = FALSE;
+  guint n_chars;
+  float alloc_width;
+  float alloc_height;
+  float resource_scale;
+
+
+  /* Note that if anything in this paint method changes it needs to be
+     reflected in the get_paint_volume implementation which is tightly
+     tied to the workings of this function */
+  n_chars = clutter_text_buffer_get_length (get_buffer (text));
+
+  clutter_actor_get_allocation_box (self, &alloc);
+
+  /* don't bother painting an empty text actor, unless it's
+   * editable, in which case we want to paint at least the
+   * cursor
+   */
+  if (n_chars == 0 &&
+      !clutter_text_should_draw_cursor (text))
+    return;
+
+  resource_scale = clutter_actor_get_resource_scale (CLUTTER_ACTOR (self));
+
+  clutter_actor_box_scale (&alloc, resource_scale);
+  clutter_actor_box_get_size (&alloc, &alloc_width, &alloc_height);
+
+  if (priv->editable && priv->single_line_mode)
+    layout = clutter_text_create_layout (text, -1, -1);
+  else
+    {
+      /* the only time when we create the PangoLayout using the full
+       * width and height of the allocation is when we can both wrap
+       * and ellipsize
+       */
+      if (priv->wrap && priv->ellipsize)
+        {
+          layout = clutter_text_create_layout (text, alloc_width, alloc_height);
+        }
+      else
+        {
+          /* if we're not wrapping we cannot set the height of the
+           * layout, otherwise Pango will happily wrap the text to
+           * fit in the rectangle - thus making the :wrap property
+           * useless
+           *
+           * see bug:
+           *
+           *   http://bugzilla.clutter-project.org/show_bug.cgi?id=2339
+           *
+           * in order to fix this, we create a layout that would fit
+           * in the assigned width, then we clip the actor if the
+           * logical rectangle overflows the allocation.
+           */
+          layout = clutter_text_create_layout (text, alloc_width, -1);
+        }
+    }
+
+  if (resource_scale != 1.0f)
+    {
+      float paint_scale = 1.0f / resource_scale;
+      clutter_snapshot_push_scale (snapshot, paint_scale, paint_scale);
+    }
+
+  if (clutter_text_should_draw_cursor (text))
+    clutter_text_ensure_cursor_position (text, resource_scale);
+
+  if (priv->editable && priv->single_line_mode)
+    {
+      PangoRectangle logical_rect = { 0, };
+      gint actor_width, text_width;
+      gboolean rtl;
+
+      pango_layout_get_extents (layout, NULL, &logical_rect);
+
+      clutter_snapshot_push_clip (snapshot);
+      clutter_snapshot_add_rectangle (snapshot,
+                                      &(ClutterActorBox) {
+                                        .x1 = 0,
+                                        .y1 = 0,
+                                        .x2 = alloc_width,
+                                        .y2 = alloc_height,
+                                      });
+      clip_set = TRUE;
+
+      actor_width = alloc_width - 2 * TEXT_PADDING;
+      text_width  = pango_to_pixels (logical_rect.width);
+
+      rtl = priv->resolved_direction == CLUTTER_TEXT_DIRECTION_RTL;
+
+      if (actor_width < text_width)
+        {
+          gint cursor_x = graphene_rect_get_x (&priv->cursor_rect);
+
+          if (priv->position == -1)
+            {
+              text_x = rtl ? TEXT_PADDING : actor_width - text_width;
+            }
+          else if (priv->position == 0)
+            {
+              text_x = rtl ? actor_width - text_width : TEXT_PADDING;
+            }
+          else
+            {
+              if (cursor_x < 0)
+                {
+                  text_x = text_x - cursor_x - TEXT_PADDING;
+                }
+              else if (cursor_x > actor_width)
+                {
+                  text_x = text_x + (actor_width - cursor_x) - TEXT_PADDING;
+                }
+            }
+        }
+      else
+        {
+          text_x = rtl ? actor_width - text_width : TEXT_PADDING;
+        }
+    }
+  else if (!priv->editable && !(priv->wrap && priv->ellipsize))
+    {
+      PangoRectangle logical_rect = { 0, };
+
+      pango_layout_get_pixel_extents (layout, NULL, &logical_rect);
+
+      /* don't clip if the layout managed to fit inside our allocation */
+      if (logical_rect.width > alloc_width ||
+          logical_rect.height > alloc_height)
+        {
+          clutter_snapshot_push_clip (snapshot);
+          clutter_snapshot_add_rectangle (snapshot,
+                                          &(ClutterActorBox) {
+                                            .x1 = 0,
+                                            .y1 = 0,
+                                            .x2 = alloc_width,
+                                            .y2 = alloc_height,
+                                          });
+          clip_set = TRUE;
+        }
+
+      clutter_text_compute_layout_offsets (text, layout, &alloc, &text_x, &text_y);
+    }
+  else
+    clutter_text_compute_layout_offsets (text, layout, &alloc, &text_x, &text_y);
+
+  if (priv->text_x != text_x ||
+      priv->text_y != text_y)
+    {
+      priv->text_x = text_x;
+      priv->text_y = text_y;
+      priv->text_logical_x = roundf ((float) text_x / resource_scale);
+      priv->text_logical_y = roundf ((float) text_y / resource_scale);
+
+      clutter_text_ensure_cursor_position (text, resource_scale);
+    }
+
+  CLUTTER_NOTE (PAINT, "painting text (text: '%s')",
+                clutter_text_buffer_get_text (get_buffer (text)));
+
+  clutter_snapshot_push_translate (snapshot, &GRAPHENE_POINT_INIT (priv->text_x, priv->text_y));
+    {
+      PangoRectangle extents;
+
+      pango_layout_get_pixel_extents (layout, NULL, &extents);
+
+      clutter_snapshot_push_layout (snapshot, layout, &priv->text_color);
+      clutter_snapshot_add_rectangle (snapshot,
+                                      &(ClutterActorBox) {
+                                        .x1 = 0,
+                                        .y1 = 0,
+                                        .x2 = extents.width,
+                                        .y2 = extents.height,
+                                      });
+      clutter_snapshot_pop (snapshot);
+    }
+  clutter_snapshot_pop (snapshot);
+
+  snapshot_selection (text, snapshot);
+
+  if (resource_scale != 1.0f)
+    clutter_snapshot_pop (snapshot);
+
+  if (clip_set)
+    clutter_snapshot_pop (snapshot);
 }
 
 static void
@@ -3778,6 +4065,7 @@ clutter_text_class_init (ClutterTextClass *klass)
   gobject_class->finalize = clutter_text_finalize;
 
   actor_class->paint = clutter_text_paint;
+  actor_class->snapshot = clutter_text_snapshot;
   actor_class->get_paint_volume = clutter_text_get_paint_volume;
   actor_class->get_preferred_width = clutter_text_get_preferred_width;
   actor_class->get_preferred_height = clutter_text_get_preferred_height;

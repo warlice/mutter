@@ -102,12 +102,20 @@ clutter_content_real_paint_content (ClutterContent      *content,
 }
 
 static void
+clutter_content_real_snapshot (ClutterContent  *content,
+                               ClutterActor    *actor,
+                               ClutterSnapshot *snapshot)
+{
+}
+
+static void
 clutter_content_default_init (ClutterContentInterface *iface)
 {
   quark_content_actors = g_quark_from_static_string ("-clutter-content-actors");
 
   iface->get_preferred_size = clutter_content_real_get_preferred_size;
   iface->paint_content = clutter_content_real_paint_content;
+  iface->snapshot = clutter_content_real_snapshot;
   iface->attached = clutter_content_real_attached;
   iface->detached = clutter_content_real_detached;
   iface->invalidate = clutter_content_real_invalidate;
@@ -309,6 +317,14 @@ _clutter_content_paint_content (ClutterContent      *content,
 {
   CLUTTER_CONTENT_GET_IFACE (content)->paint_content (content, actor, node,
                                                       paint_context);
+}
+
+void
+_clutter_content_snapshot (ClutterContent  *content,
+                           ClutterActor    *actor,
+                           ClutterSnapshot *snapshot)
+{
+  CLUTTER_CONTENT_GET_IFACE (content)->snapshot (content, actor, snapshot);
 }
 
 /**

@@ -61,6 +61,7 @@
 #include "clutter/clutter-pick-context-private.h"
 #include "clutter/clutter-private.h"
 #include "clutter/clutter-seat-private.h"
+#include "clutter/clutter-snapshot-private.h"
 #include "clutter/clutter-stage-manager-private.h"
 #include "clutter/clutter-stage-private.h"
 #include "clutter/clutter-stage-view-private.h"
@@ -136,6 +137,8 @@ typedef struct _ClutterStagePrivate
   GHashTable *touch_sequences;
 
   GPtrArray *all_active_gestures;
+
+  gboolean use_snapshots;
 
   guint actor_needs_immediate_relayout : 1;
 } ClutterStagePrivate;
@@ -400,12 +403,11 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
                              ClutterFrame     *frame,
                              const MtkRegion  *redraw_clip)
 {
+  ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
   ClutterPaintContext *paint_context;
   MtkRectangle clip_rect;
   g_autoptr (GArray) clip_frusta = NULL;
   graphene_frustum_t clip_frustum;
-  ClutterPaintNode *root_node;
-  CoglFramebuffer *fb;
   CoglColor bg_color;
   int n_rectangles;
   ClutterPaintFlag paint_flags;
@@ -453,14 +455,32 @@ clutter_stage_do_paint_view (ClutterStage     *stage,
   clutter_actor_get_background_color (CLUTTER_ACTOR (stage), &bg_color);
   bg_color.alpha = 255;
 
-  fb = clutter_stage_view_get_framebuffer (view);
+  if (priv->use_snapshots)
+    {
+      g_autoptr (ClutterPaintNode) node = NULL;
+      ClutterSnapshot *snapshot;
 
-  root_node = clutter_root_node_new (fb, &bg_color, COGL_BUFFER_BIT_DEPTH);
-  clutter_paint_node_set_static_name (root_node, "Stage (root)");
-  clutter_paint_node_paint (root_node, paint_context);
-  clutter_paint_node_unref (root_node);
+      snapshot = clutter_snapshot_new_onscreen (paint_context, &bg_color);
+      clutter_actor_snapshot (CLUTTER_ACTOR (stage), snapshot);
 
-  clutter_actor_paint (CLUTTER_ACTOR (stage), paint_context);
+      node = clutter_snapshot_free_to_node (snapshot);
+      clutter_paint_node_paint (node, paint_context);
+    }
+  else
+    {
+      ClutterPaintNode *root_node;
+      CoglFramebuffer *fb;
+
+      fb = clutter_stage_view_get_framebuffer (view);
+
+      root_node = clutter_root_node_new (fb, &bg_color, COGL_BUFFER_BIT_DEPTH);
+      clutter_paint_node_set_static_name (root_node, "Stage (root)");
+      clutter_paint_node_paint (root_node, paint_context);
+      clutter_paint_node_unref (root_node);
+
+      clutter_actor_paint (CLUTTER_ACTOR (stage), paint_context);
+    }
+
   clutter_paint_context_destroy (paint_context);
 }
 
@@ -4608,4 +4628,12 @@ clutter_stage_update_devices_in_view (ClutterStage     *stage,
                                             entry->coords,
                                             CLUTTER_CURRENT_TIME);
     }
+}
+
+void
+clutter_stage_enable_snapshots (ClutterStage *stage)
+{
+  ClutterStagePrivate *priv = clutter_stage_get_instance_private (stage);
+
+  priv->use_snapshots = TRUE;
 }

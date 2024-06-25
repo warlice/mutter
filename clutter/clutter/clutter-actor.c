@@ -511,6 +511,7 @@
 #include "clutter/clutter-pick-context-private.h"
 #include "clutter/clutter-private.h"
 #include "clutter/clutter-property-transition.h"
+#include "clutter/clutter-snapshot-private.h"
 #include "clutter/clutter-stage-private.h"
 #include "clutter/clutter-stage-view-private.h"
 #include "clutter/clutter-timeline.h"
@@ -3003,18 +3004,14 @@ static void
 _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                                        ClutterPaintVolume *pv,
                                        const CoglColor   *color,
-                                       ClutterPaintNode   *node)
+                                       ClutterSnapshot    *snapshot)
 {
   g_autoptr (ClutterPaintNode) pipeline_node = NULL;
-  static CoglPipeline *outline = NULL;
   CoglPrimitive *prim;
   graphene_point3d_t line_ends[12 * 2];
   int n_vertices;
   CoglContext *ctx =
     clutter_backend_get_cogl_context (clutter_get_default_backend ());
-
-  if (outline == NULL)
-    outline = cogl_pipeline_new (ctx);
 
   _clutter_paint_volume_complete (pv);
 
@@ -3045,19 +3042,16 @@ _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                                 n_vertices,
                                 (CoglVertexP3 *)line_ends);
 
-  cogl_pipeline_set_color (outline, color);
+  clutter_snapshot_push_color (snapshot, color);
+  clutter_snapshot_add_primitive (snapshot, prim);
+  clutter_snapshot_pop (snapshot);
 
-  pipeline_node = clutter_pipeline_node_new (outline);
-  clutter_paint_node_set_static_name (pipeline_node,
-                                      "ClutterActor (paint volume outline)");
-  clutter_paint_node_add_primitive (pipeline_node, prim);
-  clutter_paint_node_add_child (node, pipeline_node);
   g_object_unref (prim);
 }
 
 static void
-_clutter_actor_draw_paint_volume (ClutterActor     *self,
-                                  ClutterPaintNode *node)
+_clutter_actor_draw_paint_volume (ClutterActor    *self,
+                                  ClutterSnapshot *snapshot)
 {
   ClutterPaintVolume *pv;
 
@@ -3076,7 +3070,7 @@ _clutter_actor_draw_paint_volume (ClutterActor     *self,
 
       _clutter_actor_draw_paint_volume_full (self, &fake_pv,
                                              &COGL_COLOR_INIT (0, 0, 255, 255),
-                                             node);
+                                             snapshot);
 
       clutter_paint_volume_free (&fake_pv);
     }
@@ -3084,7 +3078,7 @@ _clutter_actor_draw_paint_volume (ClutterActor     *self,
     {
       _clutter_actor_draw_paint_volume_full (self, pv,
                                              &COGL_COLOR_INIT (0, 255, 0, 255),
-                                             node);
+                                             snapshot);
     }
 }
 
@@ -3092,7 +3086,7 @@ static void
 _clutter_actor_paint_cull_result (ClutterActor      *self,
                                   gboolean           success,
                                   ClutterCullResult  result,
-                                  ClutterPaintNode  *node)
+                                  ClutterSnapshot   *snapshot)
 {
   ClutterPaintVolume *pv;
   CoglColor color;
@@ -3118,7 +3112,7 @@ _clutter_actor_paint_cull_result (ClutterActor      *self,
   if (success && (pv = _clutter_actor_get_paint_volume_mutable (self)))
     _clutter_actor_draw_paint_volume_full (self, pv,
                                            &color,
-                                           node);
+                                           snapshot);
 }
 
 static int clone_paint_level = 0;
@@ -3322,6 +3316,29 @@ clutter_actor_real_paint (ClutterActor        *actor,
                     iter->priv->allocation.y2 - iter->priv->allocation.y1);
 
       clutter_actor_paint (iter, paint_context);
+    }
+}
+
+static void
+clutter_actor_real_snapshot (ClutterActor    *actor,
+                             ClutterSnapshot *snapshot)
+{
+  ClutterActorPrivate *priv = actor->priv;
+  ClutterActor *iter;
+
+  for (iter = priv->first_child;
+       iter != NULL;
+       iter = iter->priv->next_sibling)
+    {
+      CLUTTER_NOTE (PAINT, "Snapshotting %s, child of %s, at { %.2f, %.2f - %.2f x %.2f }",
+                    _clutter_actor_get_debug_name (iter),
+                    _clutter_actor_get_debug_name (actor),
+                    iter->priv->allocation.x1,
+                    iter->priv->allocation.y1,
+                    iter->priv->allocation.x2 - iter->priv->allocation.x1,
+                    iter->priv->allocation.y2 - iter->priv->allocation.y1);
+
+      clutter_actor_snapshot_child (actor, iter, snapshot);
     }
 }
 
@@ -3547,9 +3564,7 @@ clutter_actor_paint (ClutterActor        *self,
         ? cull_actor (self, paint_context, &result)
         : FALSE;
 
-      if (G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_REDRAWS))
-        _clutter_actor_paint_cull_result (self, success, result, actor_node);
-      else if (result == CLUTTER_CULL_RESULT_OUT && success)
+      if (result == CLUTTER_CULL_RESULT_OUT && success)
         return;
     }
 
@@ -3558,9 +3573,6 @@ clutter_actor_paint (ClutterActor        *self,
   else
     priv->next_effect_to_paint =
       _clutter_meta_group_peek_metas (priv->effects);
-
-  if (G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_VOLUMES))
-    _clutter_actor_draw_paint_volume (self, actor_node);
 
   clutter_paint_node_paint (root_node, paint_context);
 
@@ -3665,6 +3677,243 @@ clutter_actor_continue_paint (ClutterActor        *self,
 
       priv->current_effect = old_current_effect;
     }
+}
+
+void
+clutter_actor_snapshot_effects_and_children (ClutterActor    *self,
+                                             ClutterSnapshot *snapshot)
+{
+  ClutterActorPrivate *priv;
+
+  g_assert (CLUTTER_IS_ACTOR (self));
+  g_assert (CLUTTER_ACTOR_IN_PAINT (self));
+
+  priv = self->priv;
+
+  /* Skip any effects that are disabled */
+  while (priv->next_effect_to_paint &&
+         !clutter_actor_meta_get_enabled (priv->next_effect_to_paint->data))
+    priv->next_effect_to_paint = priv->next_effect_to_paint->next;
+
+  if (priv->next_effect_to_paint != NULL)
+    {
+      ClutterEffectPaintFlags effect_flags = 0;
+      ClutterEffect *old_current_effect;
+
+      old_current_effect = priv->current_effect;
+
+      priv->current_effect = priv->next_effect_to_paint->data;
+      priv->next_effect_to_paint = priv->next_effect_to_paint->next;
+
+      if (priv->is_dirty)
+        {
+          /* If there's an effect queued with this redraw then all
+           * effects up to that one will be considered dirty. It
+           * is expected the queued effect will paint the cached
+           * image and not call clutter_actor_continue_paint again
+           * (although it should work ok if it does)
+           */
+          if (priv->effect_to_redraw == NULL ||
+              priv->current_effect != priv->effect_to_redraw)
+            effect_flags |= CLUTTER_EFFECT_PAINT_ACTOR_DIRTY;
+        }
+
+      if (priv->current_effect == priv->flatten_effect &&
+          priv->offscreen_redirect & CLUTTER_OFFSCREEN_REDIRECT_ON_IDLE &&
+          effect_flags & CLUTTER_EFFECT_PAINT_ACTOR_DIRTY)
+        effect_flags |= CLUTTER_EFFECT_PAINT_BYPASS_EFFECT;
+
+      _clutter_effect_snapshot (priv->current_effect, snapshot, effect_flags);
+
+      priv->current_effect = old_current_effect;
+    }
+  else
+    {
+      ClutterActorBox box;
+      CoglColor background_color;
+
+      /* Actor background */
+      box.x1 = 0.f;
+      box.y1 = 0.f;
+      box.x2 = clutter_actor_box_get_width (&priv->allocation);
+      box.y2 = clutter_actor_box_get_height (&priv->allocation);
+
+      background_color = priv->bg_color;
+
+      if (!CLUTTER_ACTOR_IS_TOPLEVEL (self) &&
+          priv->bg_color_set &&
+          !cogl_color_equal (&priv->bg_color, &transparent))
+        {
+          background_color.alpha =
+            clutter_actor_get_paint_opacity_internal (self) * priv->bg_color.alpha / 255;
+
+          clutter_snapshot_push_color (snapshot, &background_color);
+          clutter_snapshot_add_rectangle (snapshot, &box);
+          clutter_snapshot_pop (snapshot);
+        }
+
+      /* No effects to snapshot, paint the content and the actor children */
+      if (priv->content != NULL)
+        _clutter_content_snapshot (priv->content, self, snapshot);
+
+      CLUTTER_ACTOR_GET_CLASS (self)->snapshot (self, snapshot);
+    }
+}
+
+static void
+clutter_actor_do_snapshot (ClutterActor    *self,
+                           ClutterSnapshot *snapshot)
+{
+  g_autoptr (GList) snapshotted_effects = NULL;
+  ClutterActorPrivate *priv;
+  ClutterActorBox clip;
+  gboolean transform_set = FALSE;
+  gboolean clip_set = FALSE;
+
+  g_assert (CLUTTER_IS_ACTOR (self));
+  g_assert (CLUTTER_IS_SNAPSHOT (snapshot));
+
+  priv = self->priv;
+  priv->propagated_one_redraw = FALSE;
+
+  /* It's an important optimization that we consider painting of
+   * actors with 0 opacity to be a NOP. */
+  if (!CLUTTER_ACTOR_IS_TOPLEVEL (self) &&
+      (priv->opacity_override >= 0 ? priv->opacity_override : priv->opacity) == 0)
+    return;
+
+  /* Cull actor out before anything */
+  if (priv->inhibit_culling_counter == 0 && !in_clone_paint ())
+    {
+      ClutterPaintContext *paint_context = clutter_snapshot_get_paint_context (snapshot);
+      ClutterCullResult result = CLUTTER_CULL_RESULT_IN;
+      gboolean should_cull_out;
+      gboolean success;
+
+      should_cull_out = (clutter_paint_debug_flags &
+                         (CLUTTER_DEBUG_DISABLE_CULLING | CLUTTER_DEBUG_DISABLE_CLIPPED_REDRAWS)) !=
+                        (CLUTTER_DEBUG_DISABLE_CULLING | CLUTTER_DEBUG_DISABLE_CLIPPED_REDRAWS);
+
+      success = should_cull_out ? cull_actor (self, paint_context, &result) : FALSE;
+
+      if (G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_REDRAWS))
+        _clutter_actor_paint_cull_result (self, success, result, snapshot);
+      else if (result == CLUTTER_CULL_RESULT_OUT && success)
+        return;
+    }
+
+  /* We check whether we need to add the flatten effect before each paint so that
+   * we can avoid having a mechanism for applications to notify when the value of
+   * the has_overlaps virtual changes.
+   */
+  add_or_remove_flatten_effect (self);
+
+  if (priv->has_clip)
+    {
+      clip.x1 = priv->clip.origin.x;
+      clip.y1 = priv->clip.origin.y;
+      clip.x2 = priv->clip.origin.x + priv->clip.size.width;
+      clip.y2 = priv->clip.origin.y + priv->clip.size.height;
+      clip_set = TRUE;
+    }
+  else if (priv->clip_to_allocation)
+    {
+      clip.x1 = 0.f;
+      clip.y1 = 0.f;
+      clip.x2 = priv->allocation.x2 - priv->allocation.x1;
+      clip.y2 = priv->allocation.y2 - priv->allocation.y1;
+      clip_set = TRUE;
+    }
+
+  if (clip_set)
+    {
+      clutter_snapshot_push_clip (snapshot);
+      clutter_snapshot_add_rectangle (snapshot, &clip);
+    }
+
+  if (priv->enable_model_view_transform)
+    {
+      graphene_matrix_t transform;
+
+      clutter_actor_get_transform (self, &transform);
+
+      if (!graphene_matrix_is_identity (&transform))
+        {
+          clutter_snapshot_push_transform (snapshot, &transform);
+          transform_set = TRUE;
+        }
+    }
+
+  CLUTTER_SET_PRIVATE_FLAGS (self, CLUTTER_IN_PAINT);
+
+  clutter_actor_snapshot_effects_and_children (self, snapshot);
+
+  CLUTTER_UNSET_PRIVATE_FLAGS (self, CLUTTER_IN_PAINT);
+
+  if (G_UNLIKELY (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_VOLUMES))
+    _clutter_actor_draw_paint_volume (self, snapshot);
+
+  if (transform_set)
+    clutter_snapshot_pop (snapshot);
+
+  if (clip_set)
+    clutter_snapshot_pop (snapshot);
+
+  /* If we make it here then the actor has run through a complete
+   * paint run including all the effects so it's no longer dirty,
+   * unless a new redraw was queued up.
+   */
+  priv->is_dirty = priv->propagated_one_redraw;
+}
+
+/**
+ * clutter_actor_snapshot_child:
+ * @self: a `ClutterActor`
+ * @child: a child of @self
+ * @snapshot: `ClutterSnapshot` as passed to the widget. In particular, no
+ *   calls to clutter_actor_snapshot_child() or other transform calls should
+ *   have been made.
+ *
+ * Snapshot the a child of @self.
+ *
+ * When an actor receives a call to the snapshot function, it must send
+ * synthetic [vfunc@Clutter.Actor.snapshot] calls to all children. This
+ * function provides a convenient way of doing this. An actor, when it
+ * receives a call to its [vfunc@Clutter.Actor.snapshot] function, calls
+ * clutter_actor_snapshot_child() once for each child, passing in the
+ * @snapshot the actor received.
+ *
+ * clutter_actor_snapshot_child() takes care of translating the origin of
+ * @snapshot, and deciding whether the child needs to be snapshot.
+ */
+void
+clutter_actor_snapshot_child (ClutterActor    *self,
+                              ClutterActor    *child,
+                              ClutterSnapshot *snapshot)
+{
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+  g_return_if_fail (CLUTTER_IS_ACTOR (child));
+  g_return_if_fail (CLUTTER_IS_SNAPSHOT (snapshot));
+  g_return_if_fail (child->priv->parent == self);
+
+  if (CLUTTER_ACTOR_IN_DESTRUCTION (self))
+    return;
+
+  if (!(child->flags & CLUTTER_ACTOR_MAPPED))
+    return;
+
+  clutter_actor_do_snapshot (child, snapshot);
+}
+
+
+void
+clutter_actor_snapshot (ClutterActor    *self,
+                        ClutterSnapshot *snapshot)
+{
+  if (!(self->flags & CLUTTER_ACTOR_MAPPED))
+    return;
+
+  clutter_actor_do_snapshot (self, snapshot);
 }
 
 /**
@@ -5577,6 +5826,7 @@ clutter_actor_class_init (ClutterActorClass *klass)
   klass->calculate_resource_scale = clutter_actor_real_calculate_resource_scale;
   klass->paint = clutter_actor_real_paint;
   klass->destroy = clutter_actor_real_destroy;
+  klass->snapshot = clutter_actor_real_snapshot;
 
   klass->layout_manager_type = G_TYPE_INVALID;
 

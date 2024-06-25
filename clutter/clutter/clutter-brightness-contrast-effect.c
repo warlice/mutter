@@ -36,6 +36,7 @@
 
 #include "cogl/cogl.h"
 
+#include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-brightness-contrast-effect.h"
 #include "clutter/clutter-debug.h"
 #include "clutter/clutter-enum-types.h"
@@ -142,6 +143,25 @@ clutter_brightness_contrast_effect_pre_paint (ClutterEffect       *effect,
 }
 
 static void
+clutter_brightness_contrast_effect_snapshot (ClutterEffect           *effect,
+                                             ClutterSnapshot         *snapshot,
+                                             ClutterEffectPaintFlags  flags)
+{
+  ClutterBrightnessContrastEffect *self = CLUTTER_BRIGHTNESS_CONTRAST_EFFECT (effect);
+
+  if (will_have_no_effect (self))
+    {
+      ClutterActor *actor = clutter_actor_meta_get_actor (CLUTTER_ACTOR_META (effect));
+      clutter_actor_snapshot_effects_and_children (actor, snapshot);
+      return;
+    }
+
+  CLUTTER_EFFECT_CLASS (clutter_brightness_contrast_effect_parent_class)->snapshot (effect,
+                                                                                    snapshot,
+                                                                                    flags);
+}
+
+static void
 clutter_brightness_contrast_effect_dispose (GObject *gobject)
 {
   ClutterBrightnessContrastEffect *self = CLUTTER_BRIGHTNESS_CONTRAST_EFFECT (gobject);
@@ -241,6 +261,7 @@ clutter_brightness_contrast_effect_class_init (ClutterBrightnessContrastEffectCl
   offscreen_class->create_pipeline = clutter_brightness_contrast_effect_create_pipeline;
 
   effect_class->pre_paint = clutter_brightness_contrast_effect_pre_paint;
+  effect_class->snapshot = clutter_brightness_contrast_effect_snapshot;
 
   gobject_class->set_property = clutter_brightness_contrast_effect_set_property;
   gobject_class->get_property = clutter_brightness_contrast_effect_get_property;
