@@ -25,6 +25,7 @@
 
 #include "backends/meta-backend-types.h"
 #include "backends/meta-virtual-monitor.h"
+#include "meta/meta-window-actor.h"
 #include "meta/window.h"
 
 #define META_TEST_CLIENT_ERROR meta_test_client_error_quark ()
@@ -84,6 +85,10 @@ gboolean meta_test_client_do (MetaTestClient  *client,
                               ...) G_GNUC_NULL_TERMINATED;
 
 META_EXPORT
+void meta_test_client_set_blocking_client_calls (MetaTestClient *client,
+                                                 gboolean        blocking_calls);
+
+META_EXPORT
 MetaWindow * meta_find_window_from_title (MetaContext *context,
                                           const char  *title);
 
@@ -91,6 +96,11 @@ META_EXPORT
 MetaWindow * meta_test_client_find_window (MetaTestClient  *client,
                                            const char      *window_id,
                                            GError         **error);
+
+META_EXPORT
+MetaWindowActor * meta_test_client_find_window_actor (MetaTestClient  *client,
+                                                      const char      *window_id,
+                                                      GError         **error);
 
 META_EXPORT
 void meta_test_client_wait_for_window_shown (MetaTestClient *client,

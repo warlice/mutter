@@ -36,7 +36,7 @@ GHashTable *windows;
 GQuark event_source_quark;
 GQuark event_handlers_quark;
 GQuark can_take_focus_quark;
-gboolean sync_after_lines = -1;
+gboolean block_while_waiting = FALSE;
 
 typedef void (*XEventHandler) (GtkWidget *window, XEvent *event);
 
@@ -278,7 +278,7 @@ text_clear_func (GtkClipboard *clipboard,
   g_free (data);
 }
 
-static void
+static gboolean
 process_line (const char *line)
 {
   GError *error = NULL;
@@ -289,13 +289,13 @@ process_line (const char *line)
     {
       g_print ("error parsing command: %s\n", error->message);
       g_error_free (error);
-      return;
+      return FALSE;
     }
 
   if (argc < 1)
     {
       g_print ("Empty command\n");
-      goto out;
+      goto fail;
     }
 
   if (strcmp (argv[0], "create") == 0)
@@ -305,13 +305,13 @@ process_line (const char *line)
       if (argc  < 2)
         {
           g_print ("usage: create <id> [override|csd]\n");
-          goto out;
+          goto fail;
         }
 
       if (g_hash_table_lookup (windows, argv[1]))
         {
           g_print ("window %s already exists\n", argv[1]);
-          goto out;
+          goto fail;
         }
 
       gboolean override = FALSE;
@@ -327,7 +327,7 @@ process_line (const char *line)
       if (override && csd)
         {
           g_print ("override and csd keywords are exclusive\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = gtk_window_new (override ? GTK_WINDOW_POPUP : GTK_WINDOW_TOPLEVEL);
@@ -371,21 +371,21 @@ process_line (const char *line)
       if (argc != 3)
         {
           g_print ("usage: set_parent <window-id> <parent-id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
         {
           g_print ("unknown window %s\n", argv[1]);
-          goto out;
+          goto fail;
         }
 
       GtkWidget *parent_window = lookup_window (argv[2]);
       if (!parent_window)
         {
           g_print ("unknown parent window %s\n", argv[2]);
-          goto out;
+          goto fail;
         }
 
       gtk_window_set_transient_for (GTK_WINDOW (window),
@@ -396,21 +396,21 @@ process_line (const char *line)
       if (argc != 3)
         {
           g_print ("usage: set_parent_exported <window-id> <parent-id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
         {
           g_print ("unknown window %s\n", argv[1]);
-          goto out;
+          goto fail;
         }
 
       GtkWidget *parent_window = lookup_window (argv[2]);
       if (!parent_window)
         {
           g_print ("unknown parent window %s\n", argv[2]);
-          goto out;
+          goto fail;
         }
 
       GdkWindow *parent_gdk_window = gtk_widget_get_window (parent_window);
@@ -425,14 +425,14 @@ process_line (const char *line)
       if (argc != 3)
         {
           g_print ("usage: %s <window-id> [true|false]\n", argv[0]);
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
         {
           g_print ("unknown window %s\n", argv[1]);
-          goto out;
+          goto fail;
         }
 
       if (!wayland &&
@@ -440,7 +440,7 @@ process_line (const char *line)
         {
           g_print ("Impossible to use %s for windows accepting take focus\n",
                    argv[1]);
-          goto out;
+          goto fail;
         }
 
       gboolean enabled = g_ascii_strcasecmp (argv[2], "true") == 0;
@@ -451,27 +451,27 @@ process_line (const char *line)
       if (argc != 3)
         {
           g_print ("usage: %s <window-id> [true|false]\n", argv[0]);
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
         {
           g_print ("unknown window %s\n", argv[1]);
-          goto out;
+          goto fail;
         }
 
       if (wayland)
         {
           g_print ("%s not supported under wayland\n", argv[0]);
-          goto out;
+          goto fail;
         }
 
       if (window_has_x11_event_handler (window, handle_take_focus))
         {
           g_print ("Impossible to change %s for windows accepting take focus\n",
                    argv[1]);
-          goto out;
+          goto fail;
         }
 
       GdkDisplay *display = gdk_display_get_default ();
@@ -510,33 +510,33 @@ process_line (const char *line)
       if (argc != 3)
         {
           g_print ("usage: %s <window-id> [true|false]\n", argv[0]);
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
         {
           g_print ("unknown window %s\n", argv[1]);
-          goto out;
+          goto fail;
         }
 
       if (wayland)
         {
           g_print ("%s not supported under wayland\n", argv[0]);
-          goto out;
+          goto fail;
         }
 
       if (gtk_window_get_accept_focus (GTK_WINDOW (window)))
         {
           g_print ("%s not supported for input windows\n", argv[0]);
-          goto out;
+          goto fail;
         }
 
       if (!g_object_get_qdata (G_OBJECT (window), can_take_focus_quark))
         {
           g_print ("%s not supported for windows with no WM_TAKE_FOCUS set\n",
                    argv[0]);
-          goto out;
+          goto fail;
         }
 
       if (g_ascii_strcasecmp (argv[2], "true") == 0)
@@ -549,12 +549,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: show <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gtk_widget_show (window);
       gdk_display_sync (gdk_display_get_default ());
@@ -564,12 +564,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: hide <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gtk_widget_hide (window);
     }
@@ -578,12 +578,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: activate <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gtk_window_present (GTK_WINDOW (window));
     }
@@ -592,12 +592,12 @@ process_line (const char *line)
       if (argc != 4)
         {
           g_print ("usage: resize <id> <width> <height>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       int width = atoi (argv[2]);
       int height = atoi (argv[3]);
@@ -611,12 +611,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: raise <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gdk_window_raise (gtk_widget_get_window (window));
     }
@@ -625,12 +625,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: lower <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gdk_window_lower (gtk_widget_get_window (window));
     }
@@ -639,12 +639,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: destroy <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       g_hash_table_remove (windows, argv[1]);
       gtk_widget_destroy (window);
@@ -654,7 +654,7 @@ process_line (const char *line)
       if (argc != 1)
         {
           g_print ("usage: destroy_all\n");
-          goto out;
+          goto fail;
         }
 
       GHashTableIter iter;
@@ -666,15 +666,15 @@ process_line (const char *line)
 
       g_hash_table_remove_all (windows);
     }
-  else if (strcmp (argv[0], "sync") == 0)
+  else if (strcmp (argv[0], "flush") == 0)
     {
       if (argc != 1)
         {
-          g_print ("usage: sync\n");
-          goto out;
+          g_print ("usage: flush\n");
+          goto fail;
         }
 
-      gdk_display_sync (gdk_display_get_default ());
+      gdk_display_flush (gdk_display_get_default ());
     }
   else if (strcmp (argv[0], "set_counter") == 0)
     {
@@ -684,13 +684,13 @@ process_line (const char *line)
       if (argc != 3)
         {
           g_print ("usage: set_counter <counter> <value>\n");
-          goto out;
+          goto fail;
         }
 
       if (wayland)
         {
           g_print ("usage: set_counter can only be used for X11\n");
-          goto out;
+          goto fail;
         }
 
       counter = strtoul(argv[1], NULL, 10);
@@ -706,12 +706,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: minimize <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gtk_window_iconify (GTK_WINDOW (window));
     }
@@ -720,12 +720,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: unminimize <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gtk_window_deiconify (GTK_WINDOW (window));
     }
@@ -734,12 +734,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: maximize <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gtk_window_maximize (GTK_WINDOW (window));
     }
@@ -748,12 +748,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: unmaximize <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gtk_window_unmaximize (GTK_WINDOW (window));
     }
@@ -762,12 +762,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: fullscreen <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gtk_window_fullscreen (GTK_WINDOW (window));
     }
@@ -776,12 +776,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: unfullscreen <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gtk_window_unfullscreen (GTK_WINDOW (window));
     }
@@ -790,12 +790,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: freeze <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gdk_window_freeze_updates (gtk_widget_get_window (window));
     }
@@ -804,12 +804,12 @@ process_line (const char *line)
       if (argc != 2)
         {
           g_print ("usage: thaw <id>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gdk_window_thaw_updates (gtk_widget_get_window (window));
     }
@@ -823,12 +823,12 @@ process_line (const char *line)
       if (argc != 4)
         {
           g_print ("usage: assert_size <id> <width> <height>\n");
-          goto out;
+          goto fail;
         }
 
       GtkWidget *window = lookup_window (argv[1]);
       if (!window)
-        goto out;
+        goto fail;
 
       gtk_window_get_size (GTK_WINDOW (window), &width, &height);
       height += calculate_titlebar_height (GTK_WINDOW (window));
@@ -840,28 +840,21 @@ process_line (const char *line)
           g_print ("Expected size %dx%d didn't match actual size %dx%d\n",
                    expected_width, expected_height,
                    width, height);
-          goto out;
+          goto fail;
         }
     }
-  else if (strcmp (argv[0], "stop_after_next") == 0)
+  else if (strcmp (argv[0], "set_client_frozen_while_mutter_active") == 0)
     {
-      if (sync_after_lines != -1)
+      if (argc != 2)
         {
-          g_print ("Can't invoke 'stop_after_next' while already stopped");
-          goto out;
+          g_print ("usage: set_client_frozen_while_mutter_active [true/false]\n");
+          goto fail;
         }
 
-      sync_after_lines = 1;
-    }
-  else if (strcmp (argv[0], "continue") == 0)
-    {
-      if (sync_after_lines != 0)
-        {
-          g_print ("Can only invoke 'continue' while stopped");
-          goto out;
-        }
-
-      sync_after_lines = -1;
+      if (strcmp (argv[1], "true") == 0)
+        block_while_waiting = TRUE;
+      else if (strcmp (argv[1], "false") == 0)
+        block_while_waiting = FALSE;
     }
   else if (strcmp (argv[0], "clipboard-set") == 0)
     {
@@ -875,7 +868,7 @@ process_line (const char *line)
       if (argc != 3)
         {
           g_print ("usage: clipboard-set <mimetype> <text>\n");
-          goto out;
+          goto fail;
         }
 
       clipboard = gtk_clipboard_get_for_display (display,
@@ -897,13 +890,15 @@ process_line (const char *line)
   else
     {
       g_print ("Unknown command %s\n", argv[0]);
-      goto out;
+      goto fail;
     }
 
-  g_print ("OK\n");
-
- out:
   g_strfreev (argv);
+  return TRUE;
+
+fail:
+  g_strfreev (argv);
+  return FALSE;
 }
 
 static void
@@ -924,7 +919,16 @@ on_line_received (GObject      *source,
       return;
     }
 
-  process_line (line);
+  if (process_line (line))
+    {
+      gdk_display_flush (gdk_display_get_default ());
+      g_print ("OK\n");
+    }
+  else
+    {
+      gdk_display_flush (gdk_display_get_default ());
+    }
+
   g_free (line);
   read_next_line (in);
 }
@@ -932,14 +936,12 @@ on_line_received (GObject      *source,
 static void
 read_next_line (GDataInputStream *in)
 {
-  while (sync_after_lines == 0)
+  while (block_while_waiting)
     {
       GdkDisplay *display = gdk_display_get_default ();
       g_autoptr (GError) error = NULL;
       g_autofree char *line = NULL;
       size_t length;
-
-      gdk_display_flush (display);
 
       line = g_data_input_stream_read_line (in, &length, NULL, &error);
       if (!line)
@@ -950,11 +952,16 @@ read_next_line (GDataInputStream *in)
           return;
         }
 
-      process_line (line);
+      if (process_line (line))
+        {
+          gdk_display_flush (display);
+          g_print ("OK\n");
+        }
+      else
+        {
+          gdk_display_flush (display);
+        }
     }
-
-  if (sync_after_lines >= 0)
-    sync_after_lines--;
 
   g_data_input_stream_read_line_async (in, G_PRIORITY_DEFAULT, NULL,
                                        on_line_received, NULL);

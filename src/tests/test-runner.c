@@ -854,6 +854,7 @@ test_case_do (TestCase    *test,
               GError     **error)
 {
   g_autofree char *command = NULL;
+  MetaWaylandCompositor *compositor = meta_context_get_wayland_compositor (test->context);
 
   command = g_strjoinv (" ", argv);
   g_debug ("%s:%d: '%s'", filename, line_no, command);
@@ -1287,6 +1288,19 @@ test_case_do (TestCase    *test,
           g_main_context_iteration (NULL, TRUE);
         }
     }
+  else if (strcmp (argv[0], "set_mutter_frozen_while_client_active") == 0)
+    {
+      gboolean blocking_calls;
+      GHashTableIter iter;
+      gpointer key, value;
+
+      if (argc != 2 || !str_to_bool (argv[1], &blocking_calls))
+        BAD_COMMAND("usage: %s [true/false]", argv[0]);
+
+      g_hash_table_iter_init (&iter, test->clients);
+      while (g_hash_table_iter_next (&iter, &key, &value))
+        meta_test_client_set_blocking_client_calls (value, blocking_calls);
+    }
   else if (strcmp (argv[0], "dispatch") == 0)
     {
       if (argc != 1)
@@ -1452,17 +1466,16 @@ test_case_do (TestCase    *test,
           return FALSE;
         }
     }
-  else if (strcmp (argv[0], "stop_after_next") == 0 ||
-           strcmp (argv[0], "continue") == 0)
+  else if (strcmp (argv[0], "set_client_frozen_while_mutter_active") == 0)
     {
-      if (argc != 2)
-        BAD_COMMAND("usage: %s <client-id>", argv[0]);
+      if (argc != 3)
+        BAD_COMMAND("usage: %s <client-id> [true/false]", argv[0]);
 
       MetaTestClient *client = test_case_lookup_client (test, argv[1], error);
       if (!client)
         return FALSE;
 
-      if (!meta_test_client_do (client, error, argv[0], NULL))
+      if (!meta_test_client_do (client, error, argv[0], argv[2], NULL))
         return FALSE;
     }
   else if (strcmp (argv[0], "clipboard-set") == 0)
@@ -1889,7 +1902,6 @@ test_case_do (TestCase    *test,
     {
       MetaTestClient *client;
       const char *window_id;
-      MetaWindow *window;
       MetaWindowActor *window_actor;
 
       if (argc != 2)
@@ -1898,11 +1910,10 @@ test_case_do (TestCase    *test,
       if (!test_case_parse_window_id (test, argv[1], &client, &window_id, error))
         return FALSE;
 
-      window = meta_test_client_find_window (client, window_id, error);
-      if (!window)
+      window_actor = meta_test_client_find_window_actor (client, window_id, error);
+      if (!window_actor)
         return FALSE;
 
-      window_actor = meta_window_actor_from_window (window);
       g_object_add_weak_pointer (G_OBJECT (window_actor),
                                  (gpointer *) &window_actor);
       while (window_actor && meta_window_actor_effect_in_progress (window_actor))
@@ -1944,6 +1955,8 @@ test_case_do (TestCase    *test,
     {
       BAD_COMMAND("Unknown command %s", argv[0]);
     }
+
+  meta_wayland_compositor_flush_clients (compositor);
 
   return TRUE;
 }
