@@ -35,6 +35,7 @@
 typedef struct _MetaKmsCrtcPropTable
 {
   MetaKmsProp props[META_KMS_CRTC_N_PROPS];
+  MetaKmsEnum histogram_enum[META_KMS_CRTC_HISTOGRAM_N_PROPS];
 } MetaKmsCrtcPropTable;
 
 struct _MetaKmsCrtc
@@ -479,6 +480,24 @@ init_properties (MetaKmsCrtc       *crtc,
         {
           .name = "VRR_ENABLED",
           .type = DRM_MODE_PROP_RANGE,
+        },
+      [META_KMS_CRTC_PROP_GLOBAL_HISTOGRAM_ENABLED] =
+       {
+         .name = "Histogram_Enable",
+         .type = DRM_MODE_PROP_ENUM,
+         .enum_values = prop_table->histogram_enum,
+         .num_enum_values = META_KMS_CRTC_HISTOGRAM_N_PROPS,
+         .default_value = META_KMS_CRTC_HISTOGRAM_UNKNOWN,
+       },
+    },
+    .histogram_enum = {
+      [META_KMS_CRTC_HISTOGRAM_DISABLE] =
+        {
+          .name = "Disable",
+        },
+      [META_KMS_CRTC_HISTOGRAM_ENABLE] =
+        {
+          .name = "Enable",
         },
     }
   };

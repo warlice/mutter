@@ -432,6 +432,19 @@ process_mode_set (MetaKmsImplDevice  *impl_device,
                               error))
         return FALSE;
 
+      meta_topic (META_DEBUG_KMS,
+                  "[atomic] Setting Global Histogram of CRTC %u (%s) to %s",
+                  meta_kms_crtc_get_id (crtc),
+                  meta_kms_impl_device_get_path (impl_device),
+                  meta_kms_mode_get_name (mode));
+
+      if (!add_crtc_property (impl_device,
+                              crtc, req,
+                              META_KMS_CRTC_PROP_GLOBAL_HISTOGRAM_ENABLED,
+                              META_KMS_CRTC_HISTOGRAM_ENABLE,
+                              error))
+         return FALSE;
+
       for (l = mode_set->connectors; l; l = l->next)
         {
           MetaKmsConnector *connector = l->data;
