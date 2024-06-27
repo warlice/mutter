@@ -223,6 +223,32 @@ read_gamma_state (MetaKmsCrtc       *crtc,
     read_crtc_legacy_gamma (crtc, crtc_state, impl_device, drm_crtc);
 }
 
+static void
+read_crtc_global_histogram_and_fetch_iet (MetaKmsCrtc       *crtc,
+                                          MetaKmsImplDevice *impl_device)
+{
+  MetaKmsProp *prop;
+  drmModePropertyBlobPtr histogram_blob = NULL;
+  uint32_t blob_id, *histogram_ptr;
+  int fd;
+
+  prop = &crtc->prop_table.props[META_KMS_CRTC_PROP_GLOBAL_HISTOGRAM];
+  if(!prop)
+    return;
+
+  blob_id = prop->value;
+  if (blob_id == 0)
+    return;
+
+  fd = meta_kms_impl_device_get_fd (impl_device);
+  histogram_blob = drmModeGetPropertyBlob (fd, blob_id);
+
+  if (!histogram_blob)
+    return;
+
+  /* Fetch IET LUT */
+}
+
 static gboolean
 gamma_equal (MetaKmsCrtcState *state,
              MetaKmsCrtcState *other_state)
@@ -261,7 +287,8 @@ static MetaKmsResourceChanges
 meta_kms_crtc_read_state (MetaKmsCrtc             *crtc,
                           MetaKmsImplDevice       *impl_device,
                           drmModeCrtc             *drm_crtc,
-                          drmModeObjectProperties *drm_props)
+                          drmModeObjectProperties *drm_props,
+                          gboolean                 read_histogram)
 {
   MetaKmsCrtcState crtc_state = {0};
   MetaKmsResourceChanges changes = META_KMS_RESOURCE_CHANGE_NONE;
@@ -300,6 +327,8 @@ meta_kms_crtc_read_state (MetaKmsCrtc             *crtc,
 
   read_gamma_state (crtc, &crtc_state, impl_device, drm_crtc);
 
+  read_crtc_global_histogram_and_fetch_iet (crtc, impl_device);
+
   if (!crtc_state.is_active)
     {
       if (crtc->current_state.is_active)
@@ -324,11 +353,13 @@ meta_kms_crtc_read_state (MetaKmsCrtc             *crtc,
                 ? "no"
                 : "yes");
 
+
   return changes;
 }
 
 MetaKmsResourceChanges
-meta_kms_crtc_update_state_in_impl (MetaKmsCrtc *crtc)
+meta_kms_crtc_update_state_in_impl (MetaKmsCrtc *crtc,
+                                    gboolean     read_histogram)
 {
   MetaKmsImplDevice *impl_device;
   MetaKmsResourceChanges changes;
@@ -351,7 +382,8 @@ meta_kms_crtc_update_state_in_impl (MetaKmsCrtc *crtc)
       goto out;
     }
 
-  changes = meta_kms_crtc_read_state (crtc, impl_device, drm_crtc, drm_props);
+  changes = meta_kms_crtc_read_state (crtc, impl_device, drm_crtc, drm_props,
+                                      read_histogram);
 
 out:
   g_clear_pointer (&drm_props, drmModeFreeObjectProperties);
@@ -489,6 +521,11 @@ init_properties (MetaKmsCrtc       *crtc,
          .num_enum_values = META_KMS_CRTC_HISTOGRAM_N_PROPS,
          .default_value = META_KMS_CRTC_HISTOGRAM_UNKNOWN,
        },
+      [META_KMS_CRTC_PROP_GLOBAL_HISTOGRAM] =
+       {
+         .name = "Global Histogram",
+         .type = DRM_MODE_PROP_BLOB,
+       },
     },
     .histogram_enum = {
       [META_KMS_CRTC_HISTOGRAM_DISABLE] =
@@ -535,7 +572,7 @@ meta_kms_crtc_new (MetaKmsImplDevice  *impl_device,
 
   init_properties (crtc, impl_device, drm_crtc);
 
-  meta_kms_crtc_read_state (crtc, impl_device, drm_crtc, drm_props);
+  meta_kms_crtc_read_state (crtc, impl_device, drm_crtc, drm_props, FALSE);
 
   drmModeFreeObjectProperties (drm_props);
 

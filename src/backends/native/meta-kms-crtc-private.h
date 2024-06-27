@@ -30,6 +30,7 @@ typedef enum _MetaKmsCrtcProp
   META_KMS_CRTC_PROP_GAMMA_LUT_SIZE,
   META_KMS_CRTC_PROP_VRR_ENABLED,
   META_KMS_CRTC_PROP_GLOBAL_HISTOGRAM_ENABLED,
+  META_KMS_CRTC_PROP_GLOBAL_HISTOGRAM,
   META_KMS_CRTC_N_PROPS
 } MetaKmsCrtcProp;
 
@@ -46,7 +47,8 @@ MetaKmsCrtc * meta_kms_crtc_new (MetaKmsImplDevice  *impl_device,
                                  int                 idx,
                                  GError            **error);
 
-MetaKmsResourceChanges meta_kms_crtc_update_state_in_impl (MetaKmsCrtc *crtc);
+MetaKmsResourceChanges meta_kms_crtc_update_state_in_impl (MetaKmsCrtc *crtc,
+                                                           gboolean     read_histogram);
 
 void meta_kms_crtc_disable_in_impl (MetaKmsCrtc *crtc);
 

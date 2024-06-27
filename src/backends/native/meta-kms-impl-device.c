@@ -1106,7 +1106,8 @@ clear_latched_fd_hold (MetaKmsImplDevice *impl_device)
 MetaKmsResourceChanges
 meta_kms_impl_device_update_states (MetaKmsImplDevice *impl_device,
                                     uint32_t           crtc_id,
-                                    uint32_t           connector_id)
+                                    uint32_t           connector_id,
+                                    gboolean           read_histogram)
 {
   MetaKmsImplDevicePrivate *priv =
     meta_kms_impl_device_get_instance_private (impl_device);
@@ -1152,7 +1153,7 @@ meta_kms_impl_device_update_states (MetaKmsImplDevice *impl_device,
           meta_kms_crtc_get_id (crtc) != crtc_id)
         continue;
 
-      changes |= meta_kms_crtc_update_state_in_impl (crtc);
+      changes |= meta_kms_crtc_update_state_in_impl (crtc, read_histogram);
     }
 
   meta_thread_uninhibit_realtime_in_impl (thread);

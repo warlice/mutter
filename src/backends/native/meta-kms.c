@@ -36,6 +36,7 @@ enum
   RESOURCES_CHANGED,
   DEVICE_ADDED,
   LEASE_CHANGED,
+  HISTOGRAM,
 
   N_SIGNALS
 };
@@ -51,6 +52,9 @@ struct _MetaKms
   gulong hotplug_handler_id;
   gulong lease_handler_id;
   gulong removed_handler_id;
+  gulong histogram_handler_id;
+
+  gboolean histogram_changed;
 
   MetaKmsImpl *impl;
   gboolean in_impl_task;
@@ -193,6 +197,7 @@ meta_kms_update_states_in_impl (MetaKms          *kms,
 {
   MetaKmsResourceChanges changes = META_KMS_RESOURCE_CHANGE_NONE;
   GList *l;
+  gboolean read_histogram;
 
   COGL_TRACE_BEGIN_SCOPED (MetaKmsUpdateStates,
                            "Meta::Kms::update_states_in_impl()");
@@ -220,10 +225,12 @@ meta_kms_update_states_in_impl (MetaKms          *kms,
                                                    update_data->connector_id))
         continue;
 
+      read_histogram = kms->histogram_changed;
       changes |=
         meta_kms_device_update_states_in_impl (kms_device,
                                                update_data->crtc_id,
-                                               update_data->connector_id);
+                                               update_data->connector_id,
+                                               read_histogram);
     }
 
   return changes;
@@ -275,6 +282,19 @@ handle_hotplug_event (MetaKms                *kms,
     meta_kms_emit_resources_changed (kms, changes);
 }
 
+static void
+handle_histogram_event (MetaKms                *kms,
+                        GUdevDevice            *udev_device,
+                        MetaKmsResourceChanges  changes)
+{
+  kms->histogram_changed = TRUE;
+
+  changes |= meta_kms_update_states_sync (kms, udev_device);
+
+  if (changes != META_KMS_RESOURCE_CHANGE_NONE)
+    g_signal_emit (kms, signals[HISTOGRAM], 0, changes);
+}
+
 static gpointer
 resume_in_impl (MetaThreadImpl  *thread_impl,
                 gpointer         user_data,
@@ -316,6 +336,14 @@ on_udev_lease (MetaUdev    *udev,
                MetaKms     *kms)
 {
   g_signal_emit (kms, signals[LEASE_CHANGED], 0);
+}
+
+static void
+on_udev_histogram (MetaUdev    *udev,
+                   GUdevDevice *udev_device,
+                   MetaKms     *kms)
+{
+  handle_histogram_event (kms, udev_device, META_KMS_RESOURCE_CHANGE_NONE);
 }
 
 MetaBackend *
@@ -415,6 +443,10 @@ meta_kms_new (MetaBackend   *backend,
         g_signal_connect (udev, "hotplug", G_CALLBACK (on_udev_hotplug), kms);
       kms->lease_handler_id =
         g_signal_connect (udev, "lease", G_CALLBACK (on_udev_lease), kms);
+
+      kms->histogram_handler_id =
+        g_signal_connect (udev, "histogram", G_CALLBACK (on_udev_histogram), kms);
+      kms->histogram_changed = FALSE;
     }
 
   kms->removed_handler_id =

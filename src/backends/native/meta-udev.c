@@ -31,6 +31,7 @@ enum
   LEASE,
   DEVICE_ADDED,
   DEVICE_REMOVED,
+  HISTOGRAM,
 
   N_SIGNALS
 };
@@ -234,6 +235,8 @@ on_uevent (GUdevClient *client,
 
   if (g_udev_device_get_property_as_boolean (device, "LEASE"))
     g_signal_emit (udev, signals[LEASE], 0, device);
+  if (g_udev_device_get_property_as_boolean (device, "HISTOGRAM"))
+    g_signal_emit (udev, signals[HISTOGRAM], 0, device);
 }
 
 MetaUdev *
@@ -311,6 +314,13 @@ meta_udev_class_init (MetaUdevClass *klass)
                   G_UDEV_TYPE_DEVICE);
   signals[DEVICE_REMOVED] =
     g_signal_new ("device-removed",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0, NULL, NULL, NULL,
+                  G_TYPE_NONE, 1,
+                  G_UDEV_TYPE_DEVICE);
+  signals[HISTOGRAM] =
+    g_signal_new ("histogram",
                   G_TYPE_FROM_CLASS (object_class),
                   G_SIGNAL_RUN_LAST,
                   0, NULL, NULL, NULL,
