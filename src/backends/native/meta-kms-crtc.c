@@ -30,6 +30,13 @@
 
 #define DEADLINE_EVASION_CONSTANT_US 200
 
+#ifdef HAVE_LIBGHE
+#include <ghe.h>
+#endif
+
+#define DEADLINE_EVASION_US 800
+#define DEADLINE_EVASION_WITH_KMS_TOPIC_US 1000
+
 #define MINIMUM_REFRESH_RATE 30.f
 
 typedef struct _MetaKmsCrtcPropTable
@@ -223,6 +230,33 @@ read_gamma_state (MetaKmsCrtc       *crtc,
     read_crtc_legacy_gamma (crtc, crtc_state, impl_device, drm_crtc);
 }
 
+#ifdef HAVE_LIBGHE
+static void
+fetch_iet_lut_from_algo (MetaKmsCrtc *crtc,
+                         int          fd,
+                         uint32_t    *data,
+                         size_t       length)
+{
+  drmModeCrtc *drm_crtc;
+  int i;
+  struct globalhist_args *args_ptr =
+         (struct globalhist_args *) malloc (sizeof(struct globalhist_args));
+
+  drm_crtc = drmModeGetCrtc (fd, crtc->id);
+
+  args_ptr->resolution_x = drm_crtc->width;
+  args_ptr->resolution_y = drm_crtc->height;
+  memcpy (args_ptr->histogram, data, length);
+
+  set_histogram_data_bin (args_ptr);
+
+  for (i=0; i<GLOBALHIST_IET_LUT_LENGTH; i++)
+    meta_topic (META_DEBUG_KMS, " IET [%d] = %d", i, args_ptr->dietfactor[i]);
+
+  /*Code Changes to Add a new Crtc property for IET to be added next*/
+}
+#endif
+
 static void
 read_crtc_global_histogram_and_fetch_iet (MetaKmsCrtc       *crtc,
                                           MetaKmsImplDevice *impl_device)
@@ -247,6 +281,9 @@ read_crtc_global_histogram_and_fetch_iet (MetaKmsCrtc       *crtc,
     return;
 
   /* Fetch IET LUT */
+#ifdef HAVE_LIBGHE
+ fetch_iet_lut_from_algo (crtc, fd, histogram_blob->data, histogram_blob->length);
+#endif
 }
 
 static gboolean
@@ -352,7 +389,6 @@ meta_kms_crtc_read_state (MetaKmsCrtc             *crtc,
               changes == META_KMS_RESOURCE_CHANGE_NONE
                 ? "no"
                 : "yes");
-
 
   return changes;
 }

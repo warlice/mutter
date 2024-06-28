@@ -225,3 +225,9 @@ option('libdisplay_info',
   deprecated: {'true': 'enabled', 'false': 'disabled'},
   description: 'Build with or without libdisplay-info'
 )
+
+option('libghe',
+  type: 'boolean',
+  value: true,
+  description: 'Build with or without libGHE'
+)
