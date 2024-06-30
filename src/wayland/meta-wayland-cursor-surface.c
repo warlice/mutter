@@ -126,6 +126,27 @@ cursor_sprite_prepare_at (MetaCursorSprite         *cursor_sprite,
       meta_cursor_sprite_set_texture_scale (cursor_sprite, texture_scale);
       meta_cursor_sprite_set_texture_transform (cursor_sprite,
                                                 surface->buffer_transform);
+
+      if (surface->viewport.has_src_rect)
+        {
+          meta_cursor_sprite_set_viewport_src_rect (cursor_sprite,
+                                                    &surface->viewport.src_rect);
+        }
+      else
+        {
+          meta_cursor_sprite_reset_viewport_src_rect (cursor_sprite);
+        }
+
+      if (surface->viewport.has_dst_size)
+        {
+          meta_cursor_sprite_set_viewport_dst_size (cursor_sprite,
+                                                    surface->viewport.dst_width,
+                                                    surface->viewport.dst_height);
+        }
+      else
+        {
+          meta_cursor_sprite_reset_viewport_dst_size (cursor_sprite);
+        }
     }
 
   meta_wayland_surface_set_main_monitor (surface, logical_monitor);
