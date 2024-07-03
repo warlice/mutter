@@ -44,6 +44,7 @@
 #include "wayland/meta-wayland-dma-buf.h"
 #include "wayland/meta-wayland-egl-stream.h"
 #include "wayland/meta-wayland-filter-manager.h"
+#include "wayland/meta-wayland-fixes.h"
 #include "wayland/meta-wayland-idle-inhibit.h"
 #include "wayland/meta-wayland-inhibit-shortcuts-dialog.h"
 #include "wayland/meta-wayland-inhibit-shortcuts.h"
@@ -876,6 +877,7 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_idle_inhibit_init (compositor);
   meta_wayland_drm_syncobj_init (compositor);
   meta_wayland_init_xdg_wm_dialog (compositor);
+  meta_wayland_init_fixes (compositor);
 
 #ifdef HAVE_NATIVE_BACKEND
   meta_wayland_drm_lease_manager_init (compositor);

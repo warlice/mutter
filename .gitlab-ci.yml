@@ -130,7 +130,7 @@ variables:
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.freedesktop.org/wayland/wayland.git \
-        1.23.0
+        1.23.90
 
       ./.gitlab-ci/install-meson-project.sh \
         https://gitlab.gnome.org/GNOME/gi-docgen.git \
