@@ -2510,3 +2510,14 @@ meta_wayland_surface_notify_actor_changed (MetaWaylandSurface *surface)
 {
   g_signal_emit (surface, surface_signals[SURFACE_ACTOR_CHANGED], 0);
 }
+
+gboolean
+meta_wayland_surface_should_show (MetaWaylandSurface *surface)
+{
+  if (!surface->buffer)
+    return FALSE;
+  else if (surface->applied_state.parent)
+    return meta_wayland_surface_should_show (surface->applied_state.parent);
+  else
+    return !!meta_wayland_surface_get_toplevel_window (surface);
+}

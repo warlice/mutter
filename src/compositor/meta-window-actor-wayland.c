@@ -53,6 +53,7 @@ struct _MetaWindowActorWayland
   MetaSurfaceContainerActorWayland *surface_container;
   gulong highest_scale_monitor_handler_id;
   gboolean needs_sync;
+  gboolean is_frozen;
 };
 
 static void cullable_iface_init (MetaCullableInterface *iface);
@@ -192,8 +193,8 @@ get_surface_actor_list (GNode    *node,
 }
 
 static gboolean
-set_surface_actor_index (GNode    *node,
-                         gpointer  data)
+update_surface_actor_state (GNode    *node,
+                            gpointer  data)
 {
   MetaWaylandSurface *surface = node->data;
   SurfaceTreeTraverseData *traverse_data = data;
@@ -224,6 +225,11 @@ set_surface_actor_index (GNode    *node,
     }
   traverse_data->index++;
 
+  if (meta_wayland_surface_should_show (surface))
+    clutter_actor_show (surface_actor);
+  else
+    clutter_actor_hide (surface_actor);
+
   return FALSE;
 }
 
@@ -235,11 +241,16 @@ meta_window_actor_wayland_rebuild_surface_tree (MetaWindowActor *actor)
     meta_window_actor_get_surface (actor);
   MetaWaylandSurface *surface = meta_surface_actor_wayland_get_surface (
     META_SURFACE_ACTOR_WAYLAND (surface_actor));
-  GNode *root_node = surface->applied_state.subsurface_branch_node;
+  GNode *root_node;
   g_autoptr (GList) surface_actors = NULL;
   g_autoptr (GList) children = NULL;
   GList *l;
   SurfaceTreeTraverseData traverse_data;
+
+  if (!surface || self->is_frozen)
+    return;
+
+  root_node = surface->applied_state.subsurface_branch_node;
 
   g_node_traverse (root_node,
                    G_IN_ORDER,
@@ -272,7 +283,7 @@ meta_window_actor_wayland_rebuild_surface_tree (MetaWindowActor *actor)
                    G_IN_ORDER,
                    G_TRAVERSE_LEAVES,
                    -1,
-                   set_surface_actor_index,
+                   update_surface_actor_state,
                    &traverse_data);
 }
 
@@ -490,24 +501,16 @@ meta_window_actor_wayland_set_frozen (MetaWindowActor *actor,
   ClutterActor *child;
   ClutterActorIter iter;
 
+  if (self->is_frozen == frozen)
+    return;
+
+  self->is_frozen = frozen;
+
   clutter_actor_iter_init (&iter, CLUTTER_ACTOR (self->surface_container));
   while (clutter_actor_iter_next (&iter, &child))
     meta_surface_actor_set_frozen (META_SURFACE_ACTOR (child), frozen);
 
-  if (!frozen)
-    {
-      MetaSurfaceActor *surface_actor = meta_window_actor_get_surface (actor);
-      MetaWaylandSurface *surface =
-        meta_surface_actor_wayland_get_surface (META_SURFACE_ACTOR_WAYLAND (surface_actor));
-
-      if (surface && surface->role)
-        {
-          MetaWaylandActorSurface *actor_surface =
-            META_WAYLAND_ACTOR_SURFACE (surface->role);
-
-          meta_wayland_actor_surface_sync_actor_state (actor_surface);
-        }
-    }
+  meta_window_actor_wayland_rebuild_surface_tree (actor);
 }
 
 static void

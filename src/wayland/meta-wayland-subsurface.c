@@ -32,6 +32,7 @@
 struct _MetaWaylandSubsurface
 {
   MetaWaylandActorSurface parent;
+  gboolean should_show;
 };
 
 G_DEFINE_TYPE (MetaWaylandSubsurface,
@@ -53,32 +54,27 @@ transform_subsurface_position (MetaWaylandSurface *surface,
   while (surface);
 }
 
-static gboolean
-should_show (MetaWaylandSurface *surface)
-{
-  if (!surface->buffer)
-    return FALSE;
-  else if (surface->applied_state.parent)
-    return should_show (surface->applied_state.parent);
-  else
-    return TRUE;
-}
-
 static void
 sync_actor_subsurface_state (MetaWaylandSurface *surface)
 {
+  MetaWaylandSubsurface *subsurface = META_WAYLAND_SUBSURFACE (surface->role);
   ClutterActor *actor = CLUTTER_ACTOR (meta_wayland_surface_get_actor (surface));
   MetaWindow *toplevel_window;
+  gboolean should_show;
   int x, y;
 
   toplevel_window = meta_wayland_surface_get_toplevel_window (surface);
-  if (!toplevel_window || !should_show (surface))
-    {
-      clutter_actor_hide (actor);
-      return;
-    }
+  if (toplevel_window &&
+      toplevel_window->client_type == META_WINDOW_CLIENT_TYPE_X11)
+    return;
 
-  if (toplevel_window->client_type == META_WINDOW_CLIENT_TYPE_X11)
+  should_show = meta_wayland_surface_should_show (surface);
+  if (should_show != subsurface->should_show)
+    {
+      subsurface->should_show = should_show;
+      meta_wayland_surface_notify_subsurface_state_changed (surface);
+    }
+  if (!should_show)
     return;
 
   x = y = 0;
@@ -86,8 +82,6 @@ sync_actor_subsurface_state (MetaWaylandSurface *surface)
 
   clutter_actor_set_position (actor, x, y);
   clutter_actor_set_reactive (actor, TRUE);
-
-  clutter_actor_show (actor);
 
   clutter_actor_notify_transform_invalid (actor);
 }

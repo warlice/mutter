@@ -420,6 +420,8 @@ meta_wayland_surface_state_new (void)
 }
 gboolean meta_wayland_surface_is_xwayland (MetaWaylandSurface *surface);
 
+gboolean meta_wayland_surface_should_show (MetaWaylandSurface *surface);
+
 static inline GNode *
 meta_get_next_subsurface_sibling (GNode *n)
 {
