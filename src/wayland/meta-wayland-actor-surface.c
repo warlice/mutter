@@ -80,10 +80,7 @@ meta_wayland_actor_surface_dispose (GObject *object)
   MetaWaylandFrameCallback *cb, *next;
 
   if (priv->actor)
-    {
-      clutter_actor_set_reactive (CLUTTER_ACTOR (priv->actor), FALSE);
-      clear_surface_actor (actor_surface);
-    }
+    clear_surface_actor (actor_surface);
 
   wl_list_for_each_safe (cb, next, &priv->frame_callback_list, link)
     wl_resource_destroy (cb->resource);

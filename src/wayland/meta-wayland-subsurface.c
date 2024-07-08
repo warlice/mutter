@@ -81,8 +81,6 @@ sync_actor_subsurface_state (MetaWaylandSurface *surface)
   transform_subsurface_position (surface, &x, &y);
 
   clutter_actor_set_position (actor, x, y);
-  clutter_actor_set_reactive (actor, TRUE);
-
   clutter_actor_notify_transform_invalid (actor);
 }
 
@@ -406,7 +404,6 @@ permanently_unmap_subsurface (MetaWaylandSurface *surface)
 {
   MetaWaylandSubsurfacePlacementOp *op;
   MetaWaylandTransaction *transaction;
-  MetaSurfaceActor *surface_actor;
 
   op = get_subsurface_placement_op (surface, NULL,
                                     META_WAYLAND_SUBSURFACE_PLACEMENT_BELOW);
@@ -417,8 +414,6 @@ permanently_unmap_subsurface (MetaWaylandSurface *surface)
   meta_wayland_transaction_add_subsurface_position (transaction, surface, 0, 0);
   meta_wayland_transaction_commit (transaction);
 
-  surface_actor = meta_wayland_surface_get_actor (surface);
-  clutter_actor_set_reactive (CLUTTER_ACTOR (surface_actor), FALSE);
   surface->committed_state.parent = NULL;
 }
 

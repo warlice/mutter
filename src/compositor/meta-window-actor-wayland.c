@@ -226,9 +226,15 @@ update_surface_actor_state (GNode    *node,
   traverse_data->index++;
 
   if (meta_wayland_surface_should_show (surface))
-    clutter_actor_show (surface_actor);
+    {
+      clutter_actor_show (surface_actor);
+      clutter_actor_set_reactive (surface_actor, TRUE);
+    }
   else
-    clutter_actor_hide (surface_actor);
+    {
+      clutter_actor_hide (surface_actor);
+      clutter_actor_set_reactive (surface_actor, FALSE);
+    }
 
   return FALSE;
 }
