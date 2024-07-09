@@ -116,6 +116,8 @@ struct _MetaOnscreenNative
   gboolean tearing_requested;
   gboolean tearing_enabled;
 
+  gboolean is_tearing_allowed;
+
   MetaRendererView *view;
 
   gboolean is_gamma_lut_invalid;
@@ -1749,7 +1751,7 @@ maybe_update_frame_sync_or_tearing (MetaOnscreenNative *onscreen_native,
         }
     }
 
-  if (onscreen_native->tearing_requested)
+  if (onscreen_native->is_tearing_allowed && onscreen_native->tearing_requested)
     {
       tearing_enabled = onscreen_native->tearing_requested;
 
@@ -2750,6 +2752,9 @@ meta_onscreen_native_new (MetaRendererNative *renderer_native,
                           int                 height)
 {
   MetaOnscreenNative *onscreen_native;
+  MetaRenderer *renderer = META_RENDERER (renderer_native);
+  MetaBackend *backend = meta_renderer_get_backend (renderer);
+  MetaSettings *settings = meta_backend_get_settings (backend);
   CoglFramebufferDriverConfig driver_config;
   const MetaOutputInfo *output_info = meta_output_get_info (output);
 
@@ -2806,6 +2811,12 @@ meta_onscreen_native_new (MetaRendererNative *renderer_native,
                           G_CALLBACK (on_hdr_metadata_changed),
                           onscreen_native);
     }
+
+  if (meta_settings_is_experimental_feature_enabled (
+        settings, META_EXPERIMENTAL_FEATURE_TEARING))
+    onscreen_native->is_tearing_allowed = TRUE;
+  else
+    onscreen_native->is_tearing_allowed = FALSE;
 
   return onscreen_native;
 }
