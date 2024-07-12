@@ -502,7 +502,8 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
 
   refresh_interval_us = frame_clock->refresh_interval_us;
 
-  if (frame_clock->last_presentation_time_us == 0)
+  if (frame_clock->last_presentation_time_us == 0 ||
+      !(frame_clock->last_presentation_flags & CLUTTER_FRAME_INFO_FLAG_VSYNC))
     {
       *out_next_update_time_us =
         frame_clock->last_dispatch_time_us ?
@@ -576,34 +577,6 @@ calculate_next_update_time_us (ClutterFrameClock *frame_clock,
 
       current_phase_us = (now_us - last_presentation_time_us) % refresh_interval_us;
       next_presentation_time_us = now_us - current_phase_us + refresh_interval_us;
-    }
-
-  if (frame_clock->has_last_next_presentation_time)
-    {
-      int64_t time_since_last_next_presentation_time_us;
-
-      /*
-       * Skip one interval if we got an early presented event.
-       *
-       *        last frame this was last_presentation_time
-       *       /       frame_clock->next_presentation_time_us
-       *      /       /
-       * |---|-o-----|-x----->
-       *       |       \
-       *       \        next_presentation_time_us is thus right after the last one
-       *        but got an unexpected early presentation
-       *             \_/
-       *             time_since_last_next_presentation_time_us
-       *
-       */
-      time_since_last_next_presentation_time_us =
-        next_presentation_time_us - frame_clock->last_next_presentation_time_us;
-      if (time_since_last_next_presentation_time_us > 0 &&
-          time_since_last_next_presentation_time_us < (refresh_interval_us / 2))
-        {
-          next_presentation_time_us =
-            frame_clock->next_presentation_time_us + refresh_interval_us;
-        }
     }
 
   if (frame_clock->last_presentation_flags & CLUTTER_FRAME_INFO_FLAG_VSYNC &&
