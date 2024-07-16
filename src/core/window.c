@@ -316,6 +316,12 @@ meta_window_real_get_client_pid (MetaWindow *window)
   return 0;
 }
 
+static MetaGravity
+meta_window_real_get_gravity (MetaWindow *window)
+{
+  return META_GRAVITY_NONE;
+}
+
 static void
 meta_window_finalize (GObject *object)
 {
@@ -489,6 +495,7 @@ meta_window_class_init (MetaWindowClass *klass)
   klass->update_struts = meta_window_real_update_struts;
   klass->get_default_skip_hints = meta_window_real_get_default_skip_hints;
   klass->get_client_pid = meta_window_real_get_client_pid;
+  klass->get_gravity = meta_window_real_get_gravity;
 
   obj_props[PROP_TITLE] =
     g_param_spec_string ("title", NULL, NULL,
@@ -8023,4 +8030,17 @@ meta_window_set_normal_hints (MetaWindow    *window,
        * consistent with base and size increment constraints.
        */
     }
+}
+
+MetaGravity
+meta_window_get_gravity (MetaWindow *window)
+{
+  MetaGravity gravity;
+
+  gravity = META_WINDOW_GET_CLASS (window)->get_gravity (window);
+
+  if (gravity == META_GRAVITY_NONE)
+    gravity = META_GRAVITY_NORTH_WEST;
+
+  return gravity;
 }

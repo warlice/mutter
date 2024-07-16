@@ -616,6 +616,8 @@ struct _MetaWindowClass
 
   gboolean (*set_transient_for) (MetaWindow *window,
                                  MetaWindow *parent);
+
+  MetaGravity (* get_gravity) (MetaWindow *window);
 };
 
 /* These differ from window->has_foo_func in that they consider
@@ -884,3 +886,5 @@ meta_window_should_attach_to_parent (MetaWindow *window);
  */
 void meta_window_set_normal_hints (MetaWindow    *window,
                                    MetaSizeHints *hints);
+
+MetaGravity meta_window_get_gravity (MetaWindow *window);
