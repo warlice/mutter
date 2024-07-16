@@ -47,6 +47,7 @@
 #include <stdlib.h>
 
 #include "backends/meta-backend-private.h"
+#include "backends/meta-color-manager-private.h"
 #include "backends/meta-crtc.h"
 #include "backends/meta-logical-monitor.h"
 #include "backends/meta-monitor.h"
@@ -3690,7 +3691,11 @@ meta_monitor_manager_read_current_state (MetaMonitorManager *manager)
 static void
 meta_monitor_manager_notify_monitors_changed (MetaMonitorManager *manager)
 {
-  meta_backend_monitors_changed (manager->backend);
+  MetaBackend *backend = manager->backend;
+  MetaColorManager *color_manager = meta_backend_get_color_manager (backend);
+
+  meta_color_manager_monitors_changed (color_manager);
+  meta_backend_monitors_changed (backend);
 
   g_signal_emit (manager, signals[MONITORS_CHANGED_INTERNAL], 0);
   g_signal_emit (manager, signals[MONITORS_CHANGED], 0);
