@@ -107,6 +107,8 @@ enum
   SURFACE_GEOMETRY_CHANGED,
   SURFACE_PRE_STATE_APPLIED,
   SURFACE_ACTOR_CHANGED,
+  SURFACE_ENTERED_OUTPUT,
+  SURFACE_LEFT_OUTPUT,
   N_SURFACE_SIGNALS
 };
 
@@ -1343,10 +1345,6 @@ static void
 surface_entered_output (MetaWaylandSurface *surface,
                         MetaWaylandOutput *wayland_output)
 {
-  g_signal_connect (wayland_output, "output-destroyed",
-                    G_CALLBACK (handle_output_destroyed),
-                    surface);
-
   if (surface->resource)
     {
       const GList *l;
@@ -1363,9 +1361,16 @@ surface_entered_output (MetaWaylandSurface *surface,
         }
     }
 
+  g_signal_connect (wayland_output, "output-destroyed",
+                    G_CALLBACK (handle_output_destroyed),
+                    surface);
+
   g_signal_connect (wayland_output, "output-bound",
                     G_CALLBACK (handle_output_bound),
                     surface);
+
+  g_signal_emit (surface, surface_signals[SURFACE_ENTERED_OUTPUT], 0,
+                 wayland_output);
 }
 
 static void
@@ -1381,6 +1386,9 @@ surface_left_output (MetaWaylandSurface *surface,
   g_signal_handlers_disconnect_by_func (wayland_output,
                                         G_CALLBACK (handle_output_bound),
                                         surface);
+
+  g_signal_emit (surface, surface_signals[SURFACE_LEFT_OUTPUT], 0,
+                 wayland_output);
 
   if (!surface->resource)
     return;
@@ -1951,6 +1959,30 @@ meta_wayland_surface_class_init (MetaWaylandSurfaceClass *klass)
                   0, NULL, NULL,
                   g_cclosure_marshal_VOID__VOID,
                   G_TYPE_NONE, 0);
+  /**
+   * MetaWaylandSurface::entered-output: (skip)
+   * @object: A #MetaWaylandSurface.
+   * @output: A #MetaWaylandOutput.
+   */
+  surface_signals[SURFACE_ENTERED_OUTPUT] =
+    g_signal_new ("entered-output",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0, NULL, NULL, NULL,
+                  G_TYPE_NONE, 1,
+                  META_TYPE_WAYLAND_OUTPUT);
+  /**
+   * MetaWaylandSurface::left-output: (skip)
+   * @object: A #MetaWaylandSurface.
+   * @output: A #MetaWaylandOutput.
+   */
+  surface_signals[SURFACE_LEFT_OUTPUT] =
+    g_signal_new ("left-output",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0, NULL, NULL, NULL,
+                  G_TYPE_NONE, 1,
+                  META_TYPE_WAYLAND_OUTPUT);
 }
 
 static void
