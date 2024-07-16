@@ -547,7 +547,6 @@ meta_window_apply_session_info (MetaWindow *window,
       meta_window_move_resize_internal (window,
                                         flags,
                                         META_PLACE_FLAG_NONE,
-                                        gravity,
                                         rect);
     }
 }
@@ -631,7 +630,6 @@ meta_window_x11_initialize_state (MetaWindow *window)
       meta_window_move_resize_internal (window,
                                         flags,
                                         META_PLACE_FLAG_NONE,
-                                        gravity,
                                         rect);
     }
 
@@ -2934,7 +2932,6 @@ meta_window_move_resize_request (MetaWindow  *window,
       meta_window_move_resize_internal (window,
                                         flags,
                                         META_PLACE_FLAG_NONE,
-                                        gravity,
                                         rect);
     }
 }
