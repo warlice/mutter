@@ -157,6 +157,8 @@ ensure_default_profile_cb (GObject      *source_object,
 
   g_set_object (&color_device->assigned_profile, color_profile);
 
+  meta_color_device_update (color_device);
+
   g_signal_emit (color_device, signals[CHANGED], 0);
 }
 
