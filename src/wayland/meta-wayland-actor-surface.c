@@ -248,6 +248,9 @@ meta_wayland_actor_surface_real_sync_actor_state (MetaWaylandActorSurface *actor
       }
   }
 
+  if (surface->color_state)
+    meta_shaped_texture_set_color_state (stex, surface->color_state);
+
   meta_shaped_texture_set_transform (stex, surface->buffer_transform);
 
   if (surface->viewport.has_src_rect)

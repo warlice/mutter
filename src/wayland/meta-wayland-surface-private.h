@@ -135,6 +135,9 @@ struct _MetaWaylandSurfaceState
     MetaWaylandSyncPoint *acquire;
     MetaWaylandSyncPoint *release;
   } drm_syncobj;
+
+  gboolean has_new_color_state;
+  ClutterColorState *color_state;
 };
 
 struct _MetaWaylandDragDestFuncs
@@ -272,6 +275,9 @@ struct _MetaWaylandSurface
     MetaWaylandTransaction *first_committed;
     MetaWaylandTransaction *last_committed;
   } transaction;
+
+  /* color state */
+  ClutterColorState *color_state;
 };
 
 void                meta_wayland_shell_init     (MetaWaylandCompositor *compositor);
