@@ -60,6 +60,7 @@
 enum
 {
   DEVICE_UPDATED,
+  READY,
 
   N_SIGNALS
 };
@@ -279,9 +280,8 @@ cd_client_connect_cb (GObject      *source_object,
 
   priv->color_store = meta_color_store_new (color_manager);
 
-  update_devices (color_manager);
-
   priv->is_ready = TRUE;
+  g_signal_emit (color_manager, signals[READY], 0);
 }
 
 static void
@@ -500,6 +500,13 @@ meta_color_manager_class_init (MetaColorManagerClass *klass)
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   META_TYPE_COLOR_DEVICE);
+
+  signals[READY] =
+    g_signal_new ("ready",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST, 0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 }
 
 static void
