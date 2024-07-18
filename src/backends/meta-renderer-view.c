@@ -32,6 +32,7 @@
 
 #include "backends/meta-renderer-view.h"
 
+#include "backends/meta-color-device.h"
 #include "backends/meta-crtc.h"
 #include "backends/meta-renderer.h"
 #include "clutter/clutter-mutter.h"
@@ -43,6 +44,7 @@ enum
 
   PROP_TRANSFORM,
   PROP_CRTC,
+  PROP_COLOR_DEVICE,
 
   PROP_LAST
 };
@@ -54,6 +56,8 @@ typedef struct _MetaRendererViewPrivate
   MetaMonitorTransform transform;
 
   MetaCrtc *crtc;
+  MetaColorDevice *color_device;
+  gulong color_state_changed_handler_id;
 } MetaRendererViewPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (MetaRendererView, meta_renderer_view,
@@ -101,6 +105,16 @@ meta_renderer_view_setup_offscreen_transform (ClutterStageView *view,
   cogl_pipeline_set_layer_matrix (pipeline, 0, &matrix);
 }
 
+static gboolean
+meta_renderer_view_get_offscreen_transformation_is_rotated (ClutterStageView *view)
+{
+  MetaRendererView *renderer_view = META_RENDERER_VIEW (view);
+  MetaRendererViewPrivate *priv =
+    meta_renderer_view_get_instance_private (renderer_view);
+
+  return meta_monitor_transform_is_rotated (priv->transform);
+}
+
 static void
 meta_renderer_view_transform_rect_to_onscreen (ClutterStageView   *view,
                                                const MtkRectangle *src_rect,
@@ -129,8 +143,78 @@ meta_renderer_view_set_transform (MetaRendererView     *view,
   if (priv->transform == transform)
     return;
 
+  if (meta_monitor_transform_is_rotated (priv->transform) !=
+      meta_monitor_transform_is_rotated (transform))
+    clutter_stage_view_invalidate_offscreen (CLUTTER_STAGE_VIEW (view));
+  else
+    clutter_stage_view_invalidate_offscreen_blit_pipeline (CLUTTER_STAGE_VIEW (view));
+
   priv->transform = transform;
-  clutter_stage_view_invalidate_offscreen_blit_pipeline (CLUTTER_STAGE_VIEW (view));
+}
+
+static void
+set_color_states (MetaRendererView *view)
+{
+  ClutterStageView *clutter_stage_view = CLUTTER_STAGE_VIEW (view);
+  MetaRendererViewPrivate *priv =
+    meta_renderer_view_get_instance_private (view);
+  g_autoptr (ClutterColorState) view_color_state = NULL;
+  g_autoptr (ClutterColorState) output_color_state = NULL;
+
+  g_return_if_fail (priv->color_device != NULL);
+
+  view_color_state = meta_color_device_get_view_state (priv->color_device);
+  output_color_state = meta_color_device_get_output_state (priv->color_device);
+
+  clutter_stage_view_set_color_state (clutter_stage_view,
+                                      view_color_state);
+  clutter_stage_view_set_output_color_state (clutter_stage_view,
+                                             output_color_state);
+}
+
+static void
+on_color_state_changed (MetaColorDevice  *color_device,
+                        MetaRendererView *view)
+{
+  set_color_states (view);
+}
+
+static void
+meta_renderer_view_constructed (GObject *object)
+{
+  MetaRendererView *view = META_RENDERER_VIEW (object);
+  MetaRendererViewPrivate *priv =
+    meta_renderer_view_get_instance_private (view);
+
+  if (priv->color_device)
+    {
+      set_color_states (view);
+
+      priv->color_state_changed_handler_id =
+        g_signal_connect (priv->color_device, "color-state-changed",
+                          G_CALLBACK (on_color_state_changed),
+                          view);
+    }
+
+  G_OBJECT_CLASS (meta_renderer_view_parent_class)->constructed (object);
+}
+
+static void
+meta_renderer_view_dispose (GObject *object)
+{
+  MetaRendererView *view = META_RENDERER_VIEW (object);
+  MetaRendererViewPrivate *priv =
+    meta_renderer_view_get_instance_private (view);
+
+  if (priv->color_device)
+    {
+      g_clear_signal_handler (&priv->color_state_changed_handler_id,
+                              priv->color_device);
+    }
+
+  g_clear_object (&priv->color_device);
+
+  G_OBJECT_CLASS (meta_renderer_view_parent_class)->dispose (object);
 }
 
 static void
@@ -150,6 +234,9 @@ meta_renderer_view_get_property (GObject    *object,
       break;
     case PROP_CRTC:
       g_value_set_object (value, priv->crtc);
+      break;
+    case PROP_COLOR_DEVICE:
+      g_value_set_object (value, priv->color_device);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -175,6 +262,9 @@ meta_renderer_view_set_property (GObject      *object,
     case PROP_CRTC:
       priv->crtc = g_value_get_object (value);
       break;
+    case PROP_COLOR_DEVICE:
+      g_set_object (&priv->color_device, g_value_get_object (value));
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -196,9 +286,13 @@ meta_renderer_view_class_init (MetaRendererViewClass *klass)
     meta_renderer_view_setup_offscreen_transform;
   view_class->get_offscreen_transformation_matrix =
     meta_renderer_view_get_offscreen_transformation_matrix;
+  view_class->get_offscreen_transformation_is_rotated =
+    meta_renderer_view_get_offscreen_transformation_is_rotated;
   view_class->transform_rect_to_onscreen =
     meta_renderer_view_transform_rect_to_onscreen;
 
+  object_class->constructed = meta_renderer_view_constructed;
+  object_class->dispose = meta_renderer_view_dispose;
   object_class->get_property = meta_renderer_view_get_property;
   object_class->set_property = meta_renderer_view_set_property;
 
@@ -214,6 +308,13 @@ meta_renderer_view_class_init (MetaRendererViewClass *klass)
   obj_props[PROP_CRTC] =
     g_param_spec_object ("crtc", NULL, NULL,
                          META_TYPE_CRTC,
+                         G_PARAM_READWRITE |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  obj_props[PROP_COLOR_DEVICE] =
+    g_param_spec_object ("color-device", NULL, NULL,
+                         META_TYPE_COLOR_DEVICE,
                          G_PARAM_READWRITE |
                          G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_STRINGS);

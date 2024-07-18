@@ -40,7 +40,6 @@ enum
   PROP_STAGE,
   PROP_LAYOUT,
   PROP_FRAMEBUFFER,
-  PROP_OFFSCREEN,
   PROP_USE_SHADOWFB,
   PROP_COLOR_STATE,
   PROP_OUTPUT_COLOR_STATE,
@@ -163,48 +162,14 @@ clutter_stage_view_get_onscreen (ClutterStageView *view)
   return priv->framebuffer;
 }
 
-static CoglPipeline *
-clutter_stage_view_create_offscreen_pipeline (CoglOffscreen *offscreen)
-{
-  CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (offscreen);
-  CoglPipeline *pipeline;
-
-  pipeline = cogl_pipeline_new (cogl_framebuffer_get_context (framebuffer));
-  cogl_pipeline_set_static_name (pipeline, "ClutterStageView (offscreen)");
-
-  cogl_pipeline_set_layer_filters (pipeline, 0,
-                                   COGL_PIPELINE_FILTER_NEAREST,
-                                   COGL_PIPELINE_FILTER_NEAREST);
-  cogl_pipeline_set_layer_texture (pipeline, 0,
-                                   cogl_offscreen_get_texture (offscreen));
-  cogl_pipeline_set_layer_wrap_mode (pipeline, 0,
-                                     COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE);
-
-  return pipeline;
-}
-
-static void
-clutter_stage_view_ensure_offscreen_blit_pipeline (ClutterStageView *view)
+void
+clutter_stage_view_invalidate_offscreen (ClutterStageView *view)
 {
   ClutterStageViewPrivate *priv =
     clutter_stage_view_get_instance_private (view);
-  ClutterStageViewClass *view_class =
-    CLUTTER_STAGE_VIEW_GET_CLASS (view);
 
-  g_assert (priv->offscreen != NULL);
-
-  if (priv->offscreen_pipeline)
-    return;
-
-  priv->offscreen_pipeline =
-    clutter_stage_view_create_offscreen_pipeline (priv->offscreen);
-
-  if (view_class->setup_offscreen_transform)
-    view_class->setup_offscreen_transform (view, priv->offscreen_pipeline);
-
-  clutter_color_state_add_pipeline_transform (priv->color_state,
-                                              priv->output_color_state,
-                                              priv->offscreen_pipeline);
+  g_clear_object (&priv->offscreen);
+  g_clear_object (&priv->offscreen_pipeline);
 }
 
 void
@@ -374,6 +339,9 @@ init_shadowfb (ClutterStageView *view)
   return;
 }
 
+static void
+clutter_stage_view_ensure_offscreen (ClutterStageView *view);
+
 void
 clutter_stage_view_after_paint (ClutterStageView *view,
                                 MtkRegion        *redraw_clip)
@@ -381,10 +349,10 @@ clutter_stage_view_after_paint (ClutterStageView *view,
   ClutterStageViewPrivate *priv =
     clutter_stage_view_get_instance_private (view);
 
+  clutter_stage_view_ensure_offscreen (view);
+
   if (priv->offscreen)
     {
-      clutter_stage_view_ensure_offscreen_blit_pipeline (view);
-
       if (priv->shadow.framebuffer)
         {
           CoglFramebuffer *shadowfb =
@@ -596,6 +564,17 @@ clutter_stage_view_get_offscreen_transformation_matrix (ClutterStageView  *view,
   ClutterStageViewClass *view_class = CLUTTER_STAGE_VIEW_GET_CLASS (view);
 
   view_class->get_offscreen_transformation_matrix (view, matrix);
+}
+
+static gboolean
+clutter_stage_view_get_offscreen_transformation_is_rotated (ClutterStageView *view)
+{
+  ClutterStageViewClass *view_class = CLUTTER_STAGE_VIEW_GET_CLASS (view);
+
+  if (!view_class->get_offscreen_transformation_is_rotated)
+    return FALSE;
+
+  return view_class->get_offscreen_transformation_is_rotated (view);
 }
 
 static void
@@ -1003,18 +982,16 @@ clutter_stage_view_set_framebuffer (ClutterStageView *view,
 }
 
 static void
-clutter_stage_view_set_color_state (ClutterStageView  *view,
-                                    ClutterColorState *color_state)
+set_color_state (ClutterStageView   *view,
+                 ClutterColorState **dest_color_state,
+                 ClutterColorState  *color_state)
 {
-  ClutterStageViewPrivate *priv =
-    clutter_stage_view_get_instance_private (view);
-
-  if (priv->color_state == color_state)
+  if (*dest_color_state == color_state)
     return;
 
-  g_set_object (&priv->color_state, color_state);
+  g_set_object (dest_color_state, color_state);
 
-  clutter_stage_view_invalidate_offscreen_blit_pipeline (view);
+  clutter_stage_view_invalidate_offscreen (view);
 }
 
 static void
@@ -1040,9 +1017,6 @@ clutter_stage_view_get_property (GObject    *object,
       break;
     case PROP_FRAMEBUFFER:
       g_value_set_object (value, priv->framebuffer);
-      break;
-    case PROP_OFFSCREEN:
-      g_value_set_object (value, priv->offscreen);
       break;
     case PROP_USE_SHADOWFB:
       g_value_set_boolean (value, priv->use_shadowfb);
@@ -1092,17 +1066,14 @@ clutter_stage_view_set_property (GObject      *object,
     case PROP_FRAMEBUFFER:
       clutter_stage_view_set_framebuffer (view, g_value_get_object (value));
       break;
-    case PROP_OFFSCREEN:
-      priv->offscreen = g_value_dup_object (value);
-      break;
     case PROP_USE_SHADOWFB:
       priv->use_shadowfb = g_value_get_boolean (value);
       break;
     case PROP_COLOR_STATE:
-      clutter_stage_view_set_color_state (view, g_value_get_object (value));
+      set_color_state (view, &priv->color_state, g_value_get_object (value));
       break;
     case PROP_OUTPUT_COLOR_STATE:
-      priv->output_color_state = g_value_dup_object (value);
+      set_color_state (view, &priv->output_color_state, g_value_get_object (value));
       break;
     case PROP_SCALE:
       priv->scale = g_value_get_float (value);
@@ -1116,6 +1087,206 @@ clutter_stage_view_set_property (GObject      *object,
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
+}
+
+static void
+clutter_stage_view_ensure_color_states (ClutterStageView *view)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+  ClutterContext *context =
+    clutter_actor_get_context (CLUTTER_ACTOR (priv->stage));
+  ClutterColorManager *color_manager =
+    clutter_context_get_color_manager (context);
+  ClutterColorState *color_state;
+
+  if (priv->color_state && priv->output_color_state)
+    return;
+
+  color_state = clutter_color_manager_get_default_color_state (color_manager);
+
+  if (!priv->color_state)
+    priv->color_state = g_object_ref (color_state);
+  if (!priv->output_color_state)
+    priv->output_color_state = g_object_ref (color_state);
+}
+
+static CoglOffscreen *
+create_offscreen (CoglContext      *cogl_context,
+                  CoglPixelFormat   format,
+                  gint              view_width,
+                  gint              view_height,
+                  GError          **error)
+{
+  CoglOffscreen *fb;
+  CoglTexture *tex;
+
+  if (format == COGL_PIXEL_FORMAT_ANY)
+    {
+      tex = cogl_texture_2d_new_with_size (cogl_context,
+                                           view_width, view_height);
+    }
+  else
+    {
+      tex = cogl_texture_2d_new_with_format (cogl_context,
+                                             view_width, view_height,
+                                             format);
+    }
+  cogl_texture_set_auto_mipmap (tex, FALSE);
+
+  if (!cogl_texture_allocate (tex, error))
+    {
+      g_object_unref (tex);
+      return FALSE;
+    }
+
+  fb = cogl_offscreen_new_with_texture (tex);
+  g_object_unref (tex);
+  if (!cogl_framebuffer_allocate (COGL_FRAMEBUFFER (fb), error))
+    {
+      g_object_unref (fb);
+      return FALSE;
+    }
+
+  return fb;
+}
+
+static CoglOffscreen *
+create_offscreen_with_formats (CoglContext      *cogl_context,
+                               CoglPixelFormat  *formats,
+                               size_t            n_formats,
+                               int               width,
+                               int               height,
+                               GError          **error)
+{
+  g_autoptr (GError) local_error = NULL;
+  size_t i;
+
+  for (i = 0; i < n_formats; i++)
+    {
+      CoglOffscreen *offscreen;
+
+      g_clear_error (&local_error);
+
+      offscreen = create_offscreen (cogl_context,
+                                    formats[i],
+                                    width,
+                                    height,
+                                    &local_error);
+      if (offscreen)
+        return offscreen;
+    }
+
+  g_propagate_error (error, g_steal_pointer (&local_error));
+  return NULL;
+}
+
+static void
+create_stage_view_offscreen (ClutterStageView *view)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+  CoglContext *cogl_context = cogl_framebuffer_get_context (priv->framebuffer);
+  g_autoptr (CoglOffscreen) offscreen = NULL;
+  int offscreen_width, offscreen_height;
+  CoglPixelFormat formats[10];
+  size_t n_formats = 0;
+  gboolean rotated;
+  g_autoptr (GError) local_error = NULL;
+
+  rotated = clutter_stage_view_get_offscreen_transformation_is_rotated (view);
+
+  if (clutter_color_state_needs_fp16 (priv->color_state))
+    {
+      formats[n_formats++] = COGL_PIXEL_FORMAT_XRGB_FP_16161616;
+      formats[n_formats++] = COGL_PIXEL_FORMAT_XBGR_FP_16161616;
+      formats[n_formats++] = COGL_PIXEL_FORMAT_RGBA_FP_16161616_PRE;
+      formats[n_formats++] = COGL_PIXEL_FORMAT_BGRA_FP_16161616_PRE;
+      formats[n_formats++] = COGL_PIXEL_FORMAT_ARGB_FP_16161616_PRE;
+      formats[n_formats++] = COGL_PIXEL_FORMAT_ABGR_FP_16161616_PRE;
+    }
+  else
+    {
+      formats[n_formats++] =
+        cogl_framebuffer_get_internal_format (priv->framebuffer);
+    }
+
+  if (rotated)
+    {
+      offscreen_width = cogl_framebuffer_get_height (priv->framebuffer);
+      offscreen_height = cogl_framebuffer_get_width (priv->framebuffer);
+    }
+  else
+    {
+      offscreen_width = cogl_framebuffer_get_width (priv->framebuffer);
+      offscreen_height = cogl_framebuffer_get_height (priv->framebuffer);
+    }
+
+  offscreen = create_offscreen_with_formats (cogl_context,
+                                             formats,
+                                             n_formats,
+                                             offscreen_width,
+                                             offscreen_height,
+                                             &local_error);
+  if (!offscreen)
+    g_error ("Failed to allocate back buffer texture: %s", local_error->message);
+
+  g_set_object (&priv->offscreen, g_steal_pointer (&offscreen));
+}
+
+static void
+create_stage_view_offscreen_pipeline (ClutterStageView *view)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+  ClutterStageViewClass *view_class =
+    CLUTTER_STAGE_VIEW_GET_CLASS (view);
+  CoglFramebuffer *framebuffer = COGL_FRAMEBUFFER (priv->offscreen);
+  CoglPipeline *pipeline;
+
+  pipeline = cogl_pipeline_new (cogl_framebuffer_get_context (framebuffer));
+  cogl_pipeline_set_static_name (pipeline, "ClutterStageView (offscreen)");
+
+  cogl_pipeline_set_layer_filters (pipeline, 0,
+                                   COGL_PIPELINE_FILTER_NEAREST,
+                                   COGL_PIPELINE_FILTER_NEAREST);
+  cogl_pipeline_set_layer_texture (pipeline, 0,
+                                   cogl_offscreen_get_texture (priv->offscreen));
+  cogl_pipeline_set_layer_wrap_mode (pipeline, 0,
+                                     COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE);
+
+  if (view_class->setup_offscreen_transform)
+    view_class->setup_offscreen_transform (view, pipeline);
+
+  clutter_color_state_add_pipeline_transform (priv->color_state,
+                                              priv->output_color_state,
+                                              pipeline);
+
+  g_set_object (&priv->offscreen_pipeline, pipeline);
+}
+
+static void
+clutter_stage_view_ensure_offscreen (ClutterStageView *view)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+  graphene_matrix_t transform;
+
+  clutter_stage_view_get_offscreen_transformation_matrix (view, &transform);
+
+  if (clutter_color_state_equals (priv->color_state, priv->output_color_state) &&
+      graphene_matrix_is_identity (&transform))
+    {
+      g_clear_object (&priv->offscreen_pipeline);
+      g_clear_object (&priv->offscreen);
+      return;
+    }
+
+  if (!priv->offscreen)
+    create_stage_view_offscreen (view);
+
+  if (!priv->offscreen_pipeline)
+    create_stage_view_offscreen_pipeline (view);
 }
 
 static void
@@ -1134,15 +1305,8 @@ clutter_stage_view_constructed (GObject *object)
                                                &frame_clock_listener_iface,
                                                view);
 
-  if (!priv->color_state)
-    {
-      ClutterContext *context =
-        clutter_actor_get_context (CLUTTER_ACTOR (priv->stage));
-
-      priv->color_state = clutter_color_state_new (context,
-                                                   CLUTTER_COLORSPACE_DEFAULT,
-                                                   CLUTTER_TRANSFER_FUNCTION_DEFAULT);
-    }
+  clutter_stage_view_ensure_color_states (view);
+  clutter_stage_view_ensure_offscreen (view);
 
   clutter_stage_view_add_redraw_clip (view, NULL);
   clutter_stage_view_schedule_update (view);
@@ -1239,13 +1403,6 @@ clutter_stage_view_class_init (ClutterStageViewClass *klass)
                          G_PARAM_CONSTRUCT |
                          G_PARAM_STATIC_STRINGS);
 
-  obj_props[PROP_OFFSCREEN] =
-    g_param_spec_object ("offscreen", NULL, NULL,
-                         COGL_TYPE_OFFSCREEN,
-                         G_PARAM_READWRITE |
-                         G_PARAM_CONSTRUCT_ONLY |
-                         G_PARAM_STATIC_STRINGS);
-
   obj_props[PROP_USE_SHADOWFB] =
     g_param_spec_boolean ("use-shadowfb", NULL, NULL,
                           FALSE,
@@ -1318,6 +1475,32 @@ clutter_stage_view_get_default_paint_flags (ClutterStageView *view)
     return view_class->get_default_paint_flags (view);
   else
     return CLUTTER_PAINT_FLAG_NONE;
+}
+
+/**
+ * clutter_stage_view_set_color_state: (skip)
+ */
+void
+clutter_stage_view_set_color_state (ClutterStageView  *view,
+                                    ClutterColorState *color_state)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+
+  set_color_state (view, &priv->color_state, color_state);
+}
+
+/**
+ * clutter_stage_view_set_output_color_state: (skip)
+ */
+void
+clutter_stage_view_set_output_color_state (ClutterStageView  *view,
+                                           ClutterColorState *color_state)
+{
+  ClutterStageViewPrivate *priv =
+    clutter_stage_view_get_instance_private (view);
+
+  set_color_state (view, &priv->output_color_state, color_state);
 }
 
 /**

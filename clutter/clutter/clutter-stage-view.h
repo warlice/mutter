@@ -45,6 +45,9 @@ struct _ClutterStageViewClass
   void (* get_offscreen_transformation_matrix) (ClutterStageView  *view,
                                                 graphene_matrix_t *matrix);
 
+
+  gboolean (* get_offscreen_transformation_is_rotated) (ClutterStageView *view);
+
   void (* transform_rect_to_onscreen) (ClutterStageView   *view,
                                        const MtkRectangle *src_rect,
                                        int                 dst_width,
@@ -67,8 +70,12 @@ CLUTTER_EXPORT
 CoglFramebuffer *clutter_stage_view_get_framebuffer (ClutterStageView *view);
 CLUTTER_EXPORT
 CoglFramebuffer *clutter_stage_view_get_onscreen (ClutterStageView *view);
+
 CLUTTER_EXPORT
-void             clutter_stage_view_invalidate_offscreen_blit_pipeline (ClutterStageView *view);
+void clutter_stage_view_invalidate_offscreen (ClutterStageView *view);
+
+CLUTTER_EXPORT
+void clutter_stage_view_invalidate_offscreen_blit_pipeline (ClutterStageView *view);
 
 CLUTTER_EXPORT
 float clutter_stage_view_get_scale (ClutterStageView *view);
@@ -100,3 +107,11 @@ ClutterColorState * clutter_stage_view_get_color_state (ClutterStageView *view);
 
 CLUTTER_EXPORT
 ClutterColorState * clutter_stage_view_get_output_color_state (ClutterStageView *view);
+
+CLUTTER_EXPORT
+void clutter_stage_view_set_color_state (ClutterStageView  *view,
+                                         ClutterColorState *color_state);
+
+CLUTTER_EXPORT
+void clutter_stage_view_set_output_color_state (ClutterStageView  *view,
+                                                ClutterColorState *color_state);
