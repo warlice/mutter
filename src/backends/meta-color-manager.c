@@ -175,15 +175,13 @@ update_devices (MetaColorManager *color_manager)
                                    g_str_equal,
                                    g_free,
                                    (GDestroyNotify) meta_color_device_destroy);
+
   for (l = meta_monitor_manager_get_monitors (monitor_manager); l; l = l->next)
     {
       MetaMonitor *monitor = META_MONITOR (l->data);
       g_autofree char *monitor_id = NULL;
       g_autofree char *stolen_monitor_id = NULL;
       MetaColorDevice *color_device;
-
-      if (meta_monitor_is_virtual (monitor))
-        continue;
 
       monitor_id = generate_monitor_id (monitor);
 
