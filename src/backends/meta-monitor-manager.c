@@ -489,125 +489,6 @@ prepare_shutdown (MetaBackend        *backend,
   g_clear_handle_id (&priv->reload_monitor_manager_id, g_source_remove);
 }
 
-static void
-set_color_space_and_hdr_metadata (MetaMonitorManager    *manager,
-                                  gboolean               enable,
-                                  MetaOutputColorspace  *color_space,
-                                  MetaOutputHdrMetadata *hdr_metadata)
-{
-  MetaBackend *backend = meta_monitor_manager_get_backend (manager);
-  ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
-  CoglContext *cogl_context = clutter_backend_get_cogl_context (clutter_backend);
-
-  if (enable &&
-      !cogl_context_has_feature (cogl_context, COGL_FEATURE_ID_TEXTURE_HALF_FLOAT))
-    {
-      g_warning ("Tried to enable HDR without half float rendering support, ignoring");
-      enable = FALSE;
-    }
-
-  if (enable)
-    {
-      *color_space = META_OUTPUT_COLORSPACE_BT2020;
-      *hdr_metadata = (MetaOutputHdrMetadata) {
-        .active = TRUE,
-        .eotf = META_OUTPUT_HDR_METADATA_EOTF_PQ,
-      };
-
-      meta_topic (META_DEBUG_COLOR,
-                  "MonitorManager: Trying to enabling HDR mode "
-                  "(Colorimetry: bt.2020, TF: PQ, HDR Metadata: Minimal):");
-    }
-  else
-    {
-      *color_space = META_OUTPUT_COLORSPACE_DEFAULT;
-      *hdr_metadata = (MetaOutputHdrMetadata) {
-        .active = FALSE,
-      };
-
-      meta_topic (META_DEBUG_COLOR,
-                  "MonitorManager: Trying to enable default mode "
-                  "(Colorimetry: default, TF: default, HDR Metadata: None):");
-    }
-}
-
-static void
-ensure_hdr_settings (MetaMonitorManager *manager)
-{
-  MetaBackend *backend = manager->backend;
-  MetaContext *context = meta_backend_get_context (backend);
-  MetaDebugControl *debug_control = meta_context_get_debug_control (context);
-  MetaOutputColorspace color_space;
-  MetaOutputHdrMetadata hdr_metadata;
-  GList *l;
-
-  set_color_space_and_hdr_metadata (manager,
-                                    meta_debug_control_is_hdr_enabled (debug_control),
-                                    &color_space,
-                                    &hdr_metadata);
-
-  for (l = manager->monitors; l; l = l->next)
-    {
-      MetaMonitor *monitor = l->data;
-      g_autoptr (GError) error = NULL;
-
-      if (!meta_monitor_set_color_space (monitor, color_space, &error))
-        {
-          meta_monitor_set_color_space (monitor,
-                                        META_OUTPUT_COLORSPACE_DEFAULT,
-                                        NULL);
-          meta_monitor_set_hdr_metadata (monitor, &(MetaOutputHdrMetadata) {
-                                           .active = FALSE,
-                                         }, NULL);
-
-          if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED))
-            {
-              meta_topic (META_DEBUG_COLOR,
-                          "MonitorManager: Colorimetry not supported "
-                          "on monitor %s",
-                          meta_monitor_get_display_name (monitor));
-            }
-          else
-            {
-              g_warning ("Failed to set color space on monitor %s: %s",
-                         meta_monitor_get_display_name (monitor), error->message);
-            }
-
-          continue;
-        }
-
-      if (!meta_monitor_set_hdr_metadata (monitor, &hdr_metadata, &error))
-        {
-          meta_monitor_set_color_space (monitor,
-                                        META_OUTPUT_COLORSPACE_DEFAULT,
-                                        NULL);
-          meta_monitor_set_hdr_metadata (monitor, &(MetaOutputHdrMetadata) {
-                                           .active = FALSE,
-                                         }, NULL);
-
-          if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED))
-            {
-              meta_topic (META_DEBUG_COLOR,
-                          "MonitorManager: HDR Metadata not supported "
-                          "on monitor %s",
-                          meta_monitor_get_display_name (monitor));
-            }
-          else
-            {
-              g_warning ("Failed to set HDR metadata on monitor %s: %s",
-                         meta_monitor_get_display_name (monitor),
-                         error->message);
-            }
-
-          continue;
-        }
-
-        meta_topic (META_DEBUG_COLOR,
-                    "MonitorManager: successfully set on monitor %s",
-                    meta_monitor_get_display_name (monitor));
-    }
-}
-
 /**
  * meta_monitor_manager_is_headless:
  * @manager: A #MetaMonitorManager object
@@ -1323,6 +1204,21 @@ update_night_light_supported (MetaMonitorManager *manager)
                                                       night_light_supported);
 }
 
+static void
+meta_monitor_manager_notify_monitors_changed (MetaMonitorManager *manager)
+{
+  MetaBackend *backend = manager->backend;
+  MetaColorManager *color_manager = meta_backend_get_color_manager (backend);
+
+  meta_color_manager_monitors_changed (color_manager);
+  meta_backend_monitors_changed (backend);
+
+  g_signal_emit (manager, signals[MONITORS_CHANGED_INTERNAL], 0);
+  g_signal_emit (manager, signals[MONITORS_CHANGED], 0);
+
+  meta_dbus_display_config_emit_monitors_changed (manager->display_config);
+}
+
 void
 meta_monitor_manager_setup (MetaMonitorManager *manager)
 {
@@ -1350,7 +1246,7 @@ meta_monitor_manager_setup (MetaMonitorManager *manager)
   if (privacy_screen_needs_update (manager))
     manager->privacy_screen_change_state = META_PRIVACY_SCREEN_CHANGE_STATE_INIT;
 
-  ensure_hdr_settings (manager);
+  meta_monitor_manager_notify_monitors_changed (manager);
 
   manager->in_init = FALSE;
 }
@@ -3689,21 +3585,6 @@ meta_monitor_manager_read_current_state (MetaMonitorManager *manager)
 }
 
 static void
-meta_monitor_manager_notify_monitors_changed (MetaMonitorManager *manager)
-{
-  MetaBackend *backend = manager->backend;
-  MetaColorManager *color_manager = meta_backend_get_color_manager (backend);
-
-  meta_color_manager_monitors_changed (color_manager);
-  meta_backend_monitors_changed (backend);
-
-  g_signal_emit (manager, signals[MONITORS_CHANGED_INTERNAL], 0);
-  g_signal_emit (manager, signals[MONITORS_CHANGED], 0);
-
-  meta_dbus_display_config_emit_monitors_changed (manager->display_config);
-}
-
-static void
 set_logical_monitor_modes (MetaMonitorManager       *manager,
                            MetaLogicalMonitorConfig *logical_monitor_config)
 {
@@ -3784,7 +3665,6 @@ meta_monitor_manager_rebuild (MetaMonitorManager *manager,
   meta_monitor_manager_update_logical_state (manager, config);
 
   ensure_privacy_screen_settings (manager);
-  ensure_hdr_settings (manager);
 
   meta_monitor_manager_notify_monitors_changed (manager);
 
