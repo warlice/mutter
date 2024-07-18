@@ -65,6 +65,7 @@ struct _MetaColorDevice
   MetaColorManager *color_manager;
   gulong manager_ready_handler_id;
 
+  CdClient *cd_client;
   char *cd_device_id;
   MetaMonitor *monitor;
   CdDevice *cd_device;
@@ -270,7 +271,7 @@ meta_color_device_dispose (GObject *object)
 {
   MetaColorDevice *color_device = META_COLOR_DEVICE (object);
   MetaColorManager *color_manager = color_device->color_manager;
-  CdClient *cd_client = meta_color_manager_get_cd_client (color_manager);
+  CdClient *cd_client;
   CdDevice *cd_device;
   const char *cd_device_id;
 
@@ -283,20 +284,31 @@ meta_color_device_dispose (GObject *object)
       g_clear_object (&color_device->assigned_profile_cancellable);
     }
 
-  g_cancellable_cancel (color_device->cancellable);
-  g_clear_object (&color_device->cancellable);
-  g_clear_signal_handler (&color_device->device_profile_ready_handler_id,
-                          color_device->device_profile);
-  g_clear_signal_handler (&color_device->manager_ready_handler_id,
-                          color_manager);
+  if (color_device->cancellable)
+    {
+      g_cancellable_cancel (color_device->cancellable);
+      g_clear_object (&color_device->cancellable);
+    }
 
+  if (color_device->device_profile)
+    {
+      g_clear_signal_handler (&color_device->device_profile_ready_handler_id,
+                              color_device->device_profile);
+      g_clear_object (&color_device->device_profile);
+    }
 
-  g_clear_object (&color_device->assigned_profile);
-  g_clear_object (&color_device->device_profile);
+  if (color_device->color_manager)
+    {
+      g_clear_signal_handler (&color_device->manager_ready_handler_id,
+                              color_device->color_manager);
+      g_clear_weak_pointer (&color_device->color_manager);
+    }
 
+  cd_client = color_device->cd_client;
   cd_device = color_device->cd_device;
   cd_device_id = color_device->cd_device_id;
-  if (!cd_device && cd_device_id && meta_color_manager_is_ready (color_manager))
+  if (!cd_device && cd_device_id &&
+      color_manager && meta_color_manager_is_ready (color_manager))
     {
       g_autoptr (GError) error = NULL;
 
@@ -315,6 +327,8 @@ meta_color_device_dispose (GObject *object)
     cd_client_delete_device (cd_client, cd_device, NULL, NULL, NULL);
 
   g_clear_pointer (&color_device->cd_device_id, g_free);
+  g_clear_object (&color_device->assigned_profile);
+  g_clear_object (&color_device->cd_client);
   g_clear_object (&color_device->cd_device);
   g_clear_object (&color_device->monitor);
   g_clear_object (&color_device->color_state);
@@ -733,12 +747,16 @@ meta_color_device_new (MetaColorManager *color_manager,
                        MetaMonitor      *monitor)
 {
   MetaColorDevice *color_device;
+  CdClient *cd_client = meta_color_manager_get_cd_client (color_manager);
 
   color_device = g_object_new (META_TYPE_COLOR_DEVICE, NULL);
   color_device->cd_device_id = generate_cd_device_id (monitor);
   color_device->monitor = g_object_ref (monitor);
   color_device->cancellable = g_cancellable_new ();
+  color_device->cd_client = g_object_ref (cd_client);
   color_device->color_manager = color_manager;
+  g_object_add_weak_pointer (G_OBJECT (color_manager),
+                             (gpointer *) &color_device->color_manager);
 
   update_color_state (color_device);
 
@@ -755,13 +773,6 @@ meta_color_device_new (MetaColorManager *color_manager,
     }
 
   return color_device;
-}
-
-void
-meta_color_device_destroy (MetaColorDevice *color_device)
-{
-  g_object_run_dispose (G_OBJECT (color_device));
-  g_object_unref (color_device);
 }
 
 void
@@ -1582,6 +1593,9 @@ meta_color_device_update (MetaColorDevice *color_device)
   UpdateResult result = 0;
 
   if (!meta_monitor_is_active (monitor))
+    return;
+
+  if (!color_device->color_manager)
     return;
 
   result |= update_white_point (color_device);
