@@ -897,3 +897,25 @@ clutter_color_state_to_string (ClutterColorState *color_state)
 
   return g_string_free_and_steal (g_steal_pointer (&str));
 }
+
+gboolean
+clutter_color_state_needs_fp16 (ClutterColorState *color_state)
+{
+  ClutterColorStatePrivate *priv;
+
+  g_return_val_if_fail (CLUTTER_IS_COLOR_STATE (color_state), FALSE);
+
+  priv = clutter_color_state_get_instance_private (color_state);
+
+  switch (priv->transfer_function)
+    {
+    case CLUTTER_TRANSFER_FUNCTION_LINEAR:
+      return TRUE;
+    case CLUTTER_TRANSFER_FUNCTION_PQ:
+    case CLUTTER_TRANSFER_FUNCTION_SRGB:
+    case CLUTTER_TRANSFER_FUNCTION_DEFAULT:
+      return FALSE;
+    }
+
+  g_assert_not_reached ();
+}
