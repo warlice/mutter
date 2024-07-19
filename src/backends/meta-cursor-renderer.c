@@ -31,6 +31,7 @@
 #include "backends/meta-stage-private.h"
 #include "clutter/clutter.h"
 #include "clutter/clutter-mutter.h"
+#include "common/meta-utils.h"
 #include "cogl/cogl.h"
 #include "core/boxes-private.h"
 #include "meta/meta-backend.h"
@@ -135,27 +136,49 @@ meta_cursor_renderer_update_stage_overlay (MetaCursorRenderer *renderer,
   MetaCursorRendererPrivate *priv = meta_cursor_renderer_get_instance_private (renderer);
   ClutterActor *stage = meta_backend_get_stage (priv->backend);
   CoglTexture *texture = NULL;
-  graphene_rect_t rect = GRAPHENE_RECT_INIT_ZERO;
-  MtkMonitorTransform buffer_transform = MTK_MONITOR_TRANSFORM_NORMAL;
+  graphene_rect_t dst_rect = GRAPHENE_RECT_INIT_ZERO;
+  graphene_matrix_t matrix;
 
   g_set_object (&priv->overlay_cursor, cursor_sprite);
 
   if (!priv->stage_overlay)
     priv->stage_overlay = meta_stage_create_cursor_overlay (META_STAGE (stage));
 
+  graphene_matrix_init_identity (&matrix);
   if (cursor_sprite)
     {
-      rect = meta_cursor_renderer_calculate_rect (renderer, cursor_sprite);
-      align_cursor_position (renderer, &rect);
+      const graphene_rect_t *src_rect;
+      MtkMonitorTransform cursor_transform;
+      float cursor_scale;
+      int cursor_width, cursor_height;
+
+      dst_rect = meta_cursor_renderer_calculate_rect (renderer, cursor_sprite);
+      align_cursor_position (renderer, &dst_rect);
 
       texture = meta_cursor_sprite_get_cogl_texture (cursor_sprite);
-      buffer_transform =
-        meta_cursor_sprite_get_texture_transform (cursor_sprite);
+      if (texture)
+        {
+          cursor_width = cogl_texture_get_width (texture);
+          cursor_height = cogl_texture_get_height (texture);
+          cursor_scale = meta_cursor_sprite_get_texture_scale (cursor_sprite);
+          cursor_transform =
+            meta_cursor_sprite_get_texture_transform (cursor_sprite);
+          src_rect = meta_cursor_sprite_get_viewport_src_rect (cursor_sprite);
+          meta_compute_cogl_pipeline_matrix (&matrix,
+                                             cursor_width,
+                                             cursor_height,
+                                             cursor_scale,
+                                             cursor_transform,
+                                             src_rect);
+        }
     }
 
   meta_overlay_set_visible (priv->stage_overlay, priv->needs_overlay);
-  meta_stage_update_cursor_overlay (META_STAGE (stage), priv->stage_overlay,
-                                    texture, &rect, buffer_transform);
+  meta_stage_update_cursor_overlay (META_STAGE (stage),
+                                    priv->stage_overlay,
+                                    texture,
+                                    &matrix,
+                                    &dst_rect);
 }
 
 static void
@@ -320,14 +343,20 @@ meta_cursor_renderer_init (MetaCursorRenderer *renderer)
 }
 
 static gboolean
-calculate_sprite_geometry (MetaCursorSprite *cursor_sprite,
-                           graphene_size_t  *size,
-                           graphene_point_t *hotspot)
+calculate_sprite_geometry (MetaCursorRenderer *renderer,
+                           MetaCursorSprite   *cursor_sprite,
+                           graphene_size_t    *size,
+                           graphene_point_t   *hotspot)
 {
+  MetaCursorRendererPrivate *priv =
+    meta_cursor_renderer_get_instance_private (renderer);
   CoglTexture *texture;
+  MtkMonitorTransform cursor_transform;
+  const graphene_rect_t *src_rect;
   int hot_x, hot_y;
-  int width, height;
-  float texture_scale;
+  int tex_width, tex_height;
+  int dst_width, dst_height;
+  float monitor_scale;
 
   meta_cursor_sprite_realize_texture (cursor_sprite);
   texture = meta_cursor_sprite_get_cogl_texture (cursor_sprite);
@@ -335,18 +364,86 @@ calculate_sprite_geometry (MetaCursorSprite *cursor_sprite,
     return FALSE;
 
   meta_cursor_sprite_get_hotspot (cursor_sprite, &hot_x, &hot_y);
-  texture_scale = meta_cursor_sprite_get_texture_scale (cursor_sprite);
-  width = cogl_texture_get_width (texture);
-  height = cogl_texture_get_height (texture);
+  cursor_transform = meta_cursor_sprite_get_texture_transform (cursor_sprite);
+  src_rect = meta_cursor_sprite_get_viewport_src_rect (cursor_sprite);
+  tex_width = cogl_texture_get_width (texture);
+  tex_height = cogl_texture_get_height (texture);
 
-  *size = (graphene_size_t) {
-    .width = width * texture_scale,
-    .height = height * texture_scale
-  };
-  *hotspot = (graphene_point_t) {
-    .x = hot_x * texture_scale,
-    .y = hot_y * texture_scale
-  };
+  if (meta_backend_is_stage_views_scaled (priv->backend))
+    {
+      monitor_scale = 1.0f;
+    }
+  else
+    {
+      MetaMonitorManager *monitor_manager =
+        meta_backend_get_monitor_manager (priv->backend);
+      MetaLogicalMonitor *logical_monitor;
+
+      logical_monitor =
+        meta_monitor_manager_get_logical_monitor_at (monitor_manager,
+                                                     priv->current_x,
+                                                     priv->current_y);
+      if (logical_monitor)
+        monitor_scale = logical_monitor->scale;
+      else
+        monitor_scale = 1.0f;
+    }
+
+  if (meta_cursor_sprite_get_viewport_dst_size (cursor_sprite,
+                                                &dst_width,
+                                                &dst_height))
+    {
+      *size = (graphene_size_t) {
+        .width = dst_width * monitor_scale,
+        .height = dst_height * monitor_scale
+      };
+      *hotspot = (graphene_point_t) {
+        .x = hot_x * monitor_scale,
+        .y = hot_y * monitor_scale
+      };
+    }
+  else if (src_rect)
+    {
+      *size = (graphene_size_t) {
+        .width = src_rect->size.width * monitor_scale,
+        .height = src_rect->size.height * monitor_scale
+      };
+      *hotspot = (graphene_point_t) {
+        .x = hot_x * monitor_scale,
+        .y = hot_y * monitor_scale
+      };
+    }
+  else
+    {
+      float cursor_scale;
+
+      // handle uniformly in meta_display_reload_cursor() instead?
+      if (meta_is_wayland_compositor ())
+        cursor_scale =
+          monitor_scale * meta_cursor_sprite_get_texture_scale (cursor_sprite);
+      else
+        cursor_scale = 1.0;
+
+      if (mtk_monitor_transform_is_rotated (cursor_transform))
+        {
+          *size = (graphene_size_t) {
+            .width = tex_height * cursor_scale,
+            .height = tex_width * cursor_scale
+          };
+        }
+      else
+        {
+          *size = (graphene_size_t) {
+            .width = tex_width * cursor_scale,
+            .height = tex_height * cursor_scale
+          };
+        }
+
+      *hotspot = (graphene_point_t) {
+        .x = hot_x * cursor_scale,
+        .y = hot_y * cursor_scale
+      };
+    }
   return TRUE;
 }
 
@@ -359,7 +456,10 @@ meta_cursor_renderer_calculate_rect (MetaCursorRenderer *renderer,
   graphene_rect_t rect = GRAPHENE_RECT_INIT_ZERO;
   graphene_point_t hotspot;
 
-  if (!calculate_sprite_geometry (cursor_sprite, &rect.size, &hotspot))
+  if (!calculate_sprite_geometry (renderer,
+                                  cursor_sprite,
+                                  &rect.size,
+                                  &hotspot))
     return GRAPHENE_RECT_INIT_ZERO;
 
   rect.origin = (graphene_point_t) { .x = -hotspot.x, .y = -hotspot.y };
@@ -368,19 +468,19 @@ meta_cursor_renderer_calculate_rect (MetaCursorRenderer *renderer,
 }
 
 static float
-find_highest_logical_monitor_scale (MetaBackend      *backend,
-                                    MetaCursorSprite *cursor_sprite)
+find_highest_logical_monitor_scale (MetaCursorRenderer *renderer,
+                                    MetaCursorSprite   *cursor_sprite)
 {
+  MetaCursorRendererPrivate *priv =
+    meta_cursor_renderer_get_instance_private (renderer);
   MetaMonitorManager *monitor_manager =
-    meta_backend_get_monitor_manager (backend);
-  MetaCursorRenderer *cursor_renderer =
-    meta_backend_get_cursor_renderer (backend);
+    meta_backend_get_monitor_manager (priv->backend);
   graphene_rect_t cursor_rect;
   GList *logical_monitors;
   GList *l;
   float highest_scale = 0.0f;
 
-  cursor_rect = meta_cursor_renderer_calculate_rect (cursor_renderer,
+  cursor_rect = meta_cursor_renderer_calculate_rect (renderer,
                                                      cursor_sprite);
 
   logical_monitors =
@@ -406,11 +506,12 @@ static void
 meta_cursor_renderer_update_cursor (MetaCursorRenderer *renderer,
                                     MetaCursorSprite   *cursor_sprite)
 {
-  MetaCursorRendererPrivate *priv = meta_cursor_renderer_get_instance_private (renderer);
+  MetaCursorRendererPrivate *priv =
+    meta_cursor_renderer_get_instance_private (renderer);
 
   if (cursor_sprite)
     {
-      float scale = find_highest_logical_monitor_scale (priv->backend,
+      float scale = find_highest_logical_monitor_scale (renderer,
                                                         cursor_sprite);
       meta_cursor_sprite_prepare_at (cursor_sprite,
                                      MAX (1, scale),
