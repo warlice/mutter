@@ -989,6 +989,12 @@ meta_renderer_native_query_drm_modifiers (CoglRenderer           *cogl_renderer,
                                                  filter, error);
 }
 
+static uint64_t
+meta_renderer_native_get_implicit_drm_modifier (CoglRenderer *renderer)
+{
+  return DRM_FORMAT_MOD_INVALID;
+}
+
 static CoglDmaBufHandle *
 meta_renderer_native_create_dma_buf (CoglRenderer     *cogl_renderer,
                                      CoglPixelFormat   format,
@@ -1363,6 +1369,8 @@ get_native_cogl_winsys_vtable (CoglRenderer *cogl_renderer)
       vtable.renderer_connect = meta_renderer_native_connect;
       vtable.renderer_disconnect = meta_renderer_native_disconnect;
       vtable.renderer_query_drm_modifiers = meta_renderer_native_query_drm_modifiers;
+      vtable.renderer_get_implicit_drm_modifier =
+        meta_renderer_native_get_implicit_drm_modifier;
       vtable.renderer_create_dma_buf = meta_renderer_native_create_dma_buf;
       vtable.renderer_is_dma_buf_supported =
         meta_renderer_native_is_dma_buf_supported;
