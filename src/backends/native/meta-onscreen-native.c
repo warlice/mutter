@@ -40,6 +40,7 @@
 #include "backends/native/meta-drm-buffer.h"
 #include "backends/native/meta-frame-native.h"
 #include "backends/native/meta-kms-connector.h"
+#include "backends/native/meta-kms-crtc-private.h"
 #include "backends/native/meta-kms-device.h"
 #include "backends/native/meta-kms-plane.h"
 #include "backends/native/meta-kms-utils.h"
@@ -1755,12 +1756,17 @@ maybe_update_frame_sync_or_tearing (MetaOnscreenNative *onscreen_native,
     {
       tearing_enabled = onscreen_native->tearing_requested;
 
+      clutter_stage_view_add_redraw_clip (stage_view, NULL);
+      clutter_stage_view_schedule_update_now (stage_view);
+
       kms_update = meta_frame_native_ensure_kms_update (frame_native,
                                                         kms_device);
       if (meta_kms_device_supports_tearing (kms_device) &&
           tearing_enabled != onscreen_native->tearing_enabled)
         {
           onscreen_native->tearing_enabled = tearing_enabled;
+
+          meta_kms_crtc_set_is_tearing (kms_crtc, tearing_enabled);
           meta_kms_update_set_tearing (kms_update, kms_crtc, tearing_enabled);
         }
     }
