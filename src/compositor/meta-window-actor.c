@@ -1329,7 +1329,7 @@ meta_window_actor_transform_cursor_position (MetaScreenCastWindow *screen_cast_w
         }
       else
         {
-          *out_view_scale = 1.0;
+          *out_view_scale = meta_window_actor_get_geometry_scale (window_actor);
         }
     }
 

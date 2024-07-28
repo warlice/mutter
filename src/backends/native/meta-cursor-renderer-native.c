@@ -801,8 +801,6 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
                                            int                       rowstride,
                                            uint32_t                  gbm_format)
 {
-  MetaCursorRendererNativePrivate *priv =
-    meta_cursor_renderer_native_get_instance_private (native);
   MetaCrtc *crtc = META_CRTC (crtc_kms);
   MetaLogicalMonitor *logical_monitor;
   MetaMonitor *monitor;
@@ -825,17 +823,13 @@ load_scaled_and_transformed_cursor_sprite (MetaCursorRendererNative *native,
   monitor = meta_output_get_monitor (meta_crtc_get_outputs (crtc)->data);
   logical_monitor = meta_monitor_get_logical_monitor (monitor);
 
+  monitor_scale = meta_logical_monitor_get_scale (logical_monitor);
   logical_transform = meta_logical_monitor_get_transform (logical_monitor);
   cursor_transform = meta_cursor_sprite_get_texture_transform (cursor_sprite);
   relative_transform = mtk_monitor_transform_transform (
     mtk_monitor_transform_invert (cursor_transform),
     meta_monitor_logical_to_crtc_transform (monitor, logical_transform));
   src_rect = meta_cursor_sprite_get_viewport_src_rect (cursor_sprite);
-
-  if (meta_backend_is_stage_views_scaled (priv->backend))
-    monitor_scale = meta_logical_monitor_get_scale (logical_monitor);
-  else
-    monitor_scale = 1.0f;
 
   if (meta_cursor_sprite_get_viewport_dst_size (cursor_sprite,
                                                 &dst_width,
