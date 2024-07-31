@@ -634,13 +634,14 @@ cogl_context_from_renderer_native (MetaRendererNative *renderer_native)
 
 CoglFramebuffer *
 meta_renderer_native_create_dma_buf_framebuffer (MetaRendererNative  *renderer_native,
-                                                 int                  dmabuf_fd,
                                                  uint32_t             width,
                                                  uint32_t             height,
-                                                 uint32_t             stride,
-                                                 uint32_t             offset,
-                                                 uint64_t            *modifier,
                                                  uint32_t             drm_format,
+                                                 int                  n_planes,
+                                                 int                 *fds,
+                                                 uint32_t            *strides,
+                                                 uint32_t            *offsets,
+                                                 uint64_t            *modifiers,
                                                  GError             **error)
 {
   CoglContext *cogl_context =
@@ -651,8 +652,6 @@ meta_renderer_native_create_dma_buf_framebuffer (MetaRendererNative  *renderer_n
   EGLDisplay egl_display = cogl_renderer_egl->edpy;
   MetaEgl *egl = meta_renderer_native_get_egl (renderer_native);
   EGLImageKHR egl_image;
-  uint32_t strides[1];
-  uint32_t offsets[1];
   CoglPixelFormat cogl_format;
   CoglEglImageFlags flags;
   CoglTexture *cogl_tex;
@@ -663,18 +662,16 @@ meta_renderer_native_create_dma_buf_framebuffer (MetaRendererNative  *renderer_n
   g_assert (format_info);
   cogl_format = format_info->cogl_format;
 
-  strides[0] = stride;
-  offsets[0] = offset;
   egl_image = meta_egl_create_dmabuf_image (egl,
                                             egl_display,
                                             width,
                                             height,
                                             drm_format,
-                                            1 /* n_planes */,
-                                            &dmabuf_fd,
+                                            n_planes,
+                                            fds,
                                             strides,
                                             offsets,
-                                            modifier,
+                                            modifiers,
                                             error);
   if (egl_image == EGL_NO_IMAGE_KHR)
     return NULL;
@@ -946,6 +943,40 @@ meta_renderer_native_queue_mode_set_update (MetaRendererNative *renderer_native,
   meta_kms_update_free (new_kms_update);
 }
 
+static GArray *
+meta_renderer_native_query_drm_modifiers (CoglRenderer           *cogl_renderer,
+                                          CoglPixelFormat         format,
+                                          CoglDrmModifierFilter   filter,
+                                          GError                **error)
+{
+  CoglRendererEGL *cogl_renderer_egl = cogl_renderer->winsys;
+  MetaRendererNativeGpuData *renderer_gpu_data = cogl_renderer_egl->platform;
+  const MetaFormatInfo *format_info;
+  uint32_t drm_format;
+  MetaRenderDevice *render_device;
+
+  format_info = meta_format_info_from_cogl_format (format);
+  if (!format_info)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                   "Format %s not supported",
+                   cogl_pixel_format_to_string (format));
+      return NULL;
+    }
+
+  drm_format = format_info->drm_format;
+
+  render_device = renderer_gpu_data->render_device;
+  return meta_render_device_query_drm_modifiers (render_device, drm_format,
+                                                 filter, error);
+}
+
+static uint64_t
+meta_renderer_native_get_implicit_drm_modifier (CoglRenderer *renderer)
+{
+  return DRM_FORMAT_MOD_INVALID;
+}
+
 static CoglDmaBufHandle *
 meta_renderer_native_create_dma_buf (CoglRenderer     *cogl_renderer,
                                      CoglPixelFormat   format,
@@ -966,11 +997,15 @@ meta_renderer_native_create_dma_buf (CoglRenderer     *cogl_renderer,
         MetaRenderDevice *render_device;
         MetaDrmBufferFlags flags;
         g_autoptr (MetaDrmBuffer) buffer = NULL;
-        int dmabuf_fd;
-        uint32_t stride;
-        uint32_t offset;
+        uint64_t buffer_modifier;
+        int n_planes;
+        int *fds;
+        uint32_t *offsets;
+        uint32_t *strides;
+        uint64_t *plane_modifiers = NULL;
         uint32_t bpp;
         uint32_t drm_format;
+        int i;
         CoglFramebuffer *dmabuf_fb;
         CoglDmaBufHandle *dmabuf_handle;
         const MetaFormatInfo *format_info;
@@ -996,49 +1031,62 @@ meta_renderer_native_create_dma_buf (CoglRenderer     *cogl_renderer,
         if (!buffer)
           return NULL;
 
-        dmabuf_fd = meta_drm_buffer_export_fd (buffer, error);
-        if (dmabuf_fd == -1)
-          return NULL;
-
-        stride = meta_drm_buffer_get_stride (buffer);
-        offset = meta_drm_buffer_get_offset (buffer, 0);
+        buffer_modifier = meta_drm_buffer_get_modifier (buffer);
         bpp = meta_drm_buffer_get_bpp (buffer);
-        if (n_modifiers)
-          {
-            uint64_t modifier = meta_drm_buffer_get_modifier (buffer);
 
-            dmabuf_fb =
-              meta_renderer_native_create_dma_buf_framebuffer (renderer_native,
-                                                               dmabuf_fd,
-                                                               width, height,
-                                                               stride,
-                                                               offset,
-                                                               &modifier,
-                                                               drm_format,
-                                                               error);
-          }
-        else
+        n_planes = meta_drm_buffer_get_n_planes (buffer);
+        fds = g_newa (int, n_planes);
+        offsets = g_newa (uint32_t, n_planes);
+        strides = g_newa (uint32_t, n_planes);
+
+        if (n_modifiers > 0)
+          plane_modifiers = g_newa (uint64_t, n_planes);
+
+        for (i = 0; i < n_planes; i++)
           {
-            dmabuf_fb =
-              meta_renderer_native_create_dma_buf_framebuffer (renderer_native,
-                                                               dmabuf_fd,
-                                                               width, height,
-                                                               stride,
-                                                               offset,
-                                                               NULL,
-                                                               drm_format,
-                                                               error);
+            fds[i] = meta_drm_buffer_export_fd_for_plane (buffer, i, error);
+            if (fds[i] == -1)
+              {
+                for (i = i - 1; i >= 0; i--)
+                  close (fds[i]);
+                return NULL;
+              }
+
+            offsets[i] = meta_drm_buffer_get_offset_for_plane (buffer, i);
+            strides[i] = meta_drm_buffer_get_stride_for_plane (buffer, i);
+            if (n_modifiers > 0)
+              plane_modifiers[i] = buffer_modifier;
           }
+
+        dmabuf_fb =
+          meta_renderer_native_create_dma_buf_framebuffer (renderer_native,
+                                                           width,
+                                                           height,
+                                                           drm_format,
+                                                           n_planes,
+                                                           fds,
+                                                           strides,
+                                                           offsets,
+                                                           plane_modifiers,
+                                                           error);
 
         if (!dmabuf_fb)
           {
-            close (dmabuf_fd);
+            for (i = 0; i < n_planes; i++)
+              close (fds[i]);
             return NULL;
           }
 
         dmabuf_handle =
-          cogl_dma_buf_handle_new (dmabuf_fb, dmabuf_fd,
-                                   width, height, stride, offset, bpp,
+          cogl_dma_buf_handle_new (dmabuf_fb,
+                                   width, height,
+                                   format,
+                                   buffer_modifier,
+                                   n_planes,
+                                   fds,
+                                   strides,
+                                   offsets,
+                                   bpp,
                                    g_steal_pointer (&buffer),
                                    g_object_unref);
         g_object_unref (dmabuf_fb);
@@ -1302,6 +1350,9 @@ get_native_cogl_winsys_vtable (CoglRenderer *cogl_renderer)
 
       vtable.renderer_connect = meta_renderer_native_connect;
       vtable.renderer_disconnect = meta_renderer_native_disconnect;
+      vtable.renderer_query_drm_modifiers = meta_renderer_native_query_drm_modifiers;
+      vtable.renderer_get_implicit_drm_modifier =
+        meta_renderer_native_get_implicit_drm_modifier;
       vtable.renderer_create_dma_buf = meta_renderer_native_create_dma_buf;
       vtable.renderer_is_dma_buf_supported =
         meta_renderer_native_is_dma_buf_supported;

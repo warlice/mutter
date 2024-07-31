@@ -421,6 +421,21 @@ cogl_onscreen_get_buffer_age (CoglOnscreen *onscreen)
 }
 
 gboolean
+cogl_onscreen_get_drm_format (CoglOnscreen  *onscreen,
+                              uint32_t      *drm_format,
+                              GError       **error)
+{
+  CoglOnscreenClass *klass = COGL_ONSCREEN_GET_CLASS (onscreen);
+
+  if (klass->get_drm_format)
+    return klass->get_drm_format (onscreen, drm_format, error);
+
+  g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+               "CoglOnscreen implementation doesn't support DRM formats");
+  return FALSE;
+}
+
+gboolean
 cogl_onscreen_direct_scanout (CoglOnscreen   *onscreen,
                               CoglScanout    *scanout,
                               CoglFrameInfo  *info,

@@ -40,6 +40,13 @@
 
 G_BEGIN_DECLS
 
+typedef enum _CoglDrmModifierFilter
+{
+  COGL_DRM_MODIFIER_FILTER_NONE = 0,
+  COGL_DRM_MODIFIER_FILTER_SINGLE_PLANE = 1 << 0,
+  COGL_DRM_MODIFIER_FILTER_NOT_EXTERNAL_ONLY = 1 << 1,
+} CoglDrmModifierFilter;
+
 /**
  * CoglRenderer:
  *
@@ -266,6 +273,25 @@ cogl_renderer_get_driver (CoglRenderer *renderer);
 
 
 /**
+ * cogl_renderer_query_drm_modifiers: (skip)
+ * @renderer: A #CoglRenderer
+ * @format: The #CoglPixelFormat
+ * @error: (nullable): return location for a #GError
+ */
+COGL_EXPORT GArray *
+cogl_renderer_query_drm_modifiers (CoglRenderer           *renderer,
+                                   CoglPixelFormat         format,
+                                   CoglDrmModifierFilter   filter,
+                                   GError                **error);
+
+COGL_EXPORT uint64_t
+cogl_renderer_get_implicit_drm_modifier (CoglRenderer *renderer);
+
+COGL_EXPORT gboolean
+cogl_renderer_is_implicit_drm_modifier (CoglRenderer *renderer,
+                                        uint64_t      modifier);
+
+/**
  * cogl_renderer_create_dma_buf: (skip)
  * @renderer: A #CoglRenderer
  * @format: A #CoglPixelFormat
@@ -294,7 +320,6 @@ cogl_renderer_create_dma_buf (CoglRenderer     *renderer,
                               int               width,
                               int               height,
                               GError          **error);
-
 
 /**
  * cogl_renderer_is_dma_buf_supported:

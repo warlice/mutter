@@ -100,6 +100,7 @@ struct _MetaOnscreenNative
 
   struct {
     struct gbm_surface *surface;
+    uint32_t format;
   } gbm;
 
 #ifdef HAVE_EGL_DEVICE
@@ -929,12 +930,14 @@ copy_shared_framebuffer_primary_gpu (CoglOnscreen                        *onscre
   MetaRendererNativeGpuData *primary_gpu_data;
   MetaDrmBufferDumb *buffer_dumb;
   MetaDrmBuffer *buffer;
-  int width, height, stride;
-  uint32_t drm_format;
+  int width, height;
   CoglFramebuffer *dmabuf_fb;
   int dmabuf_fd;
   g_autoptr (GError) error = NULL;
   const MetaFormatInfo *format_info;
+  uint32_t stride;
+  uint32_t offset;
+  uint32_t drm_format;
   uint64_t modifier;
 
   COGL_TRACE_BEGIN_SCOPED (CopySharedFramebufferPrimaryGpu,
@@ -955,6 +958,8 @@ copy_shared_framebuffer_primary_gpu (CoglOnscreen                        *onscre
   width = meta_drm_buffer_get_width (buffer);
   height = meta_drm_buffer_get_height (buffer);
   stride = meta_drm_buffer_get_stride (buffer);
+  offset = 0;
+  modifier = DRM_FORMAT_MOD_LINEAR;
   drm_format = meta_drm_buffer_get_format (buffer);
 
   g_assert (cogl_framebuffer_get_width (framebuffer) == width);
@@ -974,12 +979,14 @@ copy_shared_framebuffer_primary_gpu (CoglOnscreen                        *onscre
   modifier = DRM_FORMAT_MOD_LINEAR;
   dmabuf_fb =
     meta_renderer_native_create_dma_buf_framebuffer (renderer_native,
-                                                     dmabuf_fd,
                                                      width,
                                                      height,
-                                                     stride,
-                                                     0, &modifier,
                                                      drm_format,
+                                                     1,
+                                                     &dmabuf_fd,
+                                                     &stride,
+                                                     &offset,
+                                                     &modifier,
                                                      &error);
 
   if (error)
@@ -1576,6 +1583,24 @@ static const MetaKmsResultListenerVtable scanout_result_listener_vtable = {
 };
 
 static gboolean
+meta_onscreen_native_get_drm_format (CoglOnscreen  *onscreen,
+                                     uint32_t      *drm_format,
+                                     GError       **error)
+{
+  MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
+
+  if (onscreen_native->gbm.surface)
+    {
+      *drm_format = onscreen_native->gbm.format;
+      return TRUE;
+    }
+
+  g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+               "Render mode doesn't know about drm formats");
+  return FALSE;
+}
+
+static gboolean
 meta_onscreen_native_direct_scanout (CoglOnscreen   *onscreen,
                                      CoglScanout    *scanout,
                                      CoglFrameInfo  *frame_info,
@@ -1974,45 +1999,23 @@ get_supported_egl_modifiers (CoglOnscreen *onscreen,
 {
   MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
   MetaRendererNative *renderer_native = onscreen_native->renderer_native;
-  MetaEgl *egl = meta_onscreen_native_get_egl (onscreen_native);
   MetaGpu *gpu;
   MetaRendererNativeGpuData *renderer_gpu_data;
   MetaRenderDevice *render_device;
-  EGLDisplay egl_display;
-  EGLint num_modifiers;
   GArray *modifiers;
-  GError *error = NULL;
-  gboolean ret;
+  g_autoptr (GError) error = NULL;
 
   gpu = meta_crtc_get_gpu (META_CRTC (crtc_kms));
   renderer_gpu_data = meta_renderer_native_get_gpu_data (renderer_native,
                                                          META_GPU_KMS (gpu));
   render_device = renderer_gpu_data->render_device;
-  egl_display = meta_render_device_get_egl_display (render_device);
 
-  if (!meta_egl_has_extensions (egl, egl_display, NULL,
-                                "EGL_EXT_image_dma_buf_import_modifiers",
-                                NULL))
-    return NULL;
-
-  ret = meta_egl_query_dma_buf_modifiers (egl, egl_display,
-                                          format, 0, NULL, NULL,
-                                          &num_modifiers, NULL);
-  if (!ret || num_modifiers == 0)
-    return NULL;
-
-  modifiers = g_array_sized_new (FALSE, FALSE, sizeof (uint64_t),
-                                 num_modifiers);
-  ret = meta_egl_query_dma_buf_modifiers (egl, egl_display,
-                                          format, num_modifiers,
-                                          (EGLuint64KHR *) modifiers->data, NULL,
-                                          &num_modifiers, &error);
-
-  if (!ret)
+  modifiers = meta_render_device_query_drm_modifiers (render_device, format,
+                                                      COGL_DRM_MODIFIER_FILTER_NONE,
+                                                      &error);
+  if (!modifiers)
     {
       g_warning ("Failed to query DMABUF modifiers: %s", error->message);
-      g_error_free (error);
-      g_array_free (modifiers, TRUE);
       return NULL;
     }
 
@@ -2117,6 +2120,7 @@ static gboolean
 create_surfaces_gbm (CoglOnscreen        *onscreen,
                      int                  width,
                      int                  height,
+                     uint32_t            *out_format,
                      struct gbm_surface **gbm_surface,
                      EGLSurface          *egl_surface,
                      GError             **error)
@@ -2205,6 +2209,7 @@ create_surfaces_gbm (CoglOnscreen        *onscreen,
       return FALSE;
     }
 
+  *out_format = format;
   *gbm_surface = new_gbm_surface;
   *egl_surface = new_egl_surface;
 
@@ -2321,6 +2326,7 @@ meta_onscreen_native_allocate (CoglFramebuffer  *framebuffer,
   MetaOnscreenNative *onscreen_native = META_ONSCREEN_NATIVE (onscreen);
   CoglOnscreenEgl *onscreen_egl = COGL_ONSCREEN_EGL (onscreen);
   MetaRendererNativeGpuData *renderer_gpu_data;
+  uint32_t format;
   struct gbm_surface *gbm_surface;
   EGLSurface egl_surface;
   int width;
@@ -2351,12 +2357,14 @@ meta_onscreen_native_allocate (CoglFramebuffer  *framebuffer,
     case META_RENDERER_NATIVE_MODE_GBM:
       if (!create_surfaces_gbm (onscreen,
                                 width, height,
+                                &format,
                                 &gbm_surface,
                                 &egl_surface,
                                 error))
         return FALSE;
 
       onscreen_native->gbm.surface = gbm_surface;
+      onscreen_native->gbm.format = format;
       cogl_onscreen_egl_set_egl_surface (onscreen_egl, egl_surface);
       break;
     case META_RENDERER_NATIVE_MODE_SURFACELESS:
@@ -2863,6 +2871,7 @@ meta_onscreen_native_class_init (MetaOnscreenNativeClass *klass)
 
   onscreen_class->swap_buffers_with_damage =
     meta_onscreen_native_swap_buffers_with_damage;
+  onscreen_class->get_drm_format = meta_onscreen_native_get_drm_format;
   onscreen_class->direct_scanout = meta_onscreen_native_direct_scanout;
 
   blit_source_quark = g_quark_from_static_string ("Blit source");
