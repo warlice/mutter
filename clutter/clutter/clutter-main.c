@@ -416,21 +416,6 @@ _clutter_boolean_continue_accumulator (GSignalInvocationHint *ihint,
  * source, generating enter/leave etc.).
  */
 
-static inline void
-emit_event (ClutterStage *stage,
-            ClutterEvent *event)
-{
-  ClutterEventType event_type;
-
-  event_type = clutter_event_type (event);
-
-  if (event_type == CLUTTER_KEY_PRESS ||
-      event_type == CLUTTER_KEY_RELEASE)
-    cally_snoop_key_event (stage, (ClutterKeyEvent *) event);
-
-  clutter_stage_emit_event (stage, event);
-}
-
 static void
 maybe_remove_device_for_event (ClutterStage *stage,
                                ClutterEvent *event,
@@ -595,7 +580,7 @@ _clutter_process_event_details (ClutterActor    *stage,
       case CLUTTER_TOUCH_END:
       case CLUTTER_PROXIMITY_IN:
       case CLUTTER_PROXIMITY_OUT:
-        emit_event (CLUTTER_STAGE (stage), event);
+        clutter_stage_emit_event (CLUTTER_STAGE (stage), event);
         break;
 
       case CLUTTER_DEVICE_REMOVED:

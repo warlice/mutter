@@ -27,6 +27,7 @@
 #include "backends/meta-cursor-tracker-private.h"
 #include "backends/meta-dnd-private.h"
 #include "backends/meta-idle-manager.h"
+#include "cally/cally.h"
 #include "compositor/compositor-private.h"
 #include "compositor/meta-window-actor-private.h"
 #include "core/display-private.h"
@@ -262,6 +263,10 @@ meta_display_handle_event (MetaDisplay        *display,
 
   if (meta_display_process_captured_input (display, event))
     return CLUTTER_EVENT_STOP;
+
+  if (event_type == CLUTTER_KEY_PRESS ||
+      event_type == CLUTTER_KEY_RELEASE)
+    cally_snoop_key_event (stage_from_display (display), (ClutterKeyEvent *) event);
 
   device = clutter_event_get_device (event);
   clutter_input_pointer_a11y_update (device, event);
