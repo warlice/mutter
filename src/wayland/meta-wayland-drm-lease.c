@@ -564,6 +564,16 @@ meta_wayland_drm_lease_device_new (MetaWaylandDrmLeaseManager *lease_manager,
   MetaDrmLeaseManager *drm_lease_manager = lease_manager->drm_lease_manager;
   MetaWaylandDrmLeaseDevice *lease_device;
   g_autoptr (GList) kms_connectors = NULL;
+  MetaKmsImplDevice *impl_device;
+  g_autofd int fd = -1;
+
+  impl_device = meta_kms_device_get_impl_device (kms_device);
+  fd = meta_kms_impl_device_open_non_privileged_fd (impl_device);
+  if (fd < 0)
+    {
+      g_warning ("Error getting non privileged fd, ignoring DRM lease device");
+      return NULL;
+    }
 
   lease_device = g_rc_box_new0 (MetaWaylandDrmLeaseDevice);
   lease_device->lease_manager = lease_manager;
@@ -596,9 +606,12 @@ meta_wayland_drm_lease_manager_add_device (MetaKmsDevice              *kms_devic
   g_autoptr (MetaWaylandDrmLeaseDevice) lease_device = NULL;
 
   lease_device = meta_wayland_drm_lease_device_new (lease_manager, kms_device);
-  g_hash_table_insert (lease_manager->devices,
-                       kms_device,
-                       g_steal_pointer (&lease_device));
+  if (lease_device)
+    {
+      g_hash_table_insert (lease_manager->devices,
+                           kms_device,
+                           g_steal_pointer (&lease_device));
+    }
 }
 
 static void
