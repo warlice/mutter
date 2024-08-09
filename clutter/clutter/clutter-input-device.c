@@ -23,7 +23,7 @@
 
 /**
  * ClutterInputDevice:
- * 
+ *
  * An input device managed by Clutter
  *
  * #ClutterInputDevice represents an input device known to Clutter.
@@ -63,9 +63,11 @@ enum
 
   PROP_VENDOR_ID,
   PROP_PRODUCT_ID,
+  PROP_BUS_TYPE,
 
   PROP_N_STRIPS,
   PROP_N_RINGS,
+  PROP_N_DIALS,
   PROP_N_MODE_GROUPS,
   PROP_N_BUTTONS,
   PROP_DEVICE_NODE,
@@ -89,10 +91,12 @@ struct _ClutterInputDevicePrivate
 
   char *vendor_id;
   char *product_id;
+  char *bus_type;
   char *node_path;
 
   int n_rings;
   int n_strips;
+  int n_dials;
   int n_mode_groups;
   int n_buttons;
 
@@ -158,6 +162,7 @@ clutter_input_device_dispose (GObject *gobject)
   g_clear_pointer (&priv->device_name, g_free);
   g_clear_pointer (&priv->vendor_id, g_free);
   g_clear_pointer (&priv->product_id, g_free);
+  g_clear_pointer (&priv->bus_type, g_free);
   g_clear_pointer (&priv->node_path, g_free);
 
   if (device->accessibility_virtual_device)
@@ -210,12 +215,20 @@ clutter_input_device_set_property (GObject      *gobject,
       priv->product_id = g_value_dup_string (value);
       break;
 
+    case PROP_BUS_TYPE:
+      priv->bus_type = g_value_dup_string (value);
+      break;
+
     case PROP_N_RINGS:
       priv->n_rings = g_value_get_int (value);
       break;
 
     case PROP_N_STRIPS:
       priv->n_strips = g_value_get_int (value);
+      break;
+
+    case PROP_N_DIALS:
+      priv->n_dials = g_value_get_int (value);
       break;
 
     case PROP_N_MODE_GROUPS:
@@ -280,12 +293,20 @@ clutter_input_device_get_property (GObject    *gobject,
       g_value_set_string (value, priv->product_id);
       break;
 
+    case PROP_BUS_TYPE:
+      g_value_set_string (value, priv->bus_type);
+      break;
+
     case PROP_N_RINGS:
       g_value_set_int (value, priv->n_rings);
       break;
 
     case PROP_N_STRIPS:
       g_value_set_int (value, priv->n_strips);
+      break;
+
+    case PROP_N_DIALS:
+      g_value_set_int (value, priv->n_dials);
       break;
 
     case PROP_N_MODE_GROUPS:
@@ -409,6 +430,18 @@ clutter_input_device_class_init (ClutterInputDeviceClass *klass)
                          G_PARAM_STATIC_STRINGS |
                          G_PARAM_CONSTRUCT_ONLY);
 
+  /**
+   * ClutterInputDevice:bus-type:
+   *
+   * Bus type of this device.
+   */
+  obj_props[PROP_BUS_TYPE] =
+    g_param_spec_string ("bus-type", NULL, NULL,
+                         NULL,
+                         G_PARAM_READWRITE |
+                         G_PARAM_STATIC_STRINGS |
+                         G_PARAM_CONSTRUCT_ONLY);
+
   obj_props[PROP_N_RINGS] =
     g_param_spec_int ("n-rings", NULL, NULL,
                       0, G_MAXINT, 0,
@@ -418,6 +451,13 @@ clutter_input_device_class_init (ClutterInputDeviceClass *klass)
 
   obj_props[PROP_N_STRIPS] =
     g_param_spec_int ("n-strips", NULL, NULL,
+                      0, G_MAXINT, 0,
+                      G_PARAM_READWRITE |
+                      G_PARAM_STATIC_STRINGS |
+                      G_PARAM_CONSTRUCT_ONLY);
+
+  obj_props[PROP_N_DIALS] =
+    g_param_spec_int ("n-dials", NULL, NULL,
                       0, G_MAXINT, 0,
                       G_PARAM_READWRITE |
                       G_PARAM_STATIC_STRINGS |
@@ -600,6 +640,26 @@ clutter_input_device_get_product_id (ClutterInputDevice *device)
   return priv->product_id;
 }
 
+/**
+ * clutter_input_device_get_bus_type:
+ * @device: a physical #ClutterInputDevice
+ *
+ * Gets the bus type of this device.
+ *
+ * Returns: the bus type
+ */
+const gchar *
+clutter_input_device_get_bus_type (ClutterInputDevice *device)
+{
+  ClutterInputDevicePrivate *priv =
+    clutter_input_device_get_instance_private (device);
+
+  g_return_val_if_fail (CLUTTER_IS_INPUT_DEVICE (device), NULL);
+  g_return_val_if_fail (clutter_input_device_get_device_mode (device) != CLUTTER_INPUT_MODE_LOGICAL, NULL);
+
+  return priv->bus_type;
+}
+
 gint
 clutter_input_device_get_n_rings (ClutterInputDevice *device)
 {
@@ -620,6 +680,17 @@ clutter_input_device_get_n_strips (ClutterInputDevice *device)
   g_return_val_if_fail (CLUTTER_IS_INPUT_DEVICE (device), 0);
 
   return priv->n_strips;
+}
+
+gint
+clutter_input_device_get_n_dials (ClutterInputDevice *device)
+{
+  ClutterInputDevicePrivate *priv =
+    clutter_input_device_get_instance_private (device);
+
+  g_return_val_if_fail (CLUTTER_IS_INPUT_DEVICE (device), 0);
+
+  return priv->n_dials;
 }
 
 gint

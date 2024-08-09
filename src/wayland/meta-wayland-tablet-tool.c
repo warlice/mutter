@@ -34,7 +34,7 @@
 #include "backends/meta-input-settings-private.h"
 #include "backends/meta-logical-monitor.h"
 
-#include "tablet-unstable-v2-server-protocol.h"
+#include "tablet-v2-server-protocol.h"
 
 #define TABLET_AXIS_MAX 65535
 
