@@ -61,3 +61,6 @@ gboolean meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
 
 void meta_kms_crtc_set_is_leased (MetaKmsCrtc *crtc,
                                   gboolean     leased);
+
+void meta_kms_crtc_set_is_tearing (MetaKmsCrtc *crtc,
+                                   gboolean     tearing);

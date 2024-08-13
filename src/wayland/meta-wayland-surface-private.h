@@ -135,6 +135,9 @@ struct _MetaWaylandSurfaceState
     MetaWaylandSyncPoint *acquire;
     MetaWaylandSyncPoint *release;
   } drm_syncobj;
+
+  gboolean has_new_allow_async_presentation;
+  gboolean allow_async_presentation;
 };
 
 struct _MetaWaylandDragDestFuncs
@@ -272,6 +275,8 @@ struct _MetaWaylandSurface
     MetaWaylandTransaction *first_committed;
     MetaWaylandTransaction *last_committed;
   } transaction;
+
+  gboolean allow_async_presentation;
 };
 
 void                meta_wayland_shell_init     (MetaWaylandCompositor *compositor);
@@ -398,6 +403,8 @@ CoglScanout *       meta_wayland_surface_try_acquire_scanout (MetaWaylandSurface
                                                               ClutterStageView   *stage_view);
 
 MetaCrtc * meta_wayland_surface_get_scanout_candidate (MetaWaylandSurface *surface);
+
+gboolean meta_wayland_surface_get_is_tearing_enabled (MetaWaylandSurface *surface);
 
 void meta_wayland_surface_set_scanout_candidate (MetaWaylandSurface *surface,
                                                  MetaCrtc           *crtc);

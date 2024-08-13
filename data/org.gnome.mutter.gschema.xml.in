@@ -5,6 +5,7 @@
     <value nick="kms-modifiers" value="2"/>
     <value nick="autoclose-xwayland" value="4"/>
     <value nick="variable-refresh-rate" value="8"/>
+    <value nick="tearing" value="16"/>
   </flags>
 
   <schema id="org.gnome.mutter" path="/org/gnome/mutter/"
@@ -134,6 +135,11 @@
                                         refresh rate of the monitor when
                                         applicable if supported by the monitor,
                                         GPU and DRM driver. Configurable in
+                                        Settings. Requires a restart.
+
+        • “tearing”                   — makes mutter change the presentation
+                                        to Async or Vsync when applicable and if
+                                        supported by the driver, Configurable in
                                         Settings. Requires a restart.
 
       </description>

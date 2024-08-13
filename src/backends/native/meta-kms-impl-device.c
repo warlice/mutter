@@ -543,6 +543,7 @@ init_caps (MetaKmsImplDevice *impl_device)
   uint64_t prefer_shadow;
   uint64_t uses_monotonic_clock;
   uint64_t addfb2_modifiers;
+  uint64_t tearing_supported;
 
   fd = meta_device_file_get_fd (priv->device_file);
   if (drmGetCap (fd, DRM_CAP_CURSOR_WIDTH, &cursor_width) == 0 &&
@@ -569,6 +570,11 @@ init_caps (MetaKmsImplDevice *impl_device)
   if (drmGetCap (fd, DRM_CAP_ADDFB2_MODIFIERS, &addfb2_modifiers) == 0)
     {
       priv->caps.addfb2_modifiers = (addfb2_modifiers != 0);
+    }
+
+  if (drmGetCap (fd, DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP, &tearing_supported) == 0)
+    {
+      priv->caps.supports_tearing = (tearing_supported != 0);
     }
 }
 

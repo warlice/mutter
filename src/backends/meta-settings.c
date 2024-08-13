@@ -296,6 +296,8 @@ experimental_features_handler (GVariant *features_variant,
         feature = META_EXPERIMENTAL_FEATURE_AUTOCLOSE_XWAYLAND;
       else if (g_str_equal (feature_str, "variable-refresh-rate"))
         feature = META_EXPERIMENTAL_FEATURE_VARIABLE_REFRESH_RATE;
+      else if (g_str_equal (feature_str, "tearing"))
+        feature = META_EXPERIMENTAL_FEATURE_TEARING;
 
       if (feature)
         g_message ("Enabling experimental feature '%s'", feature_str);

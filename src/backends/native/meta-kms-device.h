@@ -52,6 +52,9 @@ META_EXPORT_TEST
 gboolean meta_kms_device_uses_monotonic_clock (MetaKmsDevice *device);
 
 META_EXPORT_TEST
+gboolean meta_kms_device_supports_tearing (MetaKmsDevice *device);
+
+META_EXPORT_TEST
 GList * meta_kms_device_get_connectors (MetaKmsDevice *device);
 
 META_EXPORT_TEST

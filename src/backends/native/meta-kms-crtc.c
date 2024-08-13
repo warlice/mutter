@@ -52,6 +52,8 @@ struct _MetaKmsCrtc
   MetaKmsCrtcPropTable prop_table;
 
   gboolean is_leased;
+
+  gboolean is_tearing;
 };
 
 G_DEFINE_TYPE (MetaKmsCrtc, meta_kms_crtc, G_TYPE_OBJECT)
@@ -120,6 +122,19 @@ meta_kms_crtc_set_is_leased (MetaKmsCrtc *crtc,
                              gboolean     leased)
 {
   crtc->is_leased = leased;
+}
+
+gboolean
+meta_kms_crtc_is_tearing (MetaKmsCrtc *crtc)
+{
+  return crtc->is_tearing;
+}
+
+void
+meta_kms_crtc_set_is_tearing (MetaKmsCrtc *crtc,
+                              gboolean     tearing)
+{
+  crtc->is_tearing = tearing;
 }
 
 static void
@@ -601,6 +616,11 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
       next_deadline_us =
         (int64_t) (s2us (vblank.reply.tval_sec) + vblank.reply.tval_usec + 0.5 +
                    G_USEC_PER_SEC / MINIMUM_REFRESH_RATE);
+    }
+  else if (meta_kms_crtc_is_tearing (crtc))
+    {
+      next_presentation_us = 0;
+      next_deadline_us = 0;
     }
   else
     {

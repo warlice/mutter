@@ -50,6 +50,8 @@ struct _MetaKmsUpdate
 
   gboolean needs_modeset;
 
+  gboolean may_tear;
+
   MetaKmsImplDevice *impl_device;
 };
 
@@ -520,6 +522,18 @@ meta_kms_update_set_vrr (MetaKmsUpdate *update,
   crtc_update->vrr.is_enabled = enabled;
 
   update_latch_crtc (update, crtc);
+}
+
+void
+meta_kms_update_set_tearing (MetaKmsUpdate *update,
+                             MetaKmsCrtc   *crtc,
+                             gboolean       enabled)
+{
+  MetaKmsCrtcUpdate *crtc_update;
+
+  g_assert (meta_kms_crtc_get_device (crtc) == update->device);
+
+  update->may_tear = enabled;
 }
 
 static MetaKmsCrtcColorUpdate *
@@ -1144,6 +1158,12 @@ meta_kms_update_get_needs_modeset (MetaKmsUpdate *update)
   return update->needs_modeset || update->mode_sets;
 }
 
+gboolean
+meta_kms_update_get_is_tearing (MetaKmsUpdate *update)
+{
+  return update->may_tear;
+}
+
 MetaKmsUpdate *
 meta_kms_update_new (MetaKmsDevice *device)
 {
@@ -1152,6 +1172,7 @@ meta_kms_update_new (MetaKmsDevice *device)
   update = g_new0 (MetaKmsUpdate, 1);
   update->device = device;
   update->is_latchable = TRUE;
+  update->may_tear = FALSE;
 
   return update;
 }
