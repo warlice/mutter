@@ -1096,6 +1096,7 @@ if have_wayland
   #  - protocol version (if stability is 'unstable')
   wayland_protocols = [
     ['drm-lease', 'staging', 'v1', ],
+    ['commit-timing-v1', 'private', ],
     ['fractional-scale', 'staging', 'v1', ],
     ['gtk-shell', 'private', ],
     ['idle-inhibit', 'unstable', 'v1', ],
