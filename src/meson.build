@@ -1097,6 +1097,7 @@ if have_wayland
   wayland_protocols = [
     ['drm-lease', 'staging', 'v1', ],
     ['commit-timing-v1', 'private', ],
+    ['fifo-v1', 'private', ],
     ['fractional-scale', 'staging', 'v1', ],
     ['gtk-shell', 'private', ],
     ['idle-inhibit', 'unstable', 'v1', ],
