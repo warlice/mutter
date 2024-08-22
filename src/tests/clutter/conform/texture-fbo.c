@@ -92,7 +92,7 @@ validate_part (TestState *state,
                                             DIVISION_WIDTH / 2 + xpos,
                                             y * DIVISION_HEIGHT +
                                             DIVISION_HEIGHT / 2 + ypos,
-                                            1, 1);
+                                            1, 1, NULL);
 
         /* If this division is clipped then it should be the stage
            color */

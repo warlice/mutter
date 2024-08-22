@@ -158,10 +158,11 @@ ClutterActor *  clutter_stage_get_actor_at_pos                  (ClutterStage   
                                                                  float                  y);
 CLUTTER_EXPORT
 guchar *        clutter_stage_read_pixels                       (ClutterStage          *stage,
-                                                                 gint                   x,
-                                                                 gint                   y,
-                                                                 gint                   width,
-                                                                 gint                   height);
+                                                                 int                    x,
+                                                                 int                    y,
+                                                                 int                    width,
+                                                                 int                    height,
+                                                                 int                   *data_length);
 
 CLUTTER_EXPORT
 void            clutter_stage_ensure_viewport                   (ClutterStage          *stage);

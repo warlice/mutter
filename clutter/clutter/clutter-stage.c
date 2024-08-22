@@ -1907,6 +1907,8 @@ _clutter_stage_get_viewport (ClutterStage *stage,
  *   entire stage width
  * @height: Height dimension of pixels to be read, or -1 for the
  *   entire stage height
+ * @data_length: (out) (optional): return location for the length
+ *   of the returned pixel data in bytes, or %NULL
  *
  * Makes a screenshot of the stage in RGBA 8bit data, returns a
  * linear buffer with @width * 4 as rowstride.
@@ -1914,16 +1916,18 @@ _clutter_stage_get_viewport (ClutterStage *stage,
  * The alpha data contained in the returned buffer is driver-dependent,
  * and not guaranteed to hold any sensible value.
  *
- * Return value: (transfer full) (array): a pointer to newly allocated memory with the buffer
- *   or %NULL if the read failed. Use g_free() on the returned data
- *   to release the resources it has allocated.
+ * Return value: (transfer full) (array length=data_length): a pointer to
+ *   newly allocated memory with the buffer or %NULL if the read
+ *   failed. Use g_free() on the returned data to release the
+ *   resources it has allocated.
  */
 guchar *
 clutter_stage_read_pixels (ClutterStage *stage,
-                           gint          x,
-                           gint          y,
-                           gint          width,
-                           gint          height)
+                           int           x,
+                           int           y,
+                           int           width,
+                           int           height,
+                           int           *data_length)
 {
   ClutterStagePrivate *priv;
   ClutterActorBox box;
@@ -1935,6 +1939,7 @@ clutter_stage_read_pixels (ClutterStage *stage,
   float view_scale;
   float pixel_width;
   float pixel_height;
+  int pixel_data_length;
   uint8_t *pixels;
 
   COGL_TRACE_BEGIN_SCOPED (ClutterStageReadPixels, "Clutter::Stage::read_pixels()");
@@ -1975,8 +1980,12 @@ clutter_stage_read_pixels (ClutterStage *stage,
   view_scale = clutter_stage_view_get_scale (view);
   pixel_width = roundf (clip_rect.width * view_scale);
   pixel_height = roundf (clip_rect.height * view_scale);
+  pixel_data_length = (int) (pixel_width * pixel_height * 4);
 
-  pixels = g_malloc0 ((int) (pixel_width * pixel_height * 4));
+  if (data_length != NULL)
+    *data_length = pixel_data_length;
+
+  pixels = g_malloc0 (pixel_data_length);
   cogl_framebuffer_read_pixels (framebuffer,
                                 (int) (clip_rect.x * view_scale),
                                 (int) (clip_rect.y * view_scale),
