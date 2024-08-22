@@ -544,10 +544,7 @@ meta_window_apply_session_info (MetaWindow *window,
 
       adjust_for_gravity (window, FALSE, gravity, &rect);
       meta_window_client_rect_to_frame_rect (window, &rect, &rect);
-      meta_window_move_resize_internal (window,
-                                        flags,
-                                        META_PLACE_FLAG_NONE,
-                                        rect);
+      meta_window_move_resize (window, flags, rect);
     }
 }
 
@@ -627,10 +624,7 @@ meta_window_x11_initialize_state (MetaWindow *window)
 
       adjust_for_gravity (window, TRUE, gravity, &rect);
       meta_window_client_rect_to_frame_rect (window, &rect, &rect);
-      meta_window_move_resize_internal (window,
-                                        flags,
-                                        META_PLACE_FLAG_NONE,
-                                        rect);
+      meta_window_move_resize (window, flags, rect);
     }
 
   meta_window_x11_update_shape_region (window);
@@ -2878,7 +2872,7 @@ meta_window_move_resize_request (MetaWindow  *window,
    * (e.g. hitting a dropdown triangle in a fileselector to show more
    * options, which makes the window bigger).  Thus we do not set
    * META_MOVE_RESIZE_USER_ACTION in flags to the
-   * meta_window_move_resize_internal() call.
+   * meta_window_move_resize() call.
    */
   flags = META_MOVE_RESIZE_CONFIGURE_REQUEST;
   if (value_mask & (CWX | CWY))
@@ -2929,10 +2923,7 @@ meta_window_move_resize_request (MetaWindow  *window,
 
       adjust_for_gravity (window, TRUE, gravity, &rect);
       meta_window_client_rect_to_frame_rect (window, &rect, &rect);
-      meta_window_move_resize_internal (window,
-                                        flags,
-                                        META_PLACE_FLAG_NONE,
-                                        rect);
+      meta_window_move_resize (window, flags, rect);
     }
 }
 
