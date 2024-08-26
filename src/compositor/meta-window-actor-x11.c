@@ -303,10 +303,13 @@ meta_window_actor_x11_assign_surface_actor (MetaWindowActor  *actor,
     {
       g_warn_if_fail (meta_is_wayland_compositor ());
 
+      clutter_actor_set_reactive (CLUTTER_ACTOR (prev_surface_actor), FALSE);
       g_clear_signal_handler (&actor_x11->size_changed_id, prev_surface_actor);
       clutter_actor_remove_child (CLUTTER_ACTOR (actor),
                                   CLUTTER_ACTOR (prev_surface_actor));
     }
+
+  clutter_actor_set_reactive (CLUTTER_ACTOR (surface_actor), TRUE);
 
   parent_class->assign_surface_actor (actor, surface_actor);
 
@@ -1577,6 +1580,8 @@ meta_window_actor_x11_dispose (GObject *object)
   surface_actor = meta_window_actor_get_surface (META_WINDOW_ACTOR (actor_x11));
   if (surface_actor)
     {
+      clutter_actor_set_reactive (CLUTTER_ACTOR (surface_actor), FALSE);
+
       g_clear_signal_handler (&actor_x11->repaint_scheduled_id, surface_actor);
       g_clear_signal_handler (&actor_x11->size_changed_id, surface_actor);
 

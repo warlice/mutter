@@ -56,7 +56,6 @@ clear_window (MetaXwaylandSurface *xwayland_surface)
     META_WAYLAND_SURFACE_ROLE (xwayland_surface);
   MetaWaylandSurface *surface =
     meta_wayland_surface_role_get_surface (surface_role);
-  MetaSurfaceActor *surface_actor;
   MetaWindowXwayland *xwayland_window;
 
   if (!xwayland_surface->window)
@@ -67,10 +66,6 @@ clear_window (MetaXwaylandSurface *xwayland_surface)
   xwayland_window = META_WINDOW_XWAYLAND (xwayland_surface->window);
   meta_window_xwayland_set_surface (xwayland_window, NULL);
   xwayland_surface->window = NULL;
-
-  surface_actor = meta_wayland_surface_get_actor (surface);
-  if (surface_actor)
-    clutter_actor_set_reactive (CLUTTER_ACTOR (surface_actor), FALSE);
 
   meta_wayland_surface_notify_unmapped (surface);
 }
@@ -111,10 +106,6 @@ meta_xwayland_surface_associate_with_window (MetaXwaylandSurface *xwayland_surfa
   meta_window_xwayland_set_surface (xwayland_window, surface);
   xwayland_surface->window = window;
 
-  surface_actor = meta_wayland_surface_get_actor (surface);
-  if (surface_actor)
-    clutter_actor_set_reactive (CLUTTER_ACTOR (surface_actor), TRUE);
-
   xwayland_surface->unmanaging_handler_id =
     g_signal_connect (window,
                       "unmanaging",
@@ -124,7 +115,8 @@ meta_xwayland_surface_associate_with_window (MetaXwaylandSurface *xwayland_surfa
   g_signal_emit (xwayland_surface, signals[WINDOW_ASSOCIATED], 0);
 
   window_actor = meta_window_actor_from_window (window);
-  if (window_actor)
+  surface_actor = meta_wayland_surface_get_actor (surface);
+  if (window_actor && surface_actor)
     meta_window_actor_assign_surface_actor (window_actor, surface_actor);
 }
 

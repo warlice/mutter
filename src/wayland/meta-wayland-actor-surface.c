@@ -80,10 +80,7 @@ meta_wayland_actor_surface_dispose (GObject *object)
   MetaWaylandFrameCallback *cb, *next;
 
   if (priv->actor)
-    {
-      clutter_actor_set_reactive (CLUTTER_ACTOR (priv->actor), FALSE);
-      clear_surface_actor (actor_surface);
-    }
+    clear_surface_actor (actor_surface);
 
   wl_list_for_each_safe (cb, next, &priv->frame_callback_list, link)
     wl_resource_destroy (cb->resource);
@@ -288,16 +285,6 @@ meta_wayland_actor_surface_sync_actor_state (MetaWaylandActorSurface *actor_surf
 {
   MetaWaylandActorSurfaceClass *actor_surface_class =
     META_WAYLAND_ACTOR_SURFACE_GET_CLASS (actor_surface);
-  MetaWaylandActorSurfacePrivate *priv =
-    meta_wayland_actor_surface_get_instance_private (actor_surface);
-
-#ifdef HAVE_XWAYLAND
-  if (!META_IS_XWAYLAND_SURFACE (actor_surface))
-#endif
-    {
-      if (priv->actor && meta_surface_actor_is_frozen (priv->actor))
-        return;
-    }
 
   actor_surface_class->sync_actor_state (actor_surface);
 }

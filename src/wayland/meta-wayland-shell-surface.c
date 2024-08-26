@@ -98,7 +98,6 @@ clear_window (MetaWaylandShellSurface *shell_surface)
     META_WAYLAND_SURFACE_ROLE (shell_surface);
   MetaWaylandSurface *surface =
     meta_wayland_surface_role_get_surface (surface_role);
-  MetaSurfaceActor *surface_actor;
 
   if (!priv->window)
     return;
@@ -108,10 +107,6 @@ clear_window (MetaWaylandShellSurface *shell_surface)
   g_clear_signal_handler (&priv->highest_scale_monitor_handler_id,
                           priv->window);
   priv->window = NULL;
-
-  surface_actor = meta_wayland_surface_get_actor (surface);
-  if (surface_actor)
-    clutter_actor_set_reactive (CLUTTER_ACTOR (surface_actor), FALSE);
 
   meta_wayland_surface_notify_unmapped (surface);
 }
@@ -133,15 +128,10 @@ meta_wayland_shell_surface_set_window (MetaWaylandShellSurface *shell_surface,
     META_WAYLAND_SURFACE_ROLE (shell_surface);
   MetaWaylandSurface *surface =
     meta_wayland_surface_role_get_surface (surface_role);
-  MetaSurfaceActor *surface_actor;
 
   g_assert (!priv->window);
 
   priv->window = window;
-
-  surface_actor = meta_wayland_surface_get_actor (surface);
-  if (surface_actor)
-    clutter_actor_set_reactive (CLUTTER_ACTOR (surface_actor), TRUE);
 
   priv->unmanaging_handler_id =
     g_signal_connect (window,
