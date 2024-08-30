@@ -39,6 +39,7 @@
 #include "cogl/cogl.h"
 #include "core/util-private.h"
 #include "meta/meta-backend.h"
+#include "mtk/mtk.h"
 
 #define MAX_STACK_RECTS 256
 
@@ -333,36 +334,75 @@ swap_framebuffer (ClutterStageWindow *stage_window,
     }
 }
 
+/**
+ * offset_scale_and_clamp_region:
+ * @region: (transfer full): The region to scale, the full ownership of
+ *  of the region is passed, including its internal rectangles.
+ * @offset_x: Offset to apply on horizontal coordinates
+ * @offset_y: Offset to apply on vertical coordinates
+ * @max_size: Maximum size the region may have
+ * @scale: Scaling to to apply to @region
+ *
+ * Returns: (transfer full): The region with offset and scale applied,
+ *   clamped to the framebuffer size
+ */
 static MtkRegion *
-offset_scale_and_clamp_region (const MtkRegion *region,
+offset_scale_and_clamp_region (MtkRegion       *region,
                                int              offset_x,
                                int              offset_y,
-                               float            scale)
+                               float            scale,
+                               graphene_size_t *max_size)
 {
   int n_rects, i;
   MtkRectangle *rects;
+  graphene_rect_t fb_rect;
   g_autofree MtkRectangle *freeme = NULL;
+  g_autoptr (MtkRegion) owned_region = NULL;
+  gboolean is_scaled = !G_APPROX_VALUE (scale, 1.0f, FLT_EPSILON);
 
-  n_rects = mtk_region_num_rectangles (region);
+  if (offset_x == 0 && offset_y == 0 && !is_scaled)
+    return g_steal_pointer (&region);
+
+  owned_region = g_steal_pointer (&region);
+  n_rects = mtk_region_num_rectangles (owned_region);
 
   if (n_rects == 0)
     return mtk_region_create ();
+
+  if (!is_scaled)
+    {
+      /* WARNING: we're changing the region in place, so this assumes that
+       * the caller is fully passing the ownership of the region to this
+       * function.
+       */
+      mtk_region_translate (owned_region, offset_x, offset_y);
+      mtk_region_intersect_rectangle (owned_region, &(MtkRectangle) {
+        .x = 0,
+        .y = 0,
+        .width = (int) max_size->width,
+        .height = (int) max_size->height,
+      });
+      return g_steal_pointer (&owned_region);
+    }
 
   if (n_rects < MAX_STACK_RECTS)
     rects = g_newa (MtkRectangle, n_rects);
   else
     rects = freeme = g_new (MtkRectangle, n_rects);
 
+  fb_rect = GRAPHENE_RECT_INIT (0, 0, max_size->width, max_size->height);
+
   for (i = 0; i < n_rects; i++)
     {
       MtkRectangle *rect = &rects[i];
       graphene_rect_t tmp;
 
-      *rect = mtk_region_get_rectangle (region, i);
+      *rect = mtk_region_get_rectangle (owned_region, i);
 
       tmp = mtk_rectangle_to_graphene_rect (rect);
       graphene_rect_offset (&tmp, offset_x, offset_y);
       graphene_rect_scale (&tmp, scale, scale, &tmp);
+      graphene_rect_intersection (&tmp, &fb_rect, &tmp);
       mtk_rectangle_from_graphene_rect (&tmp, MTK_ROUNDING_STRATEGY_GROW,
                                         rect);
     }
@@ -370,36 +410,77 @@ offset_scale_and_clamp_region (const MtkRegion *region,
   return mtk_region_create_rectangles (rects, n_rects);
 }
 
+/**
+ * scale_offset_and_clamp_region:
+ * @region: (transfer container): The region to scale, only the ownership of
+ *  of the region is passed, not of its internal rectangles.
+ * @scale: Scaling to to apply to @region
+ * @offset_x: Offset to apply on horizontal coordinates
+ * @offset_y: Offset to apply on vertical coordinates
+ * @max_size: Maximum size the region may have
+ *
+ * Returns: (transfer full): The region with scale and offset applied,
+ *   clamped to the framebuffer size
+ */
 static MtkRegion *
-scale_offset_and_clamp_region (const MtkRegion *region,
+scale_offset_and_clamp_region (MtkRegion       *region,
                                float            scale,
                                int              offset_x,
-                               int              offset_y)
+                               int              offset_y,
+                               graphene_size_t *max_size)
 {
   int n_rects, i;
   MtkRectangle *rects;
+  graphene_rect_t fb_rect;
   g_autofree MtkRectangle *freeme = NULL;
+  g_autoptr (MtkRegion) owned_region = NULL;
+  gboolean is_scaled = !G_APPROX_VALUE (scale, 1.0f, FLT_EPSILON);
 
-  n_rects = mtk_region_num_rectangles (region);
+  if (offset_x == 0 && offset_y == 0 && !is_scaled)
+    return g_steal_pointer (&region);
+
+  owned_region = g_steal_pointer (&region);
+  n_rects = mtk_region_num_rectangles (owned_region);
 
   if (n_rects == 0)
     return mtk_region_create ();
+
+  if (!is_scaled)
+    {
+      /* NOTE: We can't modify the region in place because callers do not fully
+       * pass the ownership of the region to us. But only of the container.
+       */
+      MtkRegion *new_region = mtk_region_copy (owned_region);
+      mtk_region_translate (new_region, offset_x, offset_y);
+      mtk_region_intersect_rectangle (new_region, &(MtkRectangle) {
+        .x = offset_x,
+        .y = offset_y,
+        .width = (int) max_size->width,
+        .height = (int) max_size->height,
+      });
+      return new_region;
+    }
 
   if (n_rects < MAX_STACK_RECTS)
     rects = g_newa (MtkRectangle, n_rects);
   else
     rects = freeme = g_new (MtkRectangle, n_rects);
 
+  fb_rect = GRAPHENE_RECT_INIT (0, 0, max_size->width, max_size->height);
+  graphene_rect_scale (&fb_rect, scale, scale, &fb_rect);
+  graphene_rect_offset (&fb_rect, offset_x, offset_y);
+
   for (i = 0; i < n_rects; i++)
     {
       MtkRectangle *rect = &rects[i];
       graphene_rect_t tmp;
 
-      *rect = mtk_region_get_rectangle (region, i);
+      *rect = mtk_region_get_rectangle (owned_region, i);
 
       tmp = mtk_rectangle_to_graphene_rect (rect);
       graphene_rect_scale (&tmp, scale, scale, &tmp);
       graphene_rect_offset (&tmp, offset_x, offset_y);
+      graphene_rect_intersection (&tmp, &fb_rect, &tmp);
       mtk_rectangle_from_graphene_rect (&tmp,
                                         MTK_ROUNDING_STRATEGY_GROW,
                                         rect);
@@ -560,18 +641,27 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
 
   if (use_clipped_redraw)
     {
-      fb_clip_region = offset_scale_and_clamp_region (redraw_clip,
-                                                      -view_rect.x,
-                                                      -view_rect.y,
-                                                      fb_scale);
+      fb_clip_region =
+        offset_scale_and_clamp_region (g_steal_pointer (&redraw_clip),
+                                       -view_rect.x,
+                                       -view_rect.y,
+                                       fb_scale,
+                                       &(graphene_size_t) {
+                                        .width = fb_width,
+                                        .height = fb_height,
+                                       });
 
       if (G_UNLIKELY (paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION))
         {
           queued_redraw_clip =
-            scale_offset_and_clamp_region (fb_clip_region,
+            scale_offset_and_clamp_region (mtk_region_ref (fb_clip_region),
                                            1.0f / fb_scale,
                                            view_rect.x,
-                                           view_rect.y);
+                                           view_rect.y,
+                                           &(graphene_size_t) {
+                                            .width = fb_width,
+                                            .height = fb_height,
+                                           });
         }
     }
   else
@@ -649,13 +739,18 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
        *     is a superset of fb_clip_region to avoid such gaps.
        */
       g_clear_pointer (&redraw_clip, mtk_region_unref);
-      redraw_clip = scale_offset_and_clamp_region (fb_clip_region,
-                                                   1.0f / fb_scale,
-                                                   view_rect.x,
-                                                   view_rect.y);
+      redraw_clip =
+        scale_offset_and_clamp_region (mtk_region_ref (fb_clip_region),
+                                       1.0f / fb_scale,
+                                       view_rect.x,
+                                       view_rect.y,
+                                       &(graphene_size_t) {
+                                        .width = fb_width,
+                                        .height = fb_height,
+                                       });
     }
 
-  if (paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION)
+  if (G_UNLIKELY (paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION))
     {
       g_autoptr (MtkRegion) debug_redraw_clip = NULL;
 
@@ -679,18 +774,19 @@ meta_stage_impl_redraw_view_primary (MetaStageImpl    *stage_impl,
       paint_stage (stage_impl, stage_view, redraw_clip, frame);
     }
 
-  g_clear_pointer (&redraw_clip, mtk_region_unref);
-  g_clear_pointer (&fb_clip_region, mtk_region_unref);
-
-  if (queued_redraw_clip)
+  if (G_UNLIKELY (queued_redraw_clip))
     {
       g_autoptr (MtkRegion) swap_region_in_stage_space = NULL;
 
       swap_region_in_stage_space =
-        scale_offset_and_clamp_region (swap_region,
+        scale_offset_and_clamp_region (mtk_region_ref (swap_region),
                                        1.0f / fb_scale,
                                        view_rect.x,
-                                       view_rect.y);
+                                       view_rect.y,
+                                       &(graphene_size_t) {
+                                        .width = fb_width,
+                                        .height = fb_height,
+                                       });
 
       mtk_region_subtract (swap_region_in_stage_space, queued_redraw_clip);
 
