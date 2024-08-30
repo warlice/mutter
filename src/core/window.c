@@ -177,6 +177,11 @@ static void set_hidden_suspended_state (MetaWindow *window);
 
 static void initable_iface_init (GInitableIface *initable_iface);
 
+static void meta_window_move_resize_internal (MetaWindow          *window,
+                                              MetaMoveResizeFlags  flags,
+                                              MetaPlaceFlag        place_flags,
+                                              MtkRectangle         frame_rect);
+
 typedef struct _MetaWindowPrivate
 {
   MetaQueueType queued_types;
@@ -315,6 +320,27 @@ static pid_t
 meta_window_real_get_client_pid (MetaWindow *window)
 {
   return 0;
+}
+
+static MetaGravity
+meta_window_real_get_gravity (MetaWindow *window)
+{
+  MetaWindowDrag *window_drag = NULL;
+
+  if (window->display && window->display->compositor)
+    window_drag = meta_compositor_get_current_window_drag (window->display->compositor);
+
+  if (window_drag &&
+      meta_window_drag_get_window (window_drag) == window)
+    {
+      MetaGrabOp grab_op;
+
+      grab_op = meta_window_drag_get_grab_op (window_drag);
+
+      return meta_resize_gravity_from_grab_op (grab_op);
+    }
+
+  return META_GRAVITY_NONE;
 }
 
 static void
@@ -493,6 +519,7 @@ meta_window_class_init (MetaWindowClass *klass)
   klass->update_struts = meta_window_real_update_struts;
   klass->get_default_skip_hints = meta_window_real_get_default_skip_hints;
   klass->get_client_pid = meta_window_real_get_client_pid;
+  klass->get_gravity = meta_window_real_get_gravity;
 
   obj_props[PROP_TITLE] =
     g_param_spec_string ("title", NULL, NULL,
@@ -2128,7 +2155,6 @@ meta_window_force_placement (MetaWindow    *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     place_flags,
-                                    META_GRAVITY_NORTH_WEST,
                                     window->unconstrained_rect);
   window->calc_placement = FALSE;
 
@@ -3868,11 +3894,10 @@ meta_window_update_monitor (MetaWindow                   *window,
     g_signal_emit (window, window_signals[HIGHEST_SCALE_MONITOR_CHANGED], 0);
 }
 
-void
+static void
 meta_window_move_resize_internal (MetaWindow          *window,
                                   MetaMoveResizeFlags  flags,
                                   MetaPlaceFlag        place_flags,
-                                  MetaGravity          gravity,
                                   MtkRectangle         frame_rect)
 {
   /* The rectangle here that's passed in *always* in "frame rect"
@@ -3904,6 +3929,7 @@ meta_window_move_resize_internal (MetaWindow          *window,
   MetaMoveResizeResultFlags result = 0;
   gboolean moved_or_resized = FALSE;
   MetaWindowUpdateMonitorFlags update_monitor_flags;
+  MetaGravity gravity;
 
   g_return_if_fail (!window->override_redirect);
 
@@ -3915,6 +3941,8 @@ meta_window_move_resize_internal (MetaWindow          *window,
                      META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE));
 
   did_placement = !window->placed && window->calc_placement;
+
+  gravity = meta_window_get_gravity (window);
 
   /* We don't need it in the idle queue anymore. */
   meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
@@ -3989,7 +4017,6 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   /* Do the protocol-specific move/resize logic */
   META_WINDOW_GET_CLASS (window)->move_resize_internal (window,
-                                                        gravity,
                                                         unconstrained_rect,
                                                         constrained_rect,
                                                         temporary_rect,
@@ -4078,7 +4105,6 @@ meta_window_move_resize (MetaWindow          *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     META_PLACE_FLAG_NONE,
-                                    META_GRAVITY_NORTH_WEST,
                                     rect);
 }
 
@@ -4290,11 +4316,10 @@ adjust_size_for_tile_match (MetaWindow *window,
 }
 
 void
-meta_window_resize_frame_with_gravity (MetaWindow *window,
-                                       gboolean     user_op,
-                                       int          w,
-                                       int          h,
-                                       MetaGravity  gravity)
+meta_window_resize_frame (MetaWindow *window,
+                          gboolean     user_op,
+                          int          w,
+                          int          h)
 {
   MetaMoveResizeFlags flags;
   MtkRectangle rect;
@@ -4324,7 +4349,6 @@ meta_window_resize_frame_with_gravity (MetaWindow *window,
   meta_window_move_resize_internal (window,
                                     flags,
                                     META_PLACE_FLAG_NONE,
-                                    gravity,
                                     rect);
 }
 
@@ -8036,4 +8060,17 @@ meta_window_set_normal_hints (MetaWindow    *window,
        * consistent with base and size increment constraints.
        */
     }
+}
+
+MetaGravity
+meta_window_get_gravity (MetaWindow *window)
+{
+  MetaGravity gravity;
+
+  gravity = META_WINDOW_GET_CLASS (window)->get_gravity (window);
+
+  if (gravity == META_GRAVITY_NONE)
+    gravity = META_GRAVITY_NORTH_WEST;
+
+  return gravity;
 }

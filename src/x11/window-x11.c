@@ -544,11 +544,7 @@ meta_window_apply_session_info (MetaWindow *window,
 
       adjust_for_gravity (window, FALSE, gravity, &rect);
       meta_window_client_rect_to_frame_rect (window, &rect, &rect);
-      meta_window_move_resize_internal (window,
-                                        flags,
-                                        META_PLACE_FLAG_NONE,
-                                        gravity,
-                                        rect);
+      meta_window_move_resize (window, flags, rect);
     }
 }
 
@@ -628,11 +624,7 @@ meta_window_x11_initialize_state (MetaWindow *window)
 
       adjust_for_gravity (window, TRUE, gravity, &rect);
       meta_window_client_rect_to_frame_rect (window, &rect, &rect);
-      meta_window_move_resize_internal (window,
-                                        flags,
-                                        META_PLACE_FLAG_NONE,
-                                        gravity,
-                                        rect);
+      meta_window_move_resize (window, flags, rect);
     }
 
   meta_window_x11_update_shape_region (window);
@@ -1308,7 +1300,6 @@ meta_window_x11_can_freeze_commits (MetaWindow *window)
 
 static void
 meta_window_x11_move_resize_internal (MetaWindow                *window,
-                                      MetaGravity                gravity,
                                       MtkRectangle               unconstrained_rect,
                                       MtkRectangle               constrained_rect,
                                       MtkRectangle               intermediate_rect,
@@ -2046,6 +2037,18 @@ meta_window_x11_set_transient_for (MetaWindow *window,
   return TRUE;
 }
 
+static MetaGravity
+meta_window_x11_get_gravity (MetaWindow *window)
+{
+  MetaGravity gravity;
+
+  gravity = META_WINDOW_CLASS (meta_window_x11_parent_class)->get_gravity (window);
+  if (gravity == META_GRAVITY_NONE)
+    gravity = window->size_hints.win_gravity;
+
+  return gravity;
+}
+
 gboolean
 meta_window_x11_is_ssd (MetaWindow *window)
 {
@@ -2210,6 +2213,7 @@ meta_window_x11_class_init (MetaWindowX11Class *klass)
   window_class->calculate_layer = meta_window_x11_calculate_layer;
   window_class->is_focus_async = meta_window_x11_is_focus_async;
   window_class->set_transient_for = meta_window_x11_set_transient_for;
+  window_class->get_gravity = meta_window_x11_get_gravity;
 
   klass->freeze_commits = meta_window_x11_impl_freeze_commits;
   klass->thaw_commits = meta_window_x11_impl_thaw_commits;
@@ -2868,7 +2872,7 @@ meta_window_move_resize_request (MetaWindow  *window,
    * (e.g. hitting a dropdown triangle in a fileselector to show more
    * options, which makes the window bigger).  Thus we do not set
    * META_MOVE_RESIZE_USER_ACTION in flags to the
-   * meta_window_move_resize_internal() call.
+   * meta_window_move_resize() call.
    */
   flags = META_MOVE_RESIZE_CONFIGURE_REQUEST;
   if (value_mask & (CWX | CWY))
@@ -2919,11 +2923,7 @@ meta_window_move_resize_request (MetaWindow  *window,
 
       adjust_for_gravity (window, TRUE, gravity, &rect);
       meta_window_client_rect_to_frame_rect (window, &rect, &rect);
-      meta_window_move_resize_internal (window,
-                                        flags,
-                                        META_PLACE_FLAG_NONE,
-                                        gravity,
-                                        rect);
+      meta_window_move_resize (window, flags, rect);
     }
 }
 

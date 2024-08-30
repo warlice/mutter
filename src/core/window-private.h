@@ -578,7 +578,6 @@ struct _MetaWindowClass
                                   MetaGrabOp  op);
   void (*current_workspace_changed) (MetaWindow *window);
   void (*move_resize_internal)   (MetaWindow                *window,
-                                  MetaGravity                gravity,
                                   MtkRectangle               unconstrained_rect,
                                   MtkRectangle               constrained_rect,
                                   MtkRectangle               temporary_rect,
@@ -616,6 +615,8 @@ struct _MetaWindowClass
 
   gboolean (*set_transient_for) (MetaWindow *window,
                                  MetaWindow *parent);
+
+  MetaGravity (* get_gravity) (MetaWindow *window);
 };
 
 /* These differ from window->has_foo_func in that they consider
@@ -671,11 +672,10 @@ gboolean    meta_window_has_fullscreen_monitors (MetaWindow *window);
 void        meta_window_adjust_fullscreen_monitor_rect (MetaWindow    *window,
                                                         MtkRectangle  *monitor_rect);
 
-void        meta_window_resize_frame_with_gravity (MetaWindow  *window,
-                                                   gboolean     user_op,
-                                                   int          w,
-                                                   int          h,
-                                                   MetaGravity  gravity);
+void        meta_window_resize_frame (MetaWindow  *window,
+                                      gboolean     user_op,
+                                      int          w,
+                                      int          h);
 
 gboolean    meta_window_should_be_showing_on_workspace (MetaWindow    *window,
                                                         MetaWorkspace *workspace);
@@ -803,12 +803,6 @@ void meta_window_update_monitor (MetaWindow                   *window,
 void meta_window_set_urgent (MetaWindow *window,
                              gboolean    urgent);
 
-void meta_window_move_resize_internal (MetaWindow          *window,
-                                       MetaMoveResizeFlags  flags,
-                                       MetaPlaceFlag        place_flags,
-                                       MetaGravity          gravity,
-                                       MtkRectangle         frame_rect);
-
 void meta_window_move_resize (MetaWindow          *window,
                               MetaMoveResizeFlags  flags,
                               MtkRectangle         frame_rect);
@@ -884,3 +878,5 @@ meta_window_should_attach_to_parent (MetaWindow *window);
  */
 void meta_window_set_normal_hints (MetaWindow    *window,
                                    MetaSizeHints *hints);
+
+MetaGravity meta_window_get_gravity (MetaWindow *window);
