@@ -29,6 +29,10 @@
 #include "compositor/meta-window-actor-private.h"
 #include "core/window-private.h"
 
+#ifdef HAVE_X11_CLIENT
+#include "x11/window-x11-private.h"
+#endif
+
 enum
 {
   PROP_0,
@@ -237,6 +241,10 @@ meta_screen_cast_window_stream_initable_init (GInitable     *initable,
   MetaLogicalMonitor *logical_monitor;
   int scale;
 
+#ifdef HAVE_X11_CLIENT
+  MetaFrameBorders borders;
+#endif
+
   logical_monitor = meta_window_get_main_logical_monitor (window);
   if (!logical_monitor)
     {
@@ -261,8 +269,35 @@ meta_screen_cast_window_stream_initable_init (GInitable     *initable,
    */
   window_stream->logical_width = logical_monitor->rect.width;
   window_stream->logical_height = logical_monitor->rect.height;
-  window_stream->stream_width = logical_monitor->rect.width * scale;
-  window_stream->stream_height = logical_monitor->rect.height * scale;
+
+  /* Except, a window of this size can actually be larger, potentially including
+   * the borders drawn around it. So, we want to include those as well.
+   *
+   * This code is taken from meta_window_client_rect_to_frame_rect, which also
+   * documents how G_MAXINT is used as a stand-in for infinity.
+   */
+#ifdef HAVE_X11_CLIENT
+  if (window->client_type == META_WINDOW_CLIENT_TYPE_X11 &&
+      meta_window_x11_get_frame_borders (window, &borders))
+    {
+      if (window_stream->logical_width != G_MAXINT)
+        window_stream->logical_width += borders.visible.left + borders.visible.right;
+      if (window_stream->logical_height != G_MAXINT)
+        window_stream->logical_height += borders.visible.top + borders.visible.bottom;
+    }
+  else
+#endif
+  {
+    const MetaFrameBorder *extents = &window->custom_frame_extents;
+
+    if (window_stream->logical_width != G_MAXINT)
+      window_stream->logical_width += extents->left + extents->right;
+    if (window_stream->logical_height != G_MAXINT)
+      window_stream->logical_height += extents->top + extents->bottom;
+  }
+
+  window_stream->stream_width = window_stream->logical_width * scale;
+  window_stream->stream_height = window_stream->logical_height * scale;
 
   meta_screen_cast_window_inc_usage (screen_cast_window);
 
