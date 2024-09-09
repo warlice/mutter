@@ -386,16 +386,7 @@ meta_monitor_is_laptop_panel (MetaMonitor *monitor)
   const MetaOutputInfo *output_info =
     meta_monitor_get_main_output_info (monitor);
 
-  switch (output_info->connector_type)
-    {
-    case META_CONNECTOR_TYPE_eDP:
-    case META_CONNECTOR_TYPE_LVDS:
-    case META_CONNECTOR_TYPE_DSI:
-    case META_CONNECTOR_TYPE_DPI:
-      return TRUE;
-    default:
-      return FALSE;
-    }
+  return meta_output_info_is_laptop_panel (output_info);
 }
 
 gboolean

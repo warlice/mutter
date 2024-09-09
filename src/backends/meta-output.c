@@ -534,6 +534,21 @@ meta_output_info_get_min_refresh_rate (const MetaOutputInfo *output_info,
   return TRUE;
 }
 
+gboolean
+meta_output_info_is_laptop_panel (const MetaOutputInfo *output_info)
+{
+  switch (output_info->connector_type)
+    {
+    case META_CONNECTOR_TYPE_eDP:
+    case META_CONNECTOR_TYPE_LVDS:
+    case META_CONNECTOR_TYPE_DSI:
+    case META_CONNECTOR_TYPE_DPI:
+      return TRUE;
+    default:
+      return FALSE;
+    }
+}
+
 void
 meta_output_set_color_space (MetaOutput           *output,
                              MetaOutputColorspace  color_space)
