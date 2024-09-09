@@ -44,8 +44,8 @@ static MonitorTestCaseSetup initial_test_case_setup = {
       .width_mm = 222,
       .height_mm = 125,
       .is_laptop_panel = TRUE,
-      .backlight_min = 0,
-      .backlight_max = 300,
+      .backlight_min = 10,
+      .backlight_max = 150,
     },
     {
       .crtc = 1,
@@ -90,10 +90,10 @@ meta_test_backlight_sanity (void)
   MetaMonitor *first_monitor;
   MetaMonitor *second_monitor;
   MetaOutput *output;
-  const MetaOutputInfo *output_info;
+  MetaBacklight *backlight;
   int backlight_min;
   int backlight_max;
-  int backlight;
+  int backlight_value;
 
   monitors = meta_monitor_manager_get_monitors (monitor_manager);
   g_assert_cmpuint (g_list_length (monitors), ==, 2);
@@ -104,18 +104,22 @@ meta_test_backlight_sanity (void)
   g_assert_true (meta_monitor_get_backlight_info (first_monitor,
                                                   &backlight_min,
                                                   &backlight_max));
-  g_assert_cmpint (backlight_min, ==, 0);
-  g_assert_cmpint (backlight_max, ==, 300);
-  g_assert_true (meta_monitor_get_backlight (first_monitor, &backlight));
-  g_assert_cmpint (backlight, >=, 0);
+  g_assert_cmpint (backlight_min, ==, 10);
+  g_assert_cmpint (backlight_max, ==, 150);
+  g_assert_true (meta_monitor_get_backlight (first_monitor, &backlight_value));
+  g_assert_cmpint (backlight_value, >=, 10);
+  g_assert_cmpint (backlight_value, <=, 150);
   g_assert_cmpuint (g_list_length (meta_monitor_get_outputs (first_monitor)),
                     ==,
                     1);
   output = meta_monitor_get_main_output (first_monitor);
-  output_info = meta_output_get_info (output);
-  g_assert_cmpint (meta_output_get_backlight (output), >=, 0);
-  g_assert_cmpint (output_info->backlight_min, ==, 0);
-  g_assert_cmpint (output_info->backlight_max, ==, 300);
+  backlight = meta_output_get_backlight (output);
+  g_assert_nonnull (backlight);
+  meta_backlight_get_brightness_info (backlight, &backlight_min, &backlight_max);
+  g_assert_cmpint (meta_backlight_get_brightness (backlight), >=, 10);
+  g_assert_cmpint (meta_backlight_get_brightness (backlight), <=, 150);
+  g_assert_cmpint (backlight_min, ==, 10);
+  g_assert_cmpint (backlight_max, ==, 150);
 
   g_assert_false (meta_monitor_get_backlight_info (second_monitor,
                                                    NULL,
@@ -125,10 +129,7 @@ meta_test_backlight_sanity (void)
                     ==,
                     1);
   output = meta_monitor_get_main_output (second_monitor);
-  output_info = meta_output_get_info (output);
-  g_assert_cmpint (meta_output_get_backlight (output), ==, -1);
-  g_assert_cmpint (output_info->backlight_min, ==, 0);
-  g_assert_cmpint (output_info->backlight_max, ==, 0);
+  g_assert_null (meta_output_get_backlight (output));
 }
 
 static char *

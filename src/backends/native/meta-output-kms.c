@@ -26,15 +26,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "backends/meta-backlight-sysfs-private.h"
 #include "backends/meta-crtc.h"
+#include "backends/native/meta-crtc-kms.h"
+#include "backends/native/meta-crtc-mode-kms.h"
 #include "backends/native/meta-kms.h"
 #include "backends/native/meta-kms-connector.h"
 #include "backends/native/meta-kms-device.h"
 #include "backends/native/meta-kms-mode.h"
 #include "backends/native/meta-kms-update.h"
 #include "backends/native/meta-kms-utils.h"
-#include "backends/native/meta-crtc-kms.h"
-#include "backends/native/meta-crtc-mode-kms.h"
 
 #define SYNC_TOLERANCE_HZ 0.001f
 
@@ -358,9 +359,12 @@ meta_output_kms_new (MetaGpuKms        *gpu_kms,
                      GError           **error)
 {
   MetaGpu *gpu = META_GPU (gpu_kms);
+  MetaBackend *backend = meta_gpu_get_backend (gpu);
   uint32_t connector_id;
   uint32_t gpu_id;
   g_autoptr (MetaOutputInfo) output_info = NULL;
+  g_autoptr (MetaBacklightSysfs) backlight = NULL;
+  g_autoptr (GError) local_error = NULL;
   MetaOutput *output;
   MetaOutputKms *output_kms;
   uint32_t drm_connector_type;
@@ -493,10 +497,16 @@ meta_output_kms_new (MetaGpuKms        *gpu_kms,
 
   output_info->supported_rgb_ranges = connector_state->broadcast_rgb.supported;
 
+  backlight = meta_backlight_sysfs_new (backend, output_info, &local_error);
+  if (!backlight &&
+      !g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED))
+    g_warning ("Failed creating backlight for %s", output_info->name);
+
   output = g_object_new (META_TYPE_OUTPUT_KMS,
                          "id", ((uint64_t) gpu_id << 32) | connector_id,
                          "gpu", gpu,
                          "info", output_info,
+                         "backlight", backlight,
                          NULL);
   output_kms = META_OUTPUT_KMS (output);
   output_kms->kms_connector = kms_connector;

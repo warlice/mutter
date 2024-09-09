@@ -692,6 +692,7 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
   for (i = 0; i < setup->n_outputs; i++)
     {
       MetaOutput *output;
+      g_autoptr (MetaBacklight) backlight = NULL;
       MetaOutputTest *output_test;
       int crtc_index;
       MetaCrtc *crtc;
@@ -771,8 +772,6 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
           output_info->suggested_x = -1;
           output_info->suggested_y = -1;
         }
-      output_info->backlight_min = setup->outputs[i].backlight_min;
-      output_info->backlight_max = setup->outputs[i].backlight_max;
       output_info->width_mm = setup->outputs[i].width_mm;
       output_info->height_mm = setup->outputs[i].height_mm;
       output_info->subpixel_order = META_SUBPIXEL_ORDER_UNKNOWN;
@@ -798,10 +797,24 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
                                          sizeof (setup->outputs[i].edid_info));
         }
 
+      if (is_laptop_panel &&
+          setup->outputs[i].backlight_min > 0 &&
+          setup->outputs[i].backlight_max > 0)
+        {
+          backlight =
+            g_object_new (META_TYPE_BACKLIGHT_TEST,
+                          "name", output_info->name,
+                          "brightness-min", setup->outputs[i].backlight_min,
+                          "brightness-max", setup->outputs[i].backlight_max,
+                          "brightness", setup->outputs[i].backlight_max,
+                          NULL);
+        }
+
       output = g_object_new (META_TYPE_OUTPUT_TEST,
                              "id", (uint64_t) i,
                              "gpu", meta_test_get_gpu (backend),
                              "info", output_info,
+                             "backlight", backlight,
                              NULL);
 
       output_test = META_OUTPUT_TEST (output);
