@@ -198,6 +198,8 @@ mutter_sources = [
   'backends/meta-backlight.c',
   'backends/meta-backlight.h',
   'backends/meta-backlight-private.h',
+  'backends/meta-backlight-sysfs.c',
+  'backends/meta-backlight-sysfs-private.h',
   'backends/meta-barrier.c',
   'backends/meta-barrier-private.h',
   'backends/meta-color-device.c',
