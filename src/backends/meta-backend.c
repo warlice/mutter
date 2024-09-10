@@ -206,6 +206,14 @@ G_DEFINE_ABSTRACT_TYPE_WITH_CODE (MetaBackend, meta_backend, G_TYPE_OBJECT,
                                   G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                          initable_iface_init));
 
+static void on_device_added (ClutterSeat        *seat,
+                             ClutterInputDevice *device,
+                             gpointer            user_data);
+
+static void on_device_removed (ClutterSeat        *seat,
+                               ClutterInputDevice *device,
+                               gpointer            user_data);
+
 static void
 meta_backend_dispose (GObject *object)
 {
@@ -1159,6 +1167,12 @@ init_clutter (MetaBackend  *backend,
   g_source_attach (source, NULL);
   g_source_unref (source);
 
+  g_signal_connect_object (priv->default_seat, "device-added",
+                           G_CALLBACK (on_device_added), backend, 0);
+  g_signal_connect_object (priv->default_seat, "device-removed",
+                           G_CALLBACK (on_device_removed), backend,
+                           G_CONNECT_AFTER);
+
   return TRUE;
 }
 
@@ -1243,12 +1257,6 @@ meta_backend_initable_init (GInitable     *initable,
   meta_backend_update_stage (backend);
 
   priv->idle_manager = meta_idle_manager_new (backend);
-
-  g_signal_connect_object (priv->default_seat, "device-added",
-                           G_CALLBACK (on_device_added), backend, 0);
-  g_signal_connect_object (priv->default_seat, "device-removed",
-                           G_CALLBACK (on_device_removed), backend,
-                           G_CONNECT_AFTER);
 
   priv->input_mapper = meta_backend_create_input_mapper (backend);
 
