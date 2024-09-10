@@ -263,6 +263,10 @@ meta_backend_x11_nested_initable_init (GInitable     *initable,
                                        GCancellable  *cancellable,
                                        GError       **error)
 {
+  MetaBackendX11Nested *backend_x11_nested = META_BACKEND_X11_NESTED (initable);
+
+  init_gpus (backend_x11_nested);
+
   return initable_parent_iface->init (initable, cancellable, error);
 }
 
@@ -272,18 +276,6 @@ initable_iface_init (GInitableIface *initable_iface)
   initable_parent_iface = g_type_interface_peek_parent (initable_iface);
 
   initable_iface->init = meta_backend_x11_nested_initable_init;
-}
-
-static void
-meta_backend_x11_nested_constructed (GObject *object)
-{
-  MetaBackendX11Nested *backend_x11_nested = META_BACKEND_X11_NESTED (object);
-  GObjectClass *parent_class =
-    G_OBJECT_CLASS (meta_backend_x11_nested_parent_class);
-
-  parent_class->constructed (object);
-
-  init_gpus (backend_x11_nested);
 }
 
 static void
@@ -309,7 +301,6 @@ meta_backend_x11_nested_class_init (MetaBackendX11NestedClass *klass)
   MetaBackendClass *backend_class = META_BACKEND_CLASS (klass);
   MetaBackendX11Class *backend_x11_class = META_BACKEND_X11_CLASS (klass);
 
-  object_class->constructed = meta_backend_x11_nested_constructed;
   object_class->dispose = meta_backend_x11_nested_dispose;
 
   backend_class->post_init = meta_backend_x11_nested_post_init;
