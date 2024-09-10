@@ -613,6 +613,12 @@ meta_backend_create_input_mapper (MetaBackend *backend)
   return input_mapper;
 }
 
+static void
+meta_backend_select_stage_events (MetaBackend *backend)
+{
+  META_BACKEND_GET_CLASS (backend)->select_stage_events (backend);
+}
+
 static gboolean
 meta_backend_real_is_headless (MetaBackend *backend)
 {
@@ -1237,7 +1243,7 @@ meta_backend_initable_init (GInitable     *initable,
 
   priv->stage = meta_stage_new (backend);
   clutter_actor_realize (priv->stage);
-  META_BACKEND_GET_CLASS (backend)->select_stage_events (backend);
+  meta_backend_select_stage_events (backend);
 
   meta_monitor_manager_setup (priv->monitor_manager);
 
