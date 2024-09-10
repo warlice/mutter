@@ -247,6 +247,8 @@ mutter_sources = [
   'backends/meta-input-settings-dummy.h',
   'backends/meta-keymap-utils.c',
   'backends/meta-keymap-utils.h',
+  'backends/meta-launcher.c',
+  'backends/meta-launcher.h',
   'backends/meta-logical-monitor.c',
   'backends/meta-logical-monitor.h',
   'backends/meta-monitor.c',
@@ -801,8 +803,6 @@ if have_native_backend
     'backends/native/meta-input-settings-native.h',
     'backends/native/meta-keymap-native.c',
     'backends/native/meta-keymap-native.h',
-    'backends/native/meta-launcher.c',
-    'backends/native/meta-launcher.h',
     'backends/native/meta-monitor-manager-native.c',
     'backends/native/meta-monitor-manager-native.h',
     'backends/native/meta-output-kms.c',
@@ -981,6 +981,11 @@ dbus_interfaces = [
     'interface': 'org.gnome.Mutter.X11.xml',
     'prefix': 'org.gnome.Mutter',
   },
+  {
+    'name': 'meta-dbus-login1',
+    'interface': 'org.freedesktop.login1.xml',
+    'prefix': 'org.freedesktop.',
+  },
 ]
 
 if have_profiler
@@ -1008,14 +1013,6 @@ if have_native_backend
     command: [gen_default_modes, '@OUTPUT@']
   )
   mutter_built_sources += default_modes_h
-
-  dbus_interfaces += [
-    {
-      'name': 'meta-dbus-login1',
-      'interface': 'org.freedesktop.login1.xml',
-      'prefix': 'org.freedesktop.',
-    },
-  ]
 endif
 
 if have_remote_desktop
