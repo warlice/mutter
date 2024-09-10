@@ -64,6 +64,7 @@
 #include "backends/meta-input-settings-private.h"
 #include "backends/meta-launcher.h"
 #include "backends/meta-logical-monitor.h"
+#include "backends/meta-udev.h"
 #include "backends/meta-monitor-manager-dummy.h"
 #include "backends/meta-remote-access-controller-private.h"
 #include "backends/meta-settings-private.h"
@@ -144,6 +145,7 @@ struct _MetaBackendPrivate
   MetaRenderer *renderer;
   MetaColorManager *color_manager;
   MetaLauncher *launcher;
+  MetaUdev *udev;
 #ifdef HAVE_EGL
   MetaEgl *egl;
 #endif
@@ -275,6 +277,7 @@ meta_backend_finalize (GObject *object)
 
   g_clear_object (&priv->settings);
   g_clear_object (&priv->launcher);
+  g_clear_object (&priv->udev);
  #ifdef HAVE_EGL
   g_clear_object (&priv->egl);
  #endif
@@ -958,6 +961,7 @@ on_session_active_changed (MetaLauncher *launcher,
   if (!active)
     {
       meta_renderer_pause (priv->renderer);
+      meta_udev_pause (priv->udev);
     }
 
   if (META_BACKEND_GET_CLASS (backend)->active_changed)
@@ -965,6 +969,7 @@ on_session_active_changed (MetaLauncher *launcher,
 
   if (active)
     {
+      meta_udev_resume (priv->udev);
       meta_renderer_resume (priv->renderer);
     }
 }
@@ -1288,6 +1293,8 @@ meta_backend_initable_init (GInitable     *initable,
       return FALSE;
     }
 
+  priv->udev = meta_udev_new (backend);
+
   priv->dnd = meta_dnd_new (backend);
 
   priv->orientation_manager = g_object_new (META_TYPE_ORIENTATION_MANAGER, NULL);
@@ -1475,6 +1482,17 @@ meta_backend_get_launcher (MetaBackend *backend)
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
 
   return priv->launcher;
+}
+
+/**
+ * meta_backend_get_udev: (skip)
+ */
+MetaUdev *
+meta_backend_get_udev (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  return priv->udev;
 }
 
 /**

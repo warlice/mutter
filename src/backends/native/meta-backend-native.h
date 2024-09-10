@@ -40,9 +40,6 @@ gboolean meta_backend_native_activate_vt (MetaBackendNative  *backend_native,
                                           GError            **error);
 
 META_EXPORT_TEST
-MetaUdev * meta_backend_native_get_udev (MetaBackendNative *native);
-
-META_EXPORT_TEST
 MetaKms * meta_backend_native_get_kms (MetaBackendNative *native);
 
 const char * meta_backend_native_get_seat_id (MetaBackendNative *backend_native);

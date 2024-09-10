@@ -75,6 +75,7 @@ typedef struct _MetaBarrierImpl MetaBarrierImpl;
 typedef struct _MetaIdleManager MetaIdleManager;
 
 typedef struct _MetaLauncher MetaLauncher;
+typedef struct _MetaUdev MetaUdev;
 
 typedef struct _MetaDbusSession MetaDbusSession;
 typedef struct _MetaDbusSessionManager MetaDbusSessionManager;

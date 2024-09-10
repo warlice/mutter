@@ -160,6 +160,9 @@ META_EXPORT_TEST
 MetaLauncher * meta_backend_get_launcher (MetaBackend *backend);
 
 META_EXPORT_TEST
+MetaUdev * meta_backend_get_udev (MetaBackend *backend);
+
+META_EXPORT_TEST
 MetaCursorTracker * meta_backend_get_cursor_tracker (MetaBackend *backend);
 MetaCursorRenderer * meta_backend_get_cursor_renderer_for_device (MetaBackend        *backend,
                                                                   ClutterInputDevice *device);

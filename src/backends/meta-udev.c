@@ -20,9 +20,8 @@
 
 #include "backends/meta-udev.h"
 
-#ifdef HAVE_NATIVE_BACKEND
-#include "backends/native/meta-backend-native.h"
-#endif
+#include "backends/meta-backend-private.h"
+#include "backends/meta-launcher.h"
 
 #define DRM_CARD_UDEV_DEVICE_TYPE "drm_minor"
 
@@ -138,6 +137,7 @@ gboolean
 meta_udev_is_drm_device (MetaUdev    *udev,
                          GUdevDevice *device)
 {
+  MetaLauncher *launcher = meta_backend_get_launcher (udev->backend);
   const char *device_type;
   const char *device_seat;
 
@@ -156,18 +156,15 @@ meta_udev_is_drm_device (MetaUdev    *udev,
       device_seat = "seat0";
     }
 
-#ifdef HAVE_NATIVE_BACKEND
   /* Skip devices that do not belong to our seat. */
-  if (META_IS_BACKEND_NATIVE (udev->backend))
+  if (launcher)
     {
-      MetaBackendNative *native = META_BACKEND_NATIVE (udev->backend);
       const char *seat_id;
 
-      seat_id = meta_backend_native_get_seat_id (native);
+      seat_id = meta_launcher_get_seat_id (launcher);
       if (g_strcmp0 (seat_id, device_seat))
         return FALSE;
     }
-#endif
 
   return TRUE;
 }
