@@ -532,10 +532,20 @@ on_started (MetaContext *context,
                                            determine_hotplug_pointer_visibility (seat));
 }
 
-static void
-meta_backend_real_post_init (MetaBackend *backend)
+static gboolean
+meta_backend_real_init_basic (MetaBackend  *backend,
+                              GError      **error)
 {
   /* Do nothing */
+  return TRUE;
+}
+
+static gboolean
+meta_backend_real_init_render (MetaBackend  *backend,
+                               GError      **error)
+{
+  /* Do nothing */
+  return TRUE;
 }
 
 static gboolean
@@ -862,7 +872,8 @@ meta_backend_class_init (MetaBackendClass *klass)
   object_class->set_property = meta_backend_set_property;
   object_class->get_property = meta_backend_get_property;
 
-  klass->post_init = meta_backend_real_post_init;
+  klass->init_basic = meta_backend_real_init_basic;
+  klass->init_render = meta_backend_real_init_render;
   klass->grab_device = meta_backend_real_grab_device;
   klass->ungrab_device = meta_backend_real_ungrab_device;
   klass->select_stage_events = meta_backend_real_select_stage_events;
@@ -1255,6 +1266,9 @@ meta_backend_initable_init (GInitable     *initable,
   priv->egl = g_object_new (META_TYPE_EGL, NULL);
 #endif
 
+  if (!META_BACKEND_GET_CLASS (backend)->init_basic (backend, error))
+    return FALSE;
+
   priv->monitor_manager = meta_backend_create_monitor_manager (backend, error);
   if (!priv->monitor_manager)
     return FALSE;
@@ -1272,7 +1286,8 @@ meta_backend_initable_init (GInitable     *initable,
 
   priv->input_mapper = meta_backend_create_input_mapper (backend);
 
-  META_BACKEND_GET_CLASS (backend)->post_init (backend);
+  if (!META_BACKEND_GET_CLASS (backend)->init_render (backend, error))
+    return FALSE;
 
   init_stage (backend);
 

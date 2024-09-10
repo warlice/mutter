@@ -243,13 +243,17 @@ init_gpus (MetaBackendX11Nested *backend_x11_nested)
                         backend_x11_nested->gpu);
 }
 
-static void
-meta_backend_x11_nested_post_init (MetaBackend *backend)
+static gboolean
+meta_backend_x11_nested_init_basic (MetaBackend  *backend,
+                                    GError      **error)
 {
-  MetaBackendClass *backend_class =
+  MetaBackendClass *parent_backend_class =
     META_BACKEND_CLASS (meta_backend_x11_nested_parent_class);
+  MetaBackendX11Nested *backend_x11_nested = META_BACKEND_X11_NESTED (backend);
 
-  backend_class->post_init (backend);
+  init_gpus (backend_x11_nested);
+
+  return parent_backend_class->init_basic (backend, error);
 }
 
 static MetaBackendCapabilities
@@ -263,10 +267,6 @@ meta_backend_x11_nested_initable_init (GInitable     *initable,
                                        GCancellable  *cancellable,
                                        GError       **error)
 {
-  MetaBackendX11Nested *backend_x11_nested = META_BACKEND_X11_NESTED (initable);
-
-  init_gpus (backend_x11_nested);
-
   return initable_parent_iface->init (initable, cancellable, error);
 }
 
@@ -303,7 +303,7 @@ meta_backend_x11_nested_class_init (MetaBackendX11NestedClass *klass)
 
   object_class->dispose = meta_backend_x11_nested_dispose;
 
-  backend_class->post_init = meta_backend_x11_nested_post_init;
+  backend_class->init_basic = meta_backend_x11_nested_init_basic;
   backend_class->get_capabilities = meta_backend_x11_nested_get_capabilities;
   backend_class->create_renderer = meta_backend_x11_nested_create_renderer;
   backend_class->create_monitor_manager = meta_backend_x11_nested_create_monitor_manager;

@@ -542,72 +542,6 @@ on_kbd_a11y_changed (MetaInputSettings   *input_settings,
   meta_seat_x11_apply_kbd_a11y_settings (seat, a11y_settings);
 }
 
-static void
-meta_backend_x11_post_init (MetaBackend *backend)
-{
-  MetaBackendX11 *x11 = META_BACKEND_X11 (backend);
-  MetaBackendX11Private *priv = meta_backend_x11_get_instance_private (x11);
-  MetaMonitorManager *monitor_manager;
-  ClutterBackend *clutter_backend;
-  ClutterSeat *seat;
-  MetaInputSettings *input_settings;
-  int major, minor;
-
-  priv->source = x_event_source_new (backend);
-
-  if (!XSyncQueryExtension (priv->xdisplay, &priv->xsync_event_base, &priv->xsync_error_base) ||
-      !XSyncInitialize (priv->xdisplay, &major, &minor))
-    meta_fatal ("Could not initialize XSync");
-
-  priv->counter = find_idletime_counter (priv);
-  if (priv->counter == None)
-    meta_fatal ("Could not initialize XSync counter");
-
-  priv->user_active_alarm = xsync_user_active_alarm_set (priv);
-
-  if (!xkb_x11_setup_xkb_extension (priv->xcb,
-                                    XKB_X11_MIN_MAJOR_XKB_VERSION,
-                                    XKB_X11_MIN_MINOR_XKB_VERSION,
-                                    XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
-                                    NULL, NULL,
-                                    &priv->xkb_event_base,
-                                    &priv->xkb_error_base))
-    meta_fatal ("X server doesn't have the XKB extension, version %d.%d or newer",
-                XKB_X11_MIN_MAJOR_XKB_VERSION, XKB_X11_MIN_MINOR_XKB_VERSION);
-
-  META_BACKEND_CLASS (meta_backend_x11_parent_class)->post_init (backend);
-
-  monitor_manager = meta_backend_get_monitor_manager (backend);
-  g_signal_connect (monitor_manager, "monitors-changed-internal",
-                    G_CALLBACK (on_monitors_changed), backend);
-
-  priv->touch_replay_sync_atom = XInternAtom (priv->xdisplay,
-                                              "_MUTTER_TOUCH_SEQUENCE_SYNC",
-                                              False);
-
-  clutter_backend = meta_backend_get_clutter_backend (backend);
-  seat = clutter_backend_get_default_seat (clutter_backend);
-  meta_seat_x11_notify_devices (META_SEAT_X11 (seat),
-                                CLUTTER_STAGE (meta_backend_get_stage (backend)));
-
-  input_settings = meta_backend_get_input_settings (backend);
-
-  if (input_settings)
-    {
-      g_signal_connect_object (meta_backend_get_input_settings (backend),
-                               "kbd-a11y-changed",
-                               G_CALLBACK (on_kbd_a11y_changed), backend, 0);
-
-      if (meta_input_settings_maybe_restore_numlock_state (input_settings))
-        {
-          unsigned int num_mask;
-
-          num_mask = XkbKeysymToModifiers (priv->xdisplay, XK_Num_Lock);
-          XkbLockModifiers (priv->xdisplay, XkbUseCoreKbd, num_mask, num_mask);
-        }
-    }
-}
-
 static ClutterBackend *
 meta_backend_x11_create_clutter_backend (MetaBackend    *backend,
                                          ClutterContext *context)
@@ -955,12 +889,13 @@ init_xinput (MetaBackendX11  *backend_x11,
 }
 
 static gboolean
-meta_backend_x11_initable_init (GInitable    *initable,
-                                GCancellable *cancellable,
-                                GError      **error)
+meta_backend_x11_init_basic (MetaBackend  *backend,
+                             GError      **error)
 {
-  MetaContext *context = meta_backend_get_context (META_BACKEND (initable));
-  MetaBackendX11 *x11 = META_BACKEND_X11 (initable);
+  MetaBackendClass *parent_backend_class =
+    META_BACKEND_CLASS (meta_backend_x11_parent_class);
+  MetaContext *context = meta_backend_get_context (META_BACKEND (backend));
+  MetaBackendX11 *x11 = META_BACKEND_X11 (backend);
   MetaBackendX11Private *priv = meta_backend_x11_get_instance_private (x11);
   Display *xdisplay;
   const char *xdisplay_name;
@@ -996,6 +931,86 @@ meta_backend_x11_initable_init (GInitable    *initable,
   if (priv->have_xinput_23)
     priv->barriers = meta_x11_barriers_new (x11);
 
+  return parent_backend_class->init_basic (backend, error);
+}
+
+static gboolean
+meta_backend_x11_init_render (MetaBackend  *backend,
+                              GError      **error)
+{
+  MetaBackendClass *parent_backend_class =
+    META_BACKEND_CLASS (meta_backend_x11_parent_class);
+  MetaBackendX11 *x11 = META_BACKEND_X11 (backend);
+  MetaBackendX11Private *priv = meta_backend_x11_get_instance_private (x11);
+  MetaMonitorManager *monitor_manager;
+  ClutterBackend *clutter_backend;
+  ClutterSeat *seat;
+  MetaInputSettings *input_settings;
+  int major, minor;
+
+  priv->source = x_event_source_new (backend);
+
+  if (!XSyncQueryExtension (priv->xdisplay, &priv->xsync_event_base, &priv->xsync_error_base) ||
+      !XSyncInitialize (priv->xdisplay, &major, &minor))
+    meta_fatal ("Could not initialize XSync");
+
+  priv->counter = find_idletime_counter (priv);
+  if (priv->counter == None)
+    meta_fatal ("Could not initialize XSync counter");
+
+  priv->user_active_alarm = xsync_user_active_alarm_set (priv);
+
+  if (!xkb_x11_setup_xkb_extension (priv->xcb,
+                                    XKB_X11_MIN_MAJOR_XKB_VERSION,
+                                    XKB_X11_MIN_MINOR_XKB_VERSION,
+                                    XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
+                                    NULL, NULL,
+                                    &priv->xkb_event_base,
+                                    &priv->xkb_error_base))
+    meta_fatal ("X server doesn't have the XKB extension, version %d.%d or newer",
+                XKB_X11_MIN_MAJOR_XKB_VERSION, XKB_X11_MIN_MINOR_XKB_VERSION);
+
+  if (!parent_backend_class->init_render (backend, error))
+    return FALSE;
+
+  monitor_manager = meta_backend_get_monitor_manager (backend);
+  g_signal_connect (monitor_manager, "monitors-changed-internal",
+                    G_CALLBACK (on_monitors_changed), backend);
+
+  priv->touch_replay_sync_atom = XInternAtom (priv->xdisplay,
+                                              "_MUTTER_TOUCH_SEQUENCE_SYNC",
+                                              False);
+
+  clutter_backend = meta_backend_get_clutter_backend (backend);
+  seat = clutter_backend_get_default_seat (clutter_backend);
+  meta_seat_x11_notify_devices (META_SEAT_X11 (seat),
+                                CLUTTER_STAGE (meta_backend_get_stage (backend)));
+
+  input_settings = meta_backend_get_input_settings (backend);
+
+  if (input_settings)
+    {
+      g_signal_connect_object (meta_backend_get_input_settings (backend),
+                               "kbd-a11y-changed",
+                               G_CALLBACK (on_kbd_a11y_changed), backend, 0);
+
+      if (meta_input_settings_maybe_restore_numlock_state (input_settings))
+        {
+          unsigned int num_mask;
+
+          num_mask = XkbKeysymToModifiers (priv->xdisplay, XK_Num_Lock);
+          XkbLockModifiers (priv->xdisplay, XkbUseCoreKbd, num_mask, num_mask);
+        }
+    }
+
+  return TRUE;
+}
+
+static gboolean
+meta_backend_x11_initable_init (GInitable    *initable,
+                                GCancellable *cancellable,
+                                GError      **error)
+{
   return initable_parent_iface->init (initable, cancellable, error);
 }
 
@@ -1058,10 +1073,12 @@ meta_backend_x11_class_init (MetaBackendX11Class *klass)
 
   object_class->dispose = meta_backend_x11_dispose;
   object_class->finalize = meta_backend_x11_finalize;
+
+  backend_class->init_basic = meta_backend_x11_init_basic;
+  backend_class->init_render = meta_backend_x11_init_render;
   backend_class->create_clutter_backend = meta_backend_x11_create_clutter_backend;
   backend_class->create_color_manager = meta_backend_x11_create_color_manager;
   backend_class->create_default_seat = meta_backend_x11_create_default_seat;
-  backend_class->post_init = meta_backend_x11_post_init;
   backend_class->grab_device = meta_backend_x11_grab_device;
   backend_class->ungrab_device = meta_backend_x11_ungrab_device;
   backend_class->freeze_keyboard = meta_backend_x11_freeze_keyboard;
