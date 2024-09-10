@@ -63,7 +63,15 @@ struct _MetaBackendX11Cm
   MetaInputSettings *input_settings;
 };
 
-G_DEFINE_TYPE (MetaBackendX11Cm, meta_backend_x11_cm, META_TYPE_BACKEND_X11)
+static GInitableIface *initable_parent_iface;
+
+static void
+initable_iface_init (GInitableIface *initable_iface);
+
+G_DEFINE_FINAL_TYPE_WITH_CODE (MetaBackendX11Cm, meta_backend_x11_cm,
+                               META_TYPE_BACKEND_X11,
+                               G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
+                                                      initable_iface_init));
 
 static void
 apply_keymap (MetaBackendX11 *x11);
@@ -503,20 +511,12 @@ meta_backend_x11_cm_finalize (GObject *object)
   G_OBJECT_CLASS (meta_backend_x11_cm_parent_class)->finalize (object);
 }
 
-static void
-meta_backend_x11_cm_constructed (GObject *object)
+static gboolean
+meta_backend_x11_cm_initable_init (GInitable     *initable,
+                                   GCancellable  *cancellable,
+                                   GError       **error)
 {
-  MetaBackendX11Cm *x11_cm = META_BACKEND_X11_CM (object);
-
-  if (x11_cm->display_name)
-    g_setenv ("DISPLAY", x11_cm->display_name, TRUE);
-
-  G_OBJECT_CLASS (meta_backend_x11_cm_parent_class)->constructed (object);
-}
-
-static void
-meta_backend_x11_cm_init (MetaBackendX11Cm *backend_x11_cm)
-{
+  MetaBackendX11Cm *backend_x11_cm = META_BACKEND_X11_CM (initable);
   MetaGpuXrandr *gpu_xrandr;
 
   /*
@@ -527,6 +527,24 @@ meta_backend_x11_cm_init (MetaBackendX11Cm *backend_x11_cm)
   gpu_xrandr = meta_gpu_xrandr_new (META_BACKEND_X11 (backend_x11_cm));
   meta_backend_add_gpu (META_BACKEND (backend_x11_cm),
                         META_GPU (gpu_xrandr));
+
+  if (backend_x11_cm->display_name)
+    g_setenv ("DISPLAY", backend_x11_cm->display_name, TRUE);
+
+  return initable_parent_iface->init (initable, cancellable, error);
+}
+
+static void
+initable_iface_init (GInitableIface *initable_iface)
+{
+  initable_parent_iface = g_type_interface_peek_parent (initable_iface);
+
+  initable_iface->init = meta_backend_x11_cm_initable_init;
+}
+
+static void
+meta_backend_x11_cm_init (MetaBackendX11Cm *backend_x11_cm)
+{
 }
 
 static void
@@ -538,7 +556,6 @@ meta_backend_x11_cm_class_init (MetaBackendX11CmClass *klass)
 
   object_class->set_property = meta_backend_x11_cm_set_property;
   object_class->finalize = meta_backend_x11_cm_finalize;
-  object_class->constructed = meta_backend_x11_cm_constructed;
 
   backend_class->post_init = meta_backend_x11_cm_post_init;
   backend_class->get_capabilities = meta_backend_x11_cm_get_capabilities;
