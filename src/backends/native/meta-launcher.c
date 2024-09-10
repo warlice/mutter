@@ -31,8 +31,8 @@
 #include <unistd.h>
 #include <systemd/sd-login.h>
 
+#include "backends/dbus-utils.h"
 #include "backends/meta-backend-private.h"
-#include "backends/native/dbus-utils.h"
 #include "backends/native/meta-backend-native.h"
 #include "backends/native/meta-clutter-backend-native.h"
 #include "backends/native/meta-cursor-renderer-native.h"
