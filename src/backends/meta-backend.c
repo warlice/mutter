@@ -1200,16 +1200,20 @@ meta_backend_initable_init (GInitable     *initable,
 
   g_assert (priv->context);
 
+  priv->cancellable = g_cancellable_new ();
+
+  g_bus_get (G_BUS_TYPE_SYSTEM,
+             priv->cancellable,
+             system_bus_gotten_cb,
+             backend);
+
   priv->settings = meta_settings_new (backend);
 
-#ifdef HAVE_LIBWACOM
-  priv->wacom_db = libwacom_database_new ();
-  if (!priv->wacom_db)
-    {
-      g_warning ("Could not create database of Wacom devices, "
-                 "expect tablets to misbehave");
-    }
-#endif
+  priv->dnd = meta_dnd_new (backend);
+
+  priv->orientation_manager = g_object_new (META_TYPE_ORIENTATION_MANAGER, NULL);
+
+  priv->cursor_tracker = meta_backend_create_cursor_tracker (backend);
 
   if (META_BACKEND_GET_CLASS (backend)->is_lid_closed ==
       meta_backend_real_is_lid_closed)
@@ -1223,6 +1227,15 @@ meta_backend_initable_init (GInitable     *initable,
                                                 NULL);
     }
 
+#ifdef HAVE_LIBWACOM
+  priv->wacom_db = libwacom_database_new ();
+  if (!priv->wacom_db)
+    {
+      g_warning ("Could not create database of Wacom devices, "
+                 "expect tablets to misbehave");
+    }
+#endif
+
 #ifdef HAVE_EGL
   priv->egl = g_object_new (META_TYPE_EGL, NULL);
 #endif
@@ -1230,8 +1243,6 @@ meta_backend_initable_init (GInitable     *initable,
   if (META_BACKEND_GET_CLASS (backend)->init_basic &&
       !META_BACKEND_GET_CLASS (backend)->init_basic (backend, error))
     return FALSE;
-
-  priv->orientation_manager = g_object_new (META_TYPE_ORIENTATION_MANAGER, NULL);
 
   priv->monitor_manager = meta_backend_create_monitor_manager (backend, error);
   if (!priv->monitor_manager)
@@ -1243,18 +1254,12 @@ meta_backend_initable_init (GInitable     *initable,
   if (!priv->renderer)
     return FALSE;
 
-  priv->cursor_tracker = meta_backend_create_cursor_tracker (backend);
-
-  priv->dnd = meta_dnd_new (backend);
-
-  priv->cancellable = g_cancellable_new ();
-  g_bus_get (G_BUS_TYPE_SYSTEM,
-             priv->cancellable,
-             system_bus_gotten_cb,
-             backend);
-
   if (!init_clutter (backend, error))
     return FALSE;
+
+  priv->idle_manager = meta_idle_manager_new (backend);
+
+  priv->input_mapper = meta_backend_create_input_mapper (backend);
 
   if (META_BACKEND_GET_CLASS (backend)->init_render &&
       !META_BACKEND_GET_CLASS (backend)->init_render (backend, error))
@@ -1266,12 +1271,9 @@ meta_backend_initable_init (GInitable     *initable,
 
   meta_backend_update_stage (backend);
 
-  priv->idle_manager = meta_idle_manager_new (backend);
-
-  priv->input_mapper = meta_backend_create_input_mapper (backend);
-
   priv->remote_access_controller =
     meta_remote_access_controller_new ();
+
   priv->dbus_session_watcher =
     g_object_new (META_TYPE_DBUS_SESSION_WATCHER, NULL);
 
@@ -1280,6 +1282,7 @@ meta_backend_initable_init (GInitable     *initable,
   meta_remote_access_controller_add (
     priv->remote_access_controller,
     META_DBUS_SESSION_MANAGER (priv->screen_cast));
+
   priv->remote_desktop = meta_remote_desktop_new (backend);
   meta_remote_access_controller_add (
     priv->remote_access_controller,
