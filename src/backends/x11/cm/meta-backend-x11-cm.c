@@ -63,15 +63,9 @@ struct _MetaBackendX11Cm
   MetaInputSettings *input_settings;
 };
 
-static GInitableIface *initable_parent_iface;
-
-static void
-initable_iface_init (GInitableIface *initable_iface);
-
-G_DEFINE_FINAL_TYPE_WITH_CODE (MetaBackendX11Cm, meta_backend_x11_cm,
-                               META_TYPE_BACKEND_X11,
-                               G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                      initable_iface_init));
+G_DEFINE_FINAL_TYPE (MetaBackendX11Cm,
+                     meta_backend_x11_cm,
+                     META_TYPE_BACKEND_X11);
 
 static void
 apply_keymap (MetaBackendX11 *x11);
@@ -537,22 +531,6 @@ meta_backend_x11_cm_finalize (GObject *object)
   g_clear_pointer (&x11_cm->display_name, g_free);
 
   G_OBJECT_CLASS (meta_backend_x11_cm_parent_class)->finalize (object);
-}
-
-static gboolean
-meta_backend_x11_cm_initable_init (GInitable     *initable,
-                                   GCancellable  *cancellable,
-                                   GError       **error)
-{
-  return initable_parent_iface->init (initable, cancellable, error);
-}
-
-static void
-initable_iface_init (GInitableIface *initable_iface)
-{
-  initable_parent_iface = g_type_interface_peek_parent (initable_iface);
-
-  initable_iface->init = meta_backend_x11_cm_initable_init;
 }
 
 static void

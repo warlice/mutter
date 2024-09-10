@@ -97,15 +97,9 @@ typedef struct _MetaBackendNativePrivate
 #endif
 } MetaBackendNativePrivate;
 
-static GInitableIface *initable_parent_iface;
-
-static void
-initable_iface_init (GInitableIface *initable_iface);
-
-G_DEFINE_TYPE_WITH_CODE (MetaBackendNative, meta_backend_native, META_TYPE_BACKEND,
-                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                initable_iface_init)
-                         G_ADD_PRIVATE (MetaBackendNative))
+G_DEFINE_TYPE_WITH_PRIVATE (MetaBackendNative,
+                            meta_backend_native,
+                            META_TYPE_BACKEND);
 
 static void
 meta_backend_native_dispose (GObject *object)
@@ -810,14 +804,6 @@ meta_backend_native_init_render (MetaBackend  *backend,
   return TRUE;
 }
 
-static gboolean
-meta_backend_native_initable_init (GInitable     *initable,
-                                   GCancellable  *cancellable,
-                                   GError       **error)
-{
-  return initable_parent_iface->init (initable, cancellable, error);
-}
-
 static void
 meta_backend_native_set_property (GObject      *object,
                                   guint         prop_id,
@@ -837,14 +823,6 @@ meta_backend_native_set_property (GObject      *object,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
     }
-}
-
-static void
-initable_iface_init (GInitableIface *initable_iface)
-{
-  initable_parent_iface = g_type_interface_peek_parent (initable_iface);
-
-  initable_iface->init = meta_backend_native_initable_init;
 }
 
 static void

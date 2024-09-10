@@ -98,15 +98,9 @@ struct _MetaBackendX11Private
 };
 typedef struct _MetaBackendX11Private MetaBackendX11Private;
 
-static GInitableIface *initable_parent_iface;
-
-static void
-initable_iface_init (GInitableIface *initable_iface);
-
-G_DEFINE_TYPE_WITH_CODE (MetaBackendX11, meta_backend_x11, META_TYPE_BACKEND,
-                         G_ADD_PRIVATE (MetaBackendX11)
-                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                initable_iface_init));
+G_DEFINE_TYPE_WITH_PRIVATE (MetaBackendX11,
+                            meta_backend_x11,
+                            META_TYPE_BACKEND);
 
 
 static void
@@ -1004,22 +998,6 @@ meta_backend_x11_init_render (MetaBackend  *backend,
     }
 
   return TRUE;
-}
-
-static gboolean
-meta_backend_x11_initable_init (GInitable    *initable,
-                                GCancellable *cancellable,
-                                GError      **error)
-{
-  return initable_parent_iface->init (initable, cancellable, error);
-}
-
-static void
-initable_iface_init (GInitableIface *initable_iface)
-{
-  initable_parent_iface = g_type_interface_peek_parent (initable_iface);
-
-  initable_iface->init = meta_backend_x11_initable_init;
 }
 
 static void
