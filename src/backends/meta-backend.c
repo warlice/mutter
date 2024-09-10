@@ -1176,6 +1176,18 @@ init_clutter (MetaBackend  *backend,
   return TRUE;
 }
 
+static void
+init_stage (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  priv->stage = meta_stage_new (backend);
+
+  clutter_actor_realize (priv->stage);
+
+  META_BACKEND_GET_CLASS (backend)->select_stage_events (backend);
+}
+
 static gboolean
 meta_backend_initable_init (GInitable     *initable,
                             GCancellable  *cancellable,
@@ -1248,9 +1260,7 @@ meta_backend_initable_init (GInitable     *initable,
       !META_BACKEND_GET_CLASS (backend)->init_render (backend, error))
     return FALSE;
 
-  priv->stage = meta_stage_new (backend);
-  clutter_actor_realize (priv->stage);
-  META_BACKEND_GET_CLASS (backend)->select_stage_events (backend);
+  init_stage (backend);
 
   meta_monitor_manager_setup (priv->monitor_manager);
 
