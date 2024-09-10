@@ -748,6 +748,10 @@ meta_backend_native_initable_init (GInitable     *initable,
   const char *session_id = NULL;
   const char *seat_id = NULL;
 
+  priv->startup_render_devices =
+    g_hash_table_new_full (g_str_hash, g_str_equal,
+                           g_free, g_object_unref);
+
   switch (priv->mode)
     {
     case META_BACKEND_NATIVE_MODE_DEFAULT:
@@ -874,12 +878,6 @@ meta_backend_native_class_init (MetaBackendNativeClass *klass)
 static void
 meta_backend_native_init (MetaBackendNative *backend_native)
 {
-  MetaBackendNativePrivate *priv =
-    meta_backend_native_get_instance_private (backend_native);
-
-  priv->startup_render_devices =
-    g_hash_table_new_full (g_str_hash, g_str_equal,
-                           g_free, g_object_unref);
 }
 
 MetaLauncher *
