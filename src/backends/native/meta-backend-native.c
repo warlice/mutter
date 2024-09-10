@@ -114,7 +114,7 @@ meta_backend_native_dispose (GObject *object)
   g_clear_object (&priv->kms);
   g_clear_object (&priv->udev);
   g_clear_object (&priv->device_pool);
-  g_clear_pointer (&priv->launcher, meta_launcher_free);
+  g_clear_object (&priv->launcher);
 }
 
 static ClutterBackend *
@@ -711,6 +711,17 @@ on_started (MetaContext *context,
   meta_seat_native_start (META_SEAT_NATIVE (seat));
 }
 
+static void
+on_session_active_changed (MetaLauncher      *launcher,
+                           GParamSpec        *pspec,
+                           MetaBackendNative *native)
+{
+  if (meta_launcher_is_session_active (launcher))
+    meta_backend_native_resume (native);
+  else
+    meta_backend_native_pause (native);
+}
+
 static gboolean
 meta_backend_native_init_basic (MetaBackend  *backend,
                                 GError      **error)
@@ -755,6 +766,16 @@ meta_backend_native_init_basic (MetaBackend  *backend,
           priv->mode = META_BACKEND_NATIVE_MODE_HEADLESS;
           g_message ("No seat assigned, running headlessly");
         }
+      else if (!meta_launcher_is_session_controller (priv->launcher))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Native backend mode needs to be session controller");
+          return FALSE;
+        }
+
+      g_signal_connect (priv->launcher, "notify::session-active",
+                        G_CALLBACK (on_session_active_changed),
+                        native);
     }
 
   priv->device_pool = meta_device_pool_new (native);

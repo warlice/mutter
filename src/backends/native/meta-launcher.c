@@ -33,25 +33,53 @@
 
 #include "backends/dbus-utils.h"
 #include "backends/meta-backend-private.h"
-#include "backends/native/meta-backend-native.h"
-#include "backends/native/meta-clutter-backend-native.h"
-#include "backends/native/meta-cursor-renderer-native.h"
-#include "backends/native/meta-input-thread.h"
-#include "backends/native/meta-renderer-native.h"
-#include "clutter/clutter.h"
 
 #include "meta-dbus-login1.h"
 
+enum
+{
+  PROP_0,
+
+  PROP_SESSION_ACTIVE,
+
+  N_PROPS
+};
+
+static GParamSpec *obj_props[N_PROPS];
+
 struct _MetaLauncher
 {
-  MetaBackend *backend;
+  GObject parent;
 
+  MetaBackend *backend;
   MetaDBusLogin1Session *session_proxy;
   MetaDBusLogin1Seat *seat_proxy;
   char *seat_id;
-
   gboolean session_active;
+  gboolean have_control;
 };
+
+G_DEFINE_FINAL_TYPE (MetaLauncher,
+                     meta_launcher,
+                     G_TYPE_OBJECT);
+
+MetaBackend *
+meta_launcher_get_backend (MetaLauncher *launcher)
+{
+  return launcher->backend;
+}
+
+gboolean
+meta_launcher_is_session_controller (MetaLauncher *launcher)
+{
+  return launcher->have_control;
+}
+
+gboolean
+meta_launcher_is_session_active (MetaLauncher *launcher)
+{
+  return launcher->session_active;
+}
 
 const char *
 meta_launcher_get_seat_id (MetaLauncher *launcher)
@@ -59,16 +87,119 @@ meta_launcher_get_seat_id (MetaLauncher *launcher)
   return launcher->seat_id;
 }
 
+MetaDBusLogin1Session *
+meta_launcher_get_session_proxy (MetaLauncher *launcher)
+{
+  return launcher->session_proxy;
+}
+
+gboolean
+meta_launcher_activate_vt (MetaLauncher  *launcher,
+                           signed char    vt,
+                           GError       **error)
+{
+  g_assert (launcher->seat_proxy);
+
+  return meta_dbus_login1_seat_call_switch_to_sync (launcher->seat_proxy,
+                                                    vt,
+                                                    NULL,
+                                                    error);
+}
+
+static void
+sync_active (MetaLauncher *launcher)
+{
+  MetaDBusLogin1Session *session_proxy = launcher->session_proxy;
+  gboolean active;
+
+  active = meta_dbus_login1_session_get_active (session_proxy);
+  if (active == launcher->session_active)
+    return;
+
+  launcher->session_active = active;
+  g_object_notify_by_pspec (G_OBJECT (launcher),
+                            obj_props[PROP_SESSION_ACTIVE]);
+}
+
+static void
+on_active_changed (MetaDBusLogin1Session *session,
+                   GParamSpec            *pspec,
+                   MetaLauncher          *launcher)
+{
+  sync_active (launcher);
+}
+
+static void
+meta_launcher_dispose (GObject *object)
+{
+  MetaLauncher *launcher = META_LAUNCHER (object);
+
+  if (launcher->have_control && launcher->session_proxy)
+    {
+      meta_dbus_login1_session_call_release_control_sync (launcher->session_proxy,
+                                                          NULL, NULL);
+      launcher->have_control = FALSE;
+    }
+
+  g_clear_pointer (&launcher->seat_id, g_free);
+  g_clear_object (&launcher->seat_proxy);
+  g_clear_object (&launcher->session_proxy);
+
+  G_OBJECT_CLASS (meta_launcher_parent_class)->dispose (object);
+}
+
+static void
+meta_launcher_get_property (GObject    *object,
+                            guint       prop_id,
+                            GValue     *value,
+                            GParamSpec *pspec)
+{
+  MetaLauncher *launcher = META_LAUNCHER (object);
+
+  switch (prop_id)
+    {
+    case PROP_SESSION_ACTIVE:
+      g_value_set_boolean (value, launcher->session_active);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+}
+
+static void
+meta_launcher_class_init (MetaLauncherClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  object_class->dispose = meta_launcher_dispose;
+  object_class->get_property = meta_launcher_get_property;
+
+  obj_props[PROP_SESSION_ACTIVE] =
+    g_param_spec_boolean ("session-active", NULL, NULL,
+                         TRUE,
+                         G_PARAM_READABLE |
+                         G_PARAM_STATIC_STRINGS);
+  g_object_class_install_properties (object_class, N_PROPS, obj_props);
+}
+
+static void
+meta_launcher_init (MetaLauncher *launcher)
+{
+}
+
 static gboolean
-find_systemd_session (gchar **session_id,
+find_systemd_session (char   **session_id,
                       GError **error)
 {
-  const gchar * const graphical_session_types[] = { "wayland", "x11", "mir", NULL };
-  const gchar * const active_states[] = { "active", "online", NULL };
-  g_autofree gchar *class = NULL;
-  g_autofree gchar *local_session_id = NULL;
-  g_autofree gchar *type = NULL;
-  g_autofree gchar *state = NULL;
+  const char *const graphical_session_types[] =
+    { "wayland", "x11", "mir", NULL };
+  const char *const active_states[] =
+    { "active", "online", NULL };
+  g_autofree char *class = NULL;
+  g_autofree char *local_session_id = NULL;
+  g_autofree char *type = NULL;
+  g_autofree char *state = NULL;
   g_auto (GStrv) sessions = NULL;
   int n_sessions;
   int saved_errno;
@@ -285,15 +416,19 @@ get_session_proxy (const char    *fallback_session_id,
 }
 
 static MetaDBusLogin1Seat *
-get_seat_proxy (gchar        *seat_id,
-                GCancellable *cancellable,
-                GError      **error)
+get_seat_proxy (char          *seat_id,
+                GCancellable  *cancellable,
+                GError       **error)
 {
-  g_autofree char *seat_proxy_path = get_escaped_dbus_path ("/org/freedesktop/login1/seat", seat_id);
+  g_autofree char *seat_proxy_path = NULL;
   GDBusProxyFlags flags;
   MetaDBusLogin1Seat *seat;
 
+  seat_proxy_path =
+    get_escaped_dbus_path ("/org/freedesktop/login1/seat", seat_id);
+
   flags = G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START;
+
   seat =
     meta_dbus_login1_seat_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
                                                   flags,
@@ -301,41 +436,12 @@ get_seat_proxy (gchar        *seat_id,
                                                   seat_proxy_path,
                                                   cancellable, error);
   if (!seat)
-    g_prefix_error(error, "Could not get seat proxy: ");
+    g_prefix_error (error, "Could not get seat proxy: ");
 
   return seat;
 }
 
-static void
-sync_active (MetaLauncher *self)
-{
-  MetaBackend *backend = self->backend;
-  MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
-  MetaDBusLogin1Session *session_proxy = self->session_proxy;
-  gboolean active;
-
-  active = meta_dbus_login1_session_get_active (session_proxy);
-  if (active == self->session_active)
-    return;
-
-  self->session_active = active;
-
-  if (active)
-    meta_backend_native_resume (backend_native);
-  else
-    meta_backend_native_pause (backend_native);
-}
-
-static void
-on_active_changed (MetaDBusLogin1Session *session,
-                   GParamSpec            *pspec,
-                   gpointer               user_data)
-{
-  MetaLauncher *self = user_data;
-  sync_active (self);
-}
-
-static gchar *
+static char *
 get_seat_id (GError **error)
 {
   g_autoptr (GError) local_error = NULL;
@@ -364,19 +470,13 @@ get_seat_id (GError **error)
   return seat_id;
 }
 
-MetaDBusLogin1Session *
-meta_launcher_get_session_proxy (MetaLauncher *launcher)
-{
-  return launcher->session_proxy;
-}
-
 MetaLauncher *
 meta_launcher_new (MetaBackend  *backend,
                    const char   *fallback_session_id,
                    const char   *fallback_seat_id,
                    GError      **error)
 {
-  MetaLauncher *self = NULL;
+  g_autoptr (MetaLauncher) launcher = NULL;
   g_autoptr (MetaDBusLogin1Session) session_proxy = NULL;
   g_autoptr (MetaDBusLogin1Seat) seat_proxy = NULL;
   g_autoptr (GError) local_error = NULL;
@@ -385,18 +485,22 @@ meta_launcher_new (MetaBackend  *backend,
 
   session_proxy = get_session_proxy (fallback_session_id, NULL, error);
   if (!session_proxy)
-    goto fail;
+    return NULL;
 
-  if (!meta_dbus_login1_session_call_take_control_sync (session_proxy,
-                                                        FALSE,
-                                                        NULL,
-                                                        error))
+  if (meta_dbus_login1_session_call_take_control_sync (session_proxy,
+                                                       FALSE,
+                                                       NULL,
+                                                       &local_error))
     {
-      g_prefix_error (error, "Could not take control: ");
-      goto fail;
+      have_control = TRUE;
     }
-
-  have_control = TRUE;
+  else
+    {
+      meta_topic (META_DEBUG_BACKEND,
+                  "Failed to take control of the session: %s",
+                  local_error->message);
+      g_clear_error (&local_error);
+    }
 
   seat_id = get_seat_id (&local_error);
   if (!seat_id)
@@ -415,54 +519,24 @@ meta_launcher_new (MetaBackend  *backend,
     {
       seat_proxy = get_seat_proxy (seat_id, NULL, error);
       if (!seat_proxy)
-        goto fail;
+        return NULL;
     }
 
-  self = g_new0 (MetaLauncher, 1);
-  self->backend = backend;
-  self->session_proxy = g_object_ref (session_proxy);
-  self->session_active = TRUE;
+  launcher = g_object_new (META_TYPE_LAUNCHER, NULL);
+  launcher->backend = backend;
+  launcher->session_proxy = g_steal_pointer (&session_proxy);
+  launcher->session_active = TRUE;
+  launcher->have_control = have_control;
   if (seat_id)
     {
-      self->seat_proxy = g_object_ref (seat_proxy);
-      self->seat_id = g_steal_pointer (&seat_id);
+      launcher->seat_proxy = g_steal_pointer (&seat_proxy);
+      launcher->seat_id = g_steal_pointer (&seat_id);
     }
 
-  g_signal_connect (self->session_proxy, "notify::active", G_CALLBACK (on_active_changed), self);
+  g_signal_connect (launcher->session_proxy, "notify::active",
+                    G_CALLBACK (on_active_changed),
+                    launcher);
+  sync_active (launcher);
 
-  return self;
-
-fail:
-  if (have_control)
-    {
-      meta_dbus_login1_session_call_release_control_sync (session_proxy,
-                                                          NULL, NULL);
-    }
-  return NULL;
-}
-
-void
-meta_launcher_free (MetaLauncher *self)
-{
-  g_free (self->seat_id);
-  g_clear_object (&self->seat_proxy);
-  g_clear_object (&self->session_proxy);
-  g_free (self);
-}
-
-gboolean
-meta_launcher_activate_vt (MetaLauncher  *launcher,
-                           signed char    vt,
-                           GError       **error)
-{
-  g_assert (launcher->seat_proxy);
-
-  return meta_dbus_login1_seat_call_switch_to_sync (launcher->seat_proxy, vt,
-                                                    NULL, error);
-}
-
-MetaBackend *
-meta_launcher_get_backend (MetaLauncher *launcher)
-{
-  return launcher->backend;
+  return g_steal_pointer (&launcher);
 }
