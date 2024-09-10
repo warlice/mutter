@@ -62,6 +62,7 @@
 #include "backends/meta-input-capture.h"
 #include "backends/meta-input-mapper-private.h"
 #include "backends/meta-input-settings-private.h"
+#include "backends/meta-launcher.h"
 #include "backends/meta-logical-monitor.h"
 #include "backends/meta-monitor-manager-dummy.h"
 #include "backends/meta-remote-access-controller-private.h"
@@ -142,6 +143,7 @@ struct _MetaBackendPrivate
   MetaIdleManager *idle_manager;
   MetaRenderer *renderer;
   MetaColorManager *color_manager;
+  MetaLauncher *launcher;
 #ifdef HAVE_EGL
   MetaEgl *egl;
 #endif
@@ -272,6 +274,7 @@ meta_backend_finalize (GObject *object)
   g_clear_object (&priv->upower_proxy);
 
   g_clear_object (&priv->settings);
+  g_clear_object (&priv->launcher);
  #ifdef HAVE_EGL
   g_clear_object (&priv->egl);
  #endif
@@ -944,6 +947,47 @@ meta_backend_class_init (MetaBackendClass *klass)
                   G_TYPE_NONE, 0);
 }
 
+static void
+on_session_active_changed (MetaLauncher *launcher,
+                           GParamSpec   *pspec,
+                           MetaBackend  *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+  gboolean active = meta_launcher_is_session_active (launcher);
+
+  if (!active)
+    {
+      meta_renderer_pause (priv->renderer);
+    }
+
+  if (META_BACKEND_GET_CLASS (backend)->active_changed)
+    META_BACKEND_GET_CLASS (backend)->active_changed (backend, active);
+
+  if (active)
+    {
+      meta_renderer_resume (priv->renderer);
+    }
+}
+
+static MetaLauncher *
+meta_backend_create_launcher (MetaBackend  *backend,
+                              GError      **error)
+{
+  MetaLauncher *launcher;
+
+  launcher = META_BACKEND_GET_CLASS (backend)->create_launcher (backend, error);
+
+  if (launcher)
+    {
+      g_signal_connect_object (launcher, "notify::session-active",
+                               G_CALLBACK (on_session_active_changed),
+                               backend,
+                               G_CONNECT_DEFAULT);
+    }
+
+  return launcher;
+}
+
 static MetaMonitorManager *
 meta_backend_create_monitor_manager (MetaBackend *backend,
                                      GError     **error)
@@ -1224,6 +1268,7 @@ meta_backend_initable_init (GInitable     *initable,
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
   MetaBackendClass *backend_class =
    META_BACKEND_GET_CLASS (backend);
+  g_autoptr (GError) local_error = NULL;
 
   g_assert (priv->context);
 
@@ -1235,6 +1280,13 @@ meta_backend_initable_init (GInitable     *initable,
              backend);
 
   priv->settings = meta_settings_new (backend);
+
+  priv->launcher = meta_backend_create_launcher (backend, &local_error);
+  if (!priv->launcher && local_error)
+    {
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
 
   priv->dnd = meta_dnd_new (backend);
 
@@ -1412,6 +1464,17 @@ meta_backend_get_color_manager (MetaBackend *backend)
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
 
   return priv->color_manager;
+}
+
+/**
+ * meta_backend_get_launcher: (skip)
+ */
+MetaLauncher *
+meta_backend_get_launcher (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  return priv->launcher;
 }
 
 /**

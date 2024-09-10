@@ -82,7 +82,6 @@ typedef struct _MetaBackendNativePrivate
 {
   MetaBackend parent;
 
-  MetaLauncher *launcher;
   MetaDevicePool *device_pool;
   MetaUdev *udev;
   MetaKms *kms;
@@ -100,6 +99,9 @@ G_DEFINE_TYPE_WITH_PRIVATE (MetaBackendNative,
                             meta_backend_native,
                             META_TYPE_BACKEND);
 
+static void meta_backend_native_active_changed (MetaBackend *backend,
+                                                gboolean     active);
+
 static void
 meta_backend_native_dispose (GObject *object)
 {
@@ -113,7 +115,6 @@ meta_backend_native_dispose (GObject *object)
   g_clear_object (&priv->kms);
   g_clear_object (&priv->udev);
   g_clear_object (&priv->device_pool);
-  g_clear_object (&priv->launcher);
 }
 
 static ClutterBackend *
@@ -319,12 +320,14 @@ meta_backend_native_get_seat_id (MetaBackendNative *backend_native)
 {
   MetaBackendNativePrivate *priv =
     meta_backend_native_get_instance_private (backend_native);
+  MetaLauncher *launcher =
+    meta_backend_get_launcher (META_BACKEND (backend_native));
 
   switch (priv->mode)
     {
     case META_BACKEND_NATIVE_MODE_DEFAULT:
     case META_BACKEND_NATIVE_MODE_TEST_VKMS:
-      return meta_launcher_get_seat_id (priv->launcher);
+      return meta_launcher_get_seat_id (launcher);
     case META_BACKEND_NATIVE_MODE_HEADLESS:
     case META_BACKEND_NATIVE_MODE_TEST_HEADLESS:
       return "seat0";
@@ -710,33 +713,16 @@ on_started (MetaContext *context,
   meta_seat_native_start (META_SEAT_NATIVE (seat));
 }
 
-static void
-on_session_active_changed (MetaLauncher      *launcher,
-                           GParamSpec        *pspec,
-                           MetaBackendNative *native)
+static MetaLauncher *
+meta_backend_native_create_launcher (MetaBackend  *backend,
+                                     GError      **error)
 {
-  if (meta_launcher_is_session_active (launcher))
-    meta_backend_native_resume (native);
-  else
-    meta_backend_native_pause (native);
-}
-
-static gboolean
-meta_backend_native_init_basic (MetaBackend  *backend,
-                                GError      **error)
-{
-  MetaBackendClass *parent_backend_class =
-    META_BACKEND_CLASS (meta_backend_native_parent_class);
   MetaBackendNative *native = META_BACKEND_NATIVE (backend);
   MetaBackendNativePrivate *priv =
     meta_backend_native_get_instance_private (native);
-  MetaKmsFlags kms_flags;
+  g_autoptr (MetaLauncher) launcher = NULL;
   const char *session_id = NULL;
   const char *seat_id = NULL;
-
-  priv->startup_render_devices =
-    g_hash_table_new_full (g_str_hash, g_str_equal,
-                           g_free, g_object_unref);
 
   switch (priv->mode)
     {
@@ -751,31 +737,43 @@ meta_backend_native_init_basic (MetaBackend  *backend,
       break;
     }
 
-  if (priv->mode != META_BACKEND_NATIVE_MODE_HEADLESS &&
-      priv->mode != META_BACKEND_NATIVE_MODE_TEST_HEADLESS)
+  if (priv->mode == META_BACKEND_NATIVE_MODE_HEADLESS ||
+      priv->mode == META_BACKEND_NATIVE_MODE_TEST_HEADLESS)
+    return NULL;
+
+  launcher = meta_launcher_new (backend, session_id, seat_id, error);
+  if (!launcher)
+    return NULL;
+
+  if (!meta_launcher_get_seat_id (launcher))
     {
-      priv->launcher = meta_launcher_new (backend,
-                                          session_id, seat_id,
-                                          error);
-      if (!priv->launcher)
-        return FALSE;
-
-      if (!meta_launcher_get_seat_id (priv->launcher))
-        {
-          priv->mode = META_BACKEND_NATIVE_MODE_HEADLESS;
-          g_message ("No seat assigned, running headlessly");
-        }
-      else if (!meta_launcher_is_session_controller (priv->launcher))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Native backend mode needs to be session controller");
-          return FALSE;
-        }
-
-      g_signal_connect (priv->launcher, "notify::session-active",
-                        G_CALLBACK (on_session_active_changed),
-                        native);
+      priv->mode = META_BACKEND_NATIVE_MODE_HEADLESS;
+      g_message ("No seat assigned, running headlessly");
     }
+  else if (!meta_launcher_is_session_controller (launcher))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Native backend mode needs to be session controller");
+      return NULL;
+    }
+
+  return g_steal_pointer (&launcher);
+}
+
+static gboolean
+meta_backend_native_init_basic (MetaBackend  *backend,
+                                GError      **error)
+{
+  MetaBackendClass *parent_backend_class =
+    META_BACKEND_CLASS (meta_backend_native_parent_class);
+  MetaBackendNative *native = META_BACKEND_NATIVE (backend);
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (native);
+  MetaKmsFlags kms_flags;
+
+  priv->startup_render_devices =
+    g_hash_table_new_full (g_str_hash, g_str_equal,
+                           g_free, g_object_unref);
 
   priv->device_pool = meta_device_pool_new (native);
   priv->udev = meta_udev_new (backend);
@@ -861,6 +859,7 @@ meta_backend_native_class_init (MetaBackendNativeClass *klass)
   backend_class->init_render = meta_backend_native_init_render;
   backend_class->get_capabilities = meta_backend_native_get_capabilities;
 
+  backend_class->create_launcher = meta_backend_native_create_launcher;
   backend_class->create_monitor_manager = meta_backend_native_create_monitor_manager;
   backend_class->create_color_manager = meta_backend_native_create_color_manager;
   backend_class->get_cursor_renderer = meta_backend_native_get_cursor_renderer;
@@ -879,6 +878,8 @@ meta_backend_native_class_init (MetaBackendNativeClass *klass)
 
   backend_class->is_headless = meta_backend_native_is_headless;
 
+  backend_class->active_changed = meta_backend_native_active_changed;
+
   obj_props[PROP_MODE] =
     g_param_spec_enum ("mode", NULL, NULL,
                        META_TYPE_BACKEND_NATIVE_MODE,
@@ -892,15 +893,6 @@ meta_backend_native_class_init (MetaBackendNativeClass *klass)
 static void
 meta_backend_native_init (MetaBackendNative *backend_native)
 {
-}
-
-MetaLauncher *
-meta_backend_native_get_launcher (MetaBackendNative *backend_native)
-{
-  MetaBackendNativePrivate *priv =
-    meta_backend_native_get_instance_private (backend_native);
-
-  return priv->launcher;
 }
 
 MetaDevicePool *
@@ -937,8 +929,8 @@ meta_backend_native_activate_vt (MetaBackendNative  *backend_native,
 {
   MetaBackendNativePrivate *priv =
     meta_backend_native_get_instance_private (backend_native);
-
-  MetaLauncher *launcher = meta_backend_native_get_launcher (backend_native);
+  MetaLauncher *launcher =
+    meta_backend_get_launcher (META_BACKEND (backend_native));
 
   switch (priv->mode)
     {
@@ -955,7 +947,7 @@ meta_backend_native_activate_vt (MetaBackendNative  *backend_native,
   g_assert_not_reached ();
 }
 
-void
+static void
 meta_backend_native_pause (MetaBackendNative *backend_native)
 {
   MetaBackendNativePrivate *priv =
@@ -968,19 +960,18 @@ meta_backend_native_pause (MetaBackendNative *backend_native)
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   MetaSeatNative *seat =
     META_SEAT_NATIVE (clutter_backend_get_default_seat (clutter_backend));
-  MetaRenderer *renderer = meta_backend_get_renderer (backend);
 
   COGL_TRACE_BEGIN_SCOPED (MetaBackendNativePause,
                            "Meta::BackendNative::pause()");
 
   meta_seat_native_release_devices (seat);
-  meta_renderer_pause (renderer);
   meta_udev_pause (priv->udev);
 
   meta_monitor_manager_native_pause (monitor_manager_native);
 }
 
-void meta_backend_native_resume (MetaBackendNative *native)
+static void
+meta_backend_native_resume (MetaBackendNative *native)
 {
   MetaBackendNativePrivate *priv =
     meta_backend_native_get_instance_private (native);
@@ -993,7 +984,6 @@ void meta_backend_native_resume (MetaBackendNative *native)
   ClutterBackend *clutter_backend = meta_backend_get_clutter_backend (backend);
   MetaSeatNative *seat =
     META_SEAT_NATIVE (clutter_backend_get_default_seat (clutter_backend));
-  MetaRenderer *renderer = meta_backend_get_renderer (backend);
   MetaIdleManager *idle_manager;
   MetaInputSettings *input_settings;
 
@@ -1005,7 +995,6 @@ void meta_backend_native_resume (MetaBackendNative *native)
   meta_kms_resume (priv->kms);
 
   meta_seat_native_reclaim_devices (seat);
-  meta_renderer_resume (renderer);
 
   clutter_actor_queue_redraw (CLUTTER_ACTOR (stage));
 
@@ -1016,6 +1005,18 @@ void meta_backend_native_resume (MetaBackendNative *native)
   meta_input_settings_maybe_restore_numlock_state (input_settings);
 
   clutter_seat_ensure_a11y_state (CLUTTER_SEAT (seat));
+}
+
+static void
+meta_backend_native_active_changed (MetaBackend *backend,
+                                    gboolean     active)
+{
+  MetaBackendNative *native = META_BACKEND_NATIVE (backend);
+
+  if (active)
+    meta_backend_native_resume (native);
+  else
+    meta_backend_native_pause (native);
 }
 
 static MetaRenderDevice *

@@ -43,6 +43,7 @@
 #include "backends/meta-color-manager.h"
 #include "backends/meta-idle-monitor-private.h"
 #include "backends/meta-keymap-utils.h"
+#include "backends/meta-launcher.h"
 #include "backends/meta-stage-private.h"
 #include "backends/x11/meta-barrier-x11.h"
 #include "backends/x11/meta-clutter-backend-x11.h"
@@ -534,6 +535,26 @@ on_kbd_a11y_changed (MetaInputSettings   *input_settings,
   ClutterSeat *seat = clutter_backend_get_default_seat (clutter_backend);
 
   meta_seat_x11_apply_kbd_a11y_settings (seat, a11y_settings);
+}
+
+static MetaLauncher *
+meta_backend_nx11_create_launcher (MetaBackend  *backend,
+                                   GError      **error)
+{
+  MetaLauncher *launcher;
+  g_autoptr (GError) local_error = NULL;
+
+  launcher = meta_launcher_new (backend, NULL, NULL, &local_error);
+
+  if (!launcher)
+    {
+      meta_topic (META_DEBUG_BACKEND,
+                  "Creating launcher for the X11 backend failed: %s",
+                  local_error->message);
+      return NULL;
+    }
+
+  return launcher;
 }
 
 static ClutterBackend *
@@ -1054,6 +1075,8 @@ meta_backend_x11_class_init (MetaBackendX11Class *klass)
 
   backend_class->init_basic = meta_backend_x11_init_basic;
   backend_class->init_render = meta_backend_x11_init_render;
+
+  backend_class->create_launcher = meta_backend_nx11_create_launcher;
   backend_class->create_clutter_backend = meta_backend_x11_create_clutter_backend;
   backend_class->create_color_manager = meta_backend_x11_create_color_manager;
   backend_class->create_default_seat = meta_backend_x11_create_default_seat;
