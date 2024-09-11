@@ -164,6 +164,16 @@
       </description>
     </key>
 
+    <key name="adaptive-sharpness-strength" type="u">
+      <default>0</default>
+      <range min="0" max="255"/>
+      <summary>Adaptive sharpness strength input</summary>
+      <description>
+        User desired adaptive sharpness strength which will be an input from the
+	user to write into crtc property of filter strength
+      </description>
+    </key>
+
     <child name="keybindings" schema="org.gnome.mutter.keybindings"/>
 
   </schema>

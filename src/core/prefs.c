@@ -113,6 +113,9 @@ static gboolean force_fullscreen = TRUE;
 static gboolean auto_maximize = TRUE;
 static gboolean show_fallback_app_menu = TRUE;
 
+/* Adaptive Sharpness Filter Strength */
+static unsigned int adaptive_sharpness_strength = 0;
+
 static GDesktopVisualBellType visual_bell_type = G_DESKTOP_VISUAL_BELL_FULLSCREEN_FLASH;
 static MetaButtonLayout button_layout;
 
@@ -506,6 +509,13 @@ static MetaUintPreference preferences_uint[] =
         META_PREF_CHECK_ALIVE_TIMEOUT,
       },
       &check_alive_timeout,
+    },
+    {
+      { "adaptive-sharpness-strength",
+        SCHEMA_MUTTER,
+        META_PREF_ADAPTIVE_SHARPNESS_STRENGTH,
+      },
+      &adaptive_sharpness_strength,
     },
     { { NULL, 0, 0 }, NULL },
   };
@@ -1688,6 +1698,9 @@ meta_preference_to_string (MetaPreference pref)
 
     case META_PREF_CHECK_ALIVE_TIMEOUT:
       return "CHECK_ALIVE_TIMEOUT";
+
+    case META_PREF_ADAPTIVE_SHARPNESS_STRENGTH:
+      return "ADAPTIVE_SHARPNESS_STRENGTH";
     }
 
   return "(unknown)";
@@ -2038,6 +2051,12 @@ unsigned int
 meta_prefs_get_check_alive_timeout (void)
 {
   return check_alive_timeout;
+}
+
+unsigned int
+meta_prefs_get_adaptive_sharpness_strength (void)
+{
+  return adaptive_sharpness_strength;
 }
 
 const char *
