@@ -27,6 +27,9 @@ mutter_pkg_private_deps = [
   xkbcommon_dep,
   gdk_pixbuf_dep,
   libeis_dep,
+  gudev_dep,
+  libudev_dep,
+  logind_provider_dep,
 ]
 
 if have_gnome_desktop
@@ -62,13 +65,6 @@ endif
 if have_egl
   mutter_pkg_deps += [
     egl_dep,
-  ]
-endif
-
-if have_libgudev
-  mutter_pkg_private_deps += [
-    gudev_dep,
-    libudev_dep,
   ]
 endif
 
@@ -148,10 +144,7 @@ endif
 if have_native_backend
   mutter_pkg_private_deps += [
     libinput_dep,
-    gudev_dep,
     libgbm_dep,
-    logind_provider_dep,
-    libudev_dep,
     xkbcommon_dep,
   ]
 endif
