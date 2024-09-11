@@ -125,6 +125,12 @@ typedef struct _MetaKmsCrtcUpdate
     gboolean has_update;
     gboolean is_enabled;
   } vrr;
+
+  struct {
+    gboolean has_update;
+    int strength;
+  } adaptive_sharpness;
+
 } MetaKmsCrtcUpdate;
 
 typedef struct _MetaKmsPageFlipListener

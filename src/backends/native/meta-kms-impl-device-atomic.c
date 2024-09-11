@@ -384,6 +384,22 @@ process_crtc_update (MetaKmsImplDevice  *impl_device,
         return FALSE;
     }
 
+  if (crtc_update->adaptive_sharpness.has_update)
+    {
+      meta_topic (META_DEBUG_KMS,
+                  "[atomic] Setting Adaptive Sharpness Filter strength"
+                  " of CRTC %u (%s) to %d",meta_kms_crtc_get_id (crtc),
+                  meta_kms_impl_device_get_path (impl_device),
+                  crtc_update->adaptive_sharpness.strength);
+
+      if (!add_crtc_property (impl_device,
+                              crtc, req,
+                              META_KMS_CRTC_PROP_SHARPNESS_FILTER,
+                              crtc_update->adaptive_sharpness.strength,
+                              error))
+        return FALSE;
+    }
+
   return TRUE;
 }
 
@@ -456,6 +472,13 @@ process_mode_set (MetaKmsImplDevice  *impl_device,
       if (!add_crtc_property (impl_device,
                               crtc, req,
                               META_KMS_CRTC_PROP_ACTIVE,
+                              0,
+                              error))
+        return FALSE;
+
+      if (!add_crtc_property (impl_device,
+                              crtc, req,
+                              META_KMS_CRTC_PROP_SHARPNESS_FILTER,
                               0,
                               error))
         return FALSE;
@@ -1048,6 +1071,13 @@ disable_crtcs (MetaKmsImplDevice  *impl_device,
       if (!add_crtc_property (impl_device,
                               crtc, req,
                               META_KMS_CRTC_PROP_MODE_ID,
+                              0,
+                              error))
+        return FALSE;
+
+      if (!add_crtc_property (impl_device,
+                              crtc, req,
+                              META_KMS_CRTC_PROP_SHARPNESS_FILTER,
                               0,
                               error))
         return FALSE;
