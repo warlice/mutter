@@ -266,7 +266,8 @@ update_sm_hints (MetaWindow *window)
     }
   else
     {
-      meta_verbose ("Didn't find a client leader for %s", window->desc);
+      meta_topic (META_DEBUG_X11,
+                  "Didn't find a client leader for %s", window->desc);
 
       if (!meta_prefs_get_disable_workarounds ())
         {
@@ -279,14 +280,20 @@ update_sm_hints (MetaWindow *window)
                                        &priv->sm_client_id);
 
           if (priv->sm_client_id)
-            meta_warning ("Window %s sets SM_CLIENT_ID on itself, instead of on the WM_CLIENT_LEADER window as specified in the ICCCM.",
+            {
+              meta_topic (META_DEBUG_X11,
+                          "Window %s sets SM_CLIENT_ID on itself, "
+                          "instead of on the WM_CLIENT_LEADER window "
+                          "as specified in the ICCCM.",
                           window->desc);
+            }
         }
     }
 
-  meta_verbose ("Window %s client leader: 0x%lx SM_CLIENT_ID: '%s'",
-                window->desc, priv->xclient_leader,
-                priv->sm_client_id ? priv->sm_client_id : "none");
+  meta_topic (META_DEBUG_X11,
+              "Window %s client leader: 0x%lx SM_CLIENT_ID: '%s'",
+              window->desc, priv->xclient_leader,
+              priv->sm_client_id ? priv->sm_client_id : "none");
 }
 
 static void
@@ -725,7 +732,8 @@ meta_window_x11_unmanage (MetaWindow *window)
       /* We need to clean off the window's state so it
        * won't be restored if the app maps it again.
        */
-      meta_verbose ("Cleaning state from window %s", window->desc);
+      meta_topic (META_DEBUG_X11,
+                  "Cleaning state from window %s", window->desc);
       XDeleteProperty (x11_display->xdisplay,
                        priv->xwindow,
                        x11_display->atom__NET_WM_DESKTOP);
@@ -1325,7 +1333,8 @@ update_gtk_edge_constraints (MetaWindow *window)
 
   data[0] = edge_constraints_to_gtk_edge_constraints (window);
 
-  meta_verbose ("Setting _GTK_EDGE_CONSTRAINTS to %lu", data[0]);
+  meta_topic (META_DEBUG_X11,
+              "Setting _GTK_EDGE_CONSTRAINTS to %lu", data[0]);
 
   mtk_x11_error_trap_push (x11_display->xdisplay);
   XChangeProperty (x11_display->xdisplay,
@@ -1359,8 +1368,9 @@ meta_window_x11_current_workspace_changed (MetaWindow *window)
 
   data[0] = meta_window_get_net_wm_desktop (window);
 
-  meta_verbose ("Setting _NET_WM_DESKTOP of %s to %lu",
-                window->desc, data[0]);
+  meta_topic (META_DEBUG_X11,
+              "Setting _NET_WM_DESKTOP of %s to %lu",
+              window->desc, data[0]);
 
   mtk_x11_error_trap_push (x11_display->xdisplay);
   XChangeProperty (x11_display->xdisplay,
@@ -1652,7 +1662,7 @@ meta_window_x11_update_struts (MetaWindow *window)
 
   g_return_val_if_fail (!window->override_redirect, FALSE);
 
-  meta_verbose ("Updating struts for %s", window->desc);
+  meta_topic (META_DEBUG_X11, "Updating struts for %s", window->desc);
 
   Window xwindow = meta_window_x11_get_xwindow (window);
   old_struts = g_steal_pointer (&window->struts);
@@ -1664,9 +1674,11 @@ meta_window_x11_update_struts (MetaWindow *window)
                                    &struts, &nitems))
     {
       if (nitems != 12)
-        meta_verbose ("_NET_WM_STRUT_PARTIAL on %s has %d values instead "
-                      "of 12",
+        {
+          meta_topic (META_DEBUG_X11,
+                      "_NET_WM_STRUT_PARTIAL on %s has %d values instead of 12.",
                       window->desc, nitems);
+        }
       else
         {
           /* Pull out the strut info for each side in the hint */
@@ -1722,17 +1734,19 @@ meta_window_x11_update_struts (MetaWindow *window)
               new_struts = g_slist_prepend (new_struts, temp);
             }
 
-          meta_verbose ("_NET_WM_STRUT_PARTIAL struts %u %u %u %u for "
-                        "window %s",
-                        struts[0], struts[1], struts[2], struts[3],
-                        window->desc);
+          meta_topic (META_DEBUG_X11,
+                      "_NET_WM_STRUT_PARTIAL struts %u %u %u %u for "
+                      "window %s",
+                      struts[0], struts[1], struts[2], struts[3],
+                      window->desc);
         }
       g_free (struts);
     }
   else
     {
-      meta_verbose ("No _NET_WM_STRUT property for %s",
-                    window->desc);
+      meta_topic (META_DEBUG_X11,
+                  "No _NET_WM_STRUT property for %s",
+                  window->desc);
     }
 
   if (!new_struts &&
@@ -1742,8 +1756,9 @@ meta_window_x11_update_struts (MetaWindow *window)
                                    &struts, &nitems))
     {
       if (nitems != 4)
-        meta_verbose ("_NET_WM_STRUT on %s has %d values instead of 4",
-                      window->desc, nitems);
+        meta_topic (META_DEBUG_X11,
+                    "_NET_WM_STRUT on %s has %d values instead of 4",
+                    window->desc, nitems);
       else
         {
           /* Pull out the strut info for each side in the hint */
@@ -1787,16 +1802,17 @@ meta_window_x11_update_struts (MetaWindow *window)
               new_struts = g_slist_prepend (new_struts, temp);
             }
 
-          meta_verbose ("_NET_WM_STRUT struts %u %u %u %u for window %s",
-                        struts[0], struts[1], struts[2], struts[3],
-                        window->desc);
+          meta_topic (META_DEBUG_X11,
+                      "_NET_WM_STRUT struts %u %u %u %u for window %s",
+                      struts[0], struts[1], struts[2], struts[3],
+                      window->desc);
         }
       g_free (struts);
     }
   else if (!new_struts)
     {
-      meta_verbose ("No _NET_WM_STRUT property for %s",
-                    window->desc);
+      meta_topic (META_DEBUG_X11, "No _NET_WM_STRUT property for %s",
+                  window->desc);
     }
 
   /* Determine whether old_struts and new_struts are the same */
@@ -2160,15 +2176,16 @@ meta_window_x11_constructed (GObject *object)
   XWindowAttributes attrs = priv->attributes;
   MtkRectangle rect;
 
-  meta_verbose ("attrs->map_state = %d (%s)",
-                attrs.map_state,
-                (attrs.map_state == IsUnmapped) ?
-                "IsUnmapped" :
-                (attrs.map_state == IsViewable) ?
-                "IsViewable" :
-                (attrs.map_state == IsUnviewable) ?
-                "IsUnviewable" :
-                "(unknown)");
+  meta_topic (META_DEBUG_X11,
+              "attrs->map_state = %d (%s)",
+              attrs.map_state,
+              (attrs.map_state == IsUnmapped) ?
+              "IsUnmapped" :
+              (attrs.map_state == IsViewable) ?
+              "IsViewable" :
+              (attrs.map_state == IsUnviewable) ?
+              "IsUnviewable" :
+              "(unknown)");
 
   window->client_type = META_WINDOW_CLIENT_TYPE_X11;
   window->override_redirect = attrs.override_redirect;
@@ -2398,7 +2415,7 @@ meta_window_x11_set_net_wm_state (MetaWindow *window)
       ++i;
     }
 
-  meta_verbose ("Setting _NET_WM_STATE with %d atoms", i);
+  meta_topic (META_DEBUG_X11, "Setting _NET_WM_STATE with %d atoms", i);
 
   mtk_x11_error_trap_push (x11_display->xdisplay);
   XChangeProperty (x11_display->xdisplay, priv->xwindow,
@@ -2434,7 +2451,7 @@ meta_window_x11_set_net_wm_state (MetaWindow *window)
             meta_x11_display_logical_monitor_to_xinerama_index (window->display->x11_display,
                                                                 window->fullscreen_monitors.right);
 
-          meta_verbose ("Setting _NET_WM_FULLSCREEN_MONITORS");
+          meta_topic (META_DEBUG_X11, "Setting _NET_WM_FULLSCREEN_MONITORS");
           mtk_x11_error_trap_push (x11_display->xdisplay);
           XChangeProperty (x11_display->xdisplay,
                            priv->xwindow,
@@ -2445,7 +2462,7 @@ meta_window_x11_set_net_wm_state (MetaWindow *window)
         }
       else
         {
-          meta_verbose ("Clearing _NET_WM_FULLSCREEN_MONITORS");
+          meta_topic (META_DEBUG_X11, "Clearing _NET_WM_FULLSCREEN_MONITORS");
           mtk_x11_error_trap_push (x11_display->xdisplay);
           XDeleteProperty (x11_display->xdisplay,
                            priv->xwindow,
@@ -2995,13 +3012,10 @@ meta_window_move_resize_request (MetaWindow  *window,
               window->has_fullscreen_func &&
               !window->fullscreen)
             {
-              /*
               meta_topic (META_DEBUG_GEOMETRY,
-              */
-              meta_warning (
-                           "Treating resize request of legacy application %s as a "
-                           "fullscreen request",
-                           window->desc);
+                          "Treating resize request of legacy application %s as a "
+                          "fullscreen request",
+                          window->desc);
               meta_window_make_fullscreen_internal (window);
             }
         }
@@ -3131,8 +3145,9 @@ meta_window_x11_configure_request (MetaWindow *window,
                 return TRUE;
 
               meta_topic (META_DEBUG_STACK,
-                      "xconfigure stacking request from window %s sibling %s stackmode %d",
-                      window->desc, sibling->desc, event->xconfigurerequest.detail);
+                          "xconfigure stacking request from window %s "
+                          "sibling %s stackmode %d",
+                          window->desc, sibling->desc, event->xconfigurerequest.detail);
             }
           restack_window (window, sibling, event->xconfigurerequest.detail);
         }
@@ -3153,8 +3168,8 @@ meta_window_x11_impl_process_property_notify (MetaWindow     *window,
       char *property_name = XGetAtomName (window->display->x11_display->xdisplay,
                                           event->atom);
 
-      meta_verbose ("Property notify on %s for %s",
-                    window->desc, property_name);
+      meta_topic (META_DEBUG_X11, "Property notify on %s for %s",
+                  window->desc, property_name);
       XFree (property_name);
     }
 
@@ -3352,10 +3367,10 @@ meta_window_x11_client_message (MetaWindow *window,
 	timestamp = event->xclient.data.l[0];
       else
         {
-          meta_warning ("Receiving a NET_CLOSE_WINDOW message for %s without "
-                        "a timestamp!  This means some buggy (outdated) "
-                        "application is on the loose!",
-                        window->desc);
+          meta_topic (META_DEBUG_X11,
+                      "Receiving a NET_CLOSE_WINDOW message for %s without "
+                      "an expected timestamp.",
+                      window->desc);
           timestamp = meta_display_get_current_time (window->display);
         }
 
@@ -3372,8 +3387,8 @@ meta_window_x11_client_message (MetaWindow *window,
 
       space = event->xclient.data.l[0];
 
-      meta_verbose ("Request to move %s to workspace %d",
-                    window->desc, space);
+      meta_topic (META_DEBUG_X11, "Request to move %s to workspace %d",
+                  window->desc, space);
 
       workspace =
         meta_workspace_manager_get_workspace_by_index (workspace_manager,
@@ -3384,10 +3399,10 @@ meta_window_x11_client_message (MetaWindow *window,
       else if (space == (int) 0xFFFFFFFF)
         meta_window_stick (window);
       else
-        meta_verbose ("No such workspace %d for screen", space);
+        meta_topic (META_DEBUG_X11, "No such workspace %d for screen", space);
 
-      meta_verbose ("Window %s now on_all_workspaces = %d",
-                    window->desc, window->on_all_workspaces);
+      meta_topic (META_DEBUG_X11, "Window %s now on_all_workspaces = %d",
+                  window->desc, window->on_all_workspaces);
 
       return TRUE;
     }
@@ -3417,10 +3432,10 @@ meta_window_x11_client_message (MetaWindow *window,
           if (mtk_x11_error_trap_pop_with_return (x11_display->xdisplay) != Success)
             str2 = NULL;
 
-          meta_verbose ("Request to change _NET_WM_STATE action %lu atom1: %s atom2: %s",
-                        action,
-                        str1 ? str1 : "(unknown)",
-                        str2 ? str2 : "(unknown)");
+          meta_topic (META_DEBUG_X11, "Request to change _NET_WM_STATE action %lu atom1: %s atom2: %s",
+                      action,
+                      str1 ? str1 : "(unknown)",
+                      str2 ? str2 : "(unknown)");
 
           meta_XFree (str1);
           meta_XFree (str2);
@@ -3552,8 +3567,8 @@ meta_window_x11_client_message (MetaWindow *window,
   else if (event->xclient.message_type ==
            x11_display->atom_WM_CHANGE_STATE)
     {
-      meta_verbose ("WM_CHANGE_STATE client message, state: %ld",
-                    event->xclient.data.l[0]);
+      meta_topic (META_DEBUG_X11, "WM_CHANGE_STATE client message, state: %ld",
+                  event->xclient.data.l[0]);
       if (event->xclient.data.l[0] == IconicState)
         meta_window_minimize (window);
 
@@ -3769,8 +3784,8 @@ meta_window_x11_client_message (MetaWindow *window,
       MetaClientType source_indication;
       guint32        timestamp;
 
-      meta_verbose ("_NET_ACTIVE_WINDOW request for window '%s', activating",
-                    window->desc);
+      meta_topic (META_DEBUG_X11, "_NET_ACTIVE_WINDOW request for window '%s', activating",
+                  window->desc);
 
       source_indication = event->xclient.data.l[0];
       timestamp = event->xclient.data.l[1];
@@ -3781,9 +3796,10 @@ meta_window_x11_client_message (MetaWindow *window,
       if (timestamp == 0)
         {
           /* Client using older EWMH _NET_ACTIVE_WINDOW without a timestamp */
-          meta_warning ("Buggy client sent a _NET_ACTIVE_WINDOW message with a "
-                        "timestamp of 0 for %s",
-                        window->desc);
+          meta_topic (META_DEBUG_X11,
+                      "Client sent a _NET_ACTIVE_WINDOW message with an invalid"
+                      "timestamp of 0 for %s",
+                      window->desc);
           timestamp = meta_display_get_current_time (display);
         }
 
@@ -3795,8 +3811,9 @@ meta_window_x11_client_message (MetaWindow *window,
     {
       MetaLogicalMonitor *top, *bottom, *left, *right;
 
-      meta_verbose ("_NET_WM_FULLSCREEN_MONITORS request for window '%s'",
-                    window->desc);
+      meta_topic (META_DEBUG_X11,
+                  "_NET_WM_FULLSCREEN_MONITORS request for window '%s'",
+                  window->desc);
 
       top =
         meta_x11_display_xinerama_index_to_logical_monitor (window->display->x11_display,
@@ -4037,12 +4054,12 @@ meta_window_x11_new (MetaDisplay       *display,
   MetaWindow *window = NULL;
   gulong event_mask;
 
-  meta_verbose ("Attempting to manage 0x%lx", xwindow);
+  meta_topic (META_DEBUG_X11, "Attempting to manage 0x%lx", xwindow);
 
   if (meta_x11_display_xwindow_is_a_no_focus_window (x11_display, xwindow))
     {
-      meta_verbose ("Not managing no_focus_window 0x%lx",
-                    xwindow);
+      meta_topic (META_DEBUG_X11, "Not managing no_focus_window 0x%lx",
+                  xwindow);
       return NULL;
     }
 
@@ -4057,32 +4074,32 @@ meta_window_x11_new (MetaDisplay       *display,
 
   if (!XGetWindowAttributes (x11_display->xdisplay, xwindow, &attrs))
     {
-      meta_verbose ("Failed to get attributes for window 0x%lx",
-                    xwindow);
+      meta_topic (META_DEBUG_X11, "Failed to get attributes for window 0x%lx",
+                  xwindow);
       goto error;
     }
 
   if (attrs.root != x11_display->xroot)
     {
-      meta_verbose ("Not on our screen");
+      meta_topic (META_DEBUG_X11, "Not on our screen");
       goto error;
     }
 
   if (attrs.class == InputOnly)
     {
-      meta_verbose ("Not managing InputOnly windows");
+      meta_topic (META_DEBUG_X11, "Not managing InputOnly windows");
       goto error;
     }
 
   if (is_our_xwindow (x11_display, xwindow, &attrs))
     {
-      meta_verbose ("Not managing our own windows");
+      meta_topic (META_DEBUG_X11, "Not managing our own windows");
       goto error;
     }
 
   if (maybe_filter_xwindow (display, xwindow, must_be_viewable, &attrs))
     {
-      meta_verbose ("Not managing filtered window");
+      meta_topic (META_DEBUG_X11, "Not managing filtered window");
       goto error;
     }
 
@@ -4099,14 +4116,15 @@ meta_window_x11_new (MetaDisplay       *display,
                                                    &state) &&
             (state == IconicState || state == NormalState)))
         {
-          meta_verbose ("Deciding not to manage unmapped or unviewable window 0x%lx",
-                        xwindow);
+          meta_topic (META_DEBUG_X11,
+                      "Deciding not to manage unmapped or unviewable window 0x%lx",
+                      xwindow);
           goto error;
         }
 
       existing_wm_state = state;
-      meta_verbose ("WM_STATE of %lx = %s", xwindow,
-                    wm_state_to_string (existing_wm_state));
+      meta_topic (META_DEBUG_X11, "WM_STATE of %lx = %s", xwindow,
+                  wm_state_to_string (existing_wm_state));
     }
 
   /*
@@ -4164,8 +4182,9 @@ meta_window_x11_new (MetaDisplay       *display,
 
   if (mtk_x11_error_trap_pop_with_return (x11_display->xdisplay) != Success)
     {
-      meta_verbose ("Window 0x%lx disappeared just as we tried to manage it",
-                    xwindow);
+      meta_topic (META_DEBUG_X11,
+                  "Window 0x%lx disappeared just as we tried to manage it",
+                  xwindow);
       goto error;
     }
 
@@ -4195,8 +4214,9 @@ meta_window_x11_new (MetaDisplay       *display,
     {
       /* WM_STATE said minimized */
       window->minimized = TRUE;
-      meta_verbose ("Window %s had preexisting WM_STATE = IconicState, minimizing",
-                    window->desc);
+      meta_topic (META_DEBUG_X11,
+                  "Window %s had preexisting WM_STATE = IconicState, minimizing",
+                  window->desc);
 
       /* Assume window was previously placed, though perhaps it's
        * been iconic its whole life, we have no way of knowing.
@@ -4274,9 +4294,9 @@ meta_window_x11_recalc_window_type (MetaWindow *window)
                                     priv->type_atom);
           mtk_x11_error_trap_pop (x11_display->xdisplay);
 
-          meta_warning ("Unrecognized type atom [%s] set for %s ",
-                        atom_name ? atom_name : "unknown",
-                        window->desc);
+          g_warning ("Unrecognized type atom [%s] set for %s ",
+                     atom_name ? atom_name : "unknown",
+                     window->desc);
 
           if (atom_name)
             XFree (atom_name);
@@ -4327,8 +4347,8 @@ meta_window_x11_recalc_window_type (MetaWindow *window)
         }
     }
 
-  meta_verbose ("Calculated type %u for %s, old type %u",
-                type, window->desc, type);
+  meta_topic (META_DEBUG_X11, "Calculated type %u for %s, old type %u",
+              type, window->desc, type);
   meta_window_set_type (window, type);
 }
 
@@ -4369,7 +4389,10 @@ meta_window_x11_configure_notify (MetaWindow      *window,
     meta_display_queue_check_fullscreen (window->display);
 
   if (!event->override_redirect && !event->send_event)
-    meta_warning ("Unhandled change of windows override redirect status");
+    {
+      meta_topic (META_DEBUG_X11,
+                  "Unhandled change of windows override redirect status");
+    }
 
   meta_compositor_sync_window_geometry (window->display->compositor, window, FALSE);
 }
@@ -4432,7 +4455,8 @@ meta_window_x11_set_allowed_actions_hint (MetaWindow *window)
 
   g_assert (i <= MAX_N_ACTIONS);
 
-  meta_verbose ("Setting _NET_WM_ALLOWED_ACTIONS with %d atoms", i);
+  meta_topic (META_DEBUG_X11,
+              "Setting _NET_WM_ALLOWED_ACTIONS with %d atoms", i);
 
   mtk_x11_error_trap_push (x11_display->xdisplay);
   XChangeProperty (x11_display->xdisplay,
