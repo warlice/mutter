@@ -241,15 +241,9 @@ meta_udev_backlight_get_type (GList      *devices,
   return NULL;
 }
 
-/*
- * Search for a raw backlight interface, raw backlight interfaces registered
- * by the drm driver will have the drm-connector as their parent, check the
- * drm-connector's enabled sysfs attribute so that we pick the right LCD-panel
- * connector on laptops with hybrid-gfx. Fall back to just picking the first
- * raw backlight interface if no enabled interface is found.
- */
 static GUdevDevice *
-meta_udev_backlight_get_raw (GList *devices)
+meta_udev_backlight_get_raw (GList      *devices,
+                             const char *connector_name)
 {
   GList *l;
 
@@ -257,28 +251,47 @@ meta_udev_backlight_get_raw (GList *devices)
     {
       GUdevDevice *device = l->data;
       GUdevDevice *parent;
-      const char *attr;
+      const char *prop;
 
-      attr = g_udev_device_get_sysfs_attr (device, "type");
-      if (g_strcmp0 (attr, "raw") != 0)
-      continue;
+      /* Only look for raw backlight interfaces */
+      prop = g_udev_device_get_sysfs_attr (device, "type");
+      if (g_strcmp0 (prop, "raw") != 0)
+        continue;
 
       parent = g_udev_device_get_parent (device);
       if (!parent)
         continue;
 
-      attr = g_udev_device_get_sysfs_attr (parent, "enabled");
-      if (!attr || g_strcmp0 (attr, "enabled") != 0)
+      /* Raw backlight interfaces registered by the drm driver will have the
+       * drm-connector as their parent.
+       */
+      prop = g_udev_device_get_subsystem (parent);
+      if (!prop || g_strcmp0 (prop, "drm") != 0)
+        continue;
+
+      /* The drm-connector name is in the form `card[n]-[connector-name]`, so
+       * let's check that the suffix of it matches the connector name to make
+       * sure this backlight belongs to the connector.
+       */
+      prop = g_udev_device_get_name (parent);
+      if (!prop || !g_str_has_suffix (prop, connector_name))
+        continue;
+
+      /* Also make sure the connector is actually enabled */
+      prop = g_udev_device_get_sysfs_attr (parent, "enabled");
+      if (!prop || g_strcmp0 (prop, "enabled") != 0)
         continue;
 
       return G_UDEV_DEVICE (g_object_ref (device));
     }
 
-  return meta_udev_backlight_get_type (devices, "raw");
+  return NULL;
 }
 
 GUdevDevice *
-meta_udev_get_builtin_backlight (MetaUdev *udev)
+meta_udev_get_backlight_for (MetaUdev   *udev,
+                             const char *connector_name,
+                             gboolean    is_internal)
 {
   g_autolist(GUdevDevice) devices = NULL;
   GUdevDevice *device;
@@ -289,19 +302,27 @@ meta_udev_get_builtin_backlight (MetaUdev *udev)
   if (!devices)
     return NULL;
 
-  /* Search the backlight devices and prefer the types:
-  * firmware -> platform -> raw */
-  device = meta_udev_backlight_get_type (devices, "firmware");
+  if (is_internal)
+    {
+      /* For internal monitors, prefer the types firmware -> platform -> raw */
+      device = meta_udev_backlight_get_type (devices, "firmware");
+      if (device)
+        return device;
+
+      device = meta_udev_backlight_get_type (devices, "platform");
+      if (device)
+        return device;
+    }
+
+  /* Try to find a backlight interface matching the connector */
+  device = meta_udev_backlight_get_raw (devices, connector_name);
   if (device)
     return device;
 
-  device = meta_udev_backlight_get_type (devices, "platform");
-  if (device)
-    return device;
-
-  device = meta_udev_backlight_get_raw (devices);
-  if (device)
-    return device;
+  /* For internal monitors, fall back to just picking the first raw backlight
+   * interface if no other interface was found. */
+  if (is_internal)
+    return meta_udev_backlight_get_type (devices, "raw");
 
   return NULL;
 }

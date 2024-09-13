@@ -54,7 +54,9 @@ GList * meta_udev_list_drm_devices (MetaUdev            *udev,
                                     MetaUdevDeviceType   device_type,
                                     GError             **error);
 
-GUdevDevice * meta_udev_get_builtin_backlight (MetaUdev *udev);
+GUdevDevice * meta_udev_get_backlight_for (MetaUdev   *udev,
+                                           const char *connector_name,
+                                           gboolean    is_internal);
 
 void meta_udev_pause (MetaUdev *udev);
 
