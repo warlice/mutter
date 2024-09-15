@@ -342,6 +342,7 @@ gboolean meta_monitor_get_backlight_info (MetaMonitor *monitor,
                                           int         *backlight_min,
                                           int         *backlight_max);
 
+META_EXPORT_TEST
 void meta_monitor_set_backlight (MetaMonitor *monitor,
                                  int          value);
 

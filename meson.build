@@ -41,6 +41,7 @@ harfbuzz_req = '>= 2.6'
 libei_req = '>= 1.0.901'
 udev_req = '>= 228'
 gudev_req = '>= 232'
+umockdev_req = '>= 0.3.0'
 
 # wayland version requirements
 wayland_server_req = '>= 1.23'
@@ -351,6 +352,7 @@ have_x11_tests = false
 if have_tests
   gtk3_dep = dependency('gtk+-3.0', version: gtk3_req)
   dbusmock_dep = python.find_installation('python3', modules: ['dbusmock'], required: false)
+  umockdev_dep = dependency('umockdev-1.0', version: umockdev_req)
 
   if not have_native_backend
     error('Tests require the native backend to be enabled')

@@ -27,6 +27,7 @@
 G_DECLARE_FINAL_TYPE (MetaBacklightSysfs, meta_backlight_sysfs,
                       META, BACKLIGHT_SYSFS, MetaBacklight)
 
+META_EXPORT_TEST
 MetaBacklightSysfs * meta_backlight_sysfs_new (MetaBackend     *backend,
                                                MetaOutputInfo  *output_info,
                                                GError         **error);

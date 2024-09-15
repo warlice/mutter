@@ -56,6 +56,14 @@ meta_backlight_get_name (MetaBacklight *backlight)
   return priv->name;
 }
 
+gboolean
+meta_backlight_has_pending (MetaBacklight *backlight)
+{
+  MetaBacklightPrivate *priv = meta_backlight_get_instance_private (backlight);
+
+  return priv->pending;
+}
+
 void
 meta_backlight_update_brightness_target (MetaBacklight *backlight,
                                          int            brightness)
@@ -155,8 +163,6 @@ meta_backlight_set_brightness (MetaBacklight *backlight,
                                                             NULL);
     }
 }
-
-
 
 int
 meta_backlight_get_brightness (MetaBacklight *backlight)

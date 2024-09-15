@@ -22,6 +22,8 @@
 #include "backends/native/meta-monitor-manager-native.h"
 #include "core/util-private.h"
 
+typedef struct _UMockdevTestbed UMockdevTestbed;
+
 typedef struct _MetaMonitorTestSetup
 {
   GList *modes;

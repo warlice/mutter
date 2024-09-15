@@ -228,6 +228,8 @@ def run_test(args, extra_env):
 
     wrapper = os.getenv('META_DBUS_RUNNER_WRAPPER')
 
+    args = ['umockdev-wrapper'] + args
+
     if wrapper == 'gdb':
         args = ['gdb', '-ex', 'r', '-ex', 'bt full', '--args'] + args
     elif wrapper == 'rr':
