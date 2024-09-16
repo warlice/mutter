@@ -544,7 +544,7 @@ meta_backend_nx11_create_launcher (MetaBackend  *backend,
   MetaLauncher *launcher;
   g_autoptr (GError) local_error = NULL;
 
-  launcher = meta_launcher_new (backend, NULL, NULL, &local_error);
+  launcher = meta_launcher_new (backend, &local_error);
 
   if (!launcher)
     {
