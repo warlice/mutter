@@ -4561,10 +4561,15 @@ meta_window_x11_surface_rect_to_client_rect (MetaWindow   *window,
   meta_frame_calc_borders (priv->frame, &borders);
 
   *client_rect = *surface_rect;
-  client_rect->x += borders.total.left;
-  client_rect->y += borders.total.top;
-  client_rect->width -= borders.total.left + borders.total.right;
-  client_rect->height -= borders.total.top + borders.total.bottom;
+
+  if (client_rect->width >= borders.total.left + borders.total.right &&
+      client_rect->height >= borders.total.top + borders.total.bottom)
+    {
+      client_rect->x += borders.total.left;
+      client_rect->y += borders.total.top;
+      client_rect->width -= borders.total.left + borders.total.right;
+      client_rect->height -= borders.total.top + borders.total.bottom;
+    }
 }
 
 MtkRectangle
