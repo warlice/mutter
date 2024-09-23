@@ -604,6 +604,7 @@ if have_wayland
     'wayland/meta-wayland-client-private.h',
     'wayland/meta-wayland-color-management.c',
     'wayland/meta-wayland-color-management.h',
+    'wayland/meta-wayland-commit-timing.c',
     'wayland/meta-wayland-cursor-surface.c',
     'wayland/meta-wayland-cursor-surface.h',
     'wayland/meta-wayland-data-device.c',
