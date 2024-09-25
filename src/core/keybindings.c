@@ -823,20 +823,20 @@ reload_active_keyboard_layouts (MetaKeyBindingManager *keys)
 static void
 reload_combos (MetaKeyBindingManager *keys)
 {
-  MetaKeyCombo combo;
+  MetaKeyCombo combo[2];
 
   g_hash_table_remove_all (keys->key_bindings_index);
 
   reload_active_keyboard_layouts (keys);
 
-  meta_prefs_get_overlay_binding (&combo);
+  meta_prefs_get_overlay_binding (&combo[0]);
   resolve_key_combo (keys,
-                     &combo,
+                     &combo[0],
                      &keys->overlay_resolved_key_combo);
 
-  meta_prefs_get_locate_pointer_binding (&combo);
+  meta_prefs_get_locate_pointer_binding (&combo[0]);
   resolve_key_combo (keys,
-                     &combo,
+                     &combo[0],
                      &keys->locate_pointer_resolved_key_combo);
 
   reload_iso_next_group_combos (keys);
