@@ -1468,6 +1468,27 @@ button_layout_handler (GVariant *value,
 }
 
 static gboolean
+parse_special_key (const gchar *string_value,
+                   MetaKeyCombo combo[2])
+{
+  g_autofree gchar *string_value_l = NULL;
+  g_autofree gchar *string_value_r = NULL;
+
+  if (meta_parse_accelerator (string_value, &combo[0]))
+    return TRUE;
+
+  string_value_l = g_strconcat (string_value, "_L", NULL);
+  if (!meta_parse_accelerator (string_value_l, &combo[0]))
+    return FALSE;
+
+  string_value_r = g_strconcat (string_value, "_R", NULL);
+  if (!meta_parse_accelerator (string_value_r, &combo[1]))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
 overlay_key_handler (GVariant *value,
                      gpointer *result,
                      gpointer  data)
@@ -1478,7 +1499,7 @@ overlay_key_handler (GVariant *value,
   *result = NULL; /* ignored */
   string_value = g_variant_get_string (value, NULL);
 
-  if (!string_value || !meta_parse_accelerator (string_value, &combo[0]))
+  if (!string_value || !parse_special_key (string_value, combo))
     {
       meta_topic (META_DEBUG_KEYBINDINGS,
                   "Failed to parse value for overlay-key");
@@ -1512,7 +1533,7 @@ locate_pointer_key_handler (GVariant *value,
   *result = NULL; /* ignored */
   string_value = g_variant_get_string (value, NULL);
 
-  if (!string_value || !meta_parse_accelerator (string_value, &combo[0]))
+  if (!string_value || !parse_special_key (string_value, combo))
     {
       meta_topic (META_DEBUG_KEYBINDINGS,
                   "Failed to parse value for locate-pointer-key");
