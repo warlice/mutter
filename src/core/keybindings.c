@@ -829,15 +829,15 @@ reload_combos (MetaKeyBindingManager *keys)
 
   reload_active_keyboard_layouts (keys);
 
-  meta_prefs_get_overlay_binding (&combo[0]);
-  resolve_key_combo (keys,
-                     &combo[0],
-                     &keys->overlay_resolved_key_combo);
+  meta_prefs_get_overlay_binding (combo);
+  resolve_special_key_combo (keys,
+                             combo,
+                             &keys->overlay_resolved_key_combo);
 
-  meta_prefs_get_locate_pointer_binding (&combo[0]);
-  resolve_key_combo (keys,
-                     &combo[0],
-                     &keys->locate_pointer_resolved_key_combo);
+  meta_prefs_get_locate_pointer_binding (combo);
+  resolve_special_key_combo (keys,
+                             combo,
+                             &keys->locate_pointer_resolved_key_combo);
 
   reload_iso_next_group_combos (keys);
 
