@@ -502,6 +502,9 @@ xdg_toplevel_set_fullscreen (struct wl_client   *client,
   if (!window)
     return;
 
+  if (!window->has_fullscreen_func)
+    return;
+
   if (output_resource)
     {
       MetaWaylandOutput *wayland_output;
