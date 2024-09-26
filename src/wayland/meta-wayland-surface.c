@@ -36,6 +36,7 @@
 #include "core/window-private.h"
 #include "wayland/meta-wayland-actor-surface.h"
 #include "wayland/meta-wayland-buffer.h"
+#include "wayland/meta-wayland-fifo.h"
 #include "wayland/meta-wayland-fractional-scale.h"
 #include "wayland/meta-wayland-gtk-shell.h"
 #include "wayland/meta-wayland-outputs.h"
@@ -456,6 +457,9 @@ meta_wayland_surface_state_set_default (MetaWaylandSurfaceState *state)
 
   state->has_new_color_state = FALSE;
   state->color_state = NULL;
+
+  state->fifo_wait = FALSE;
+  state->fifo_barrier = FALSE;
 }
 
 static void
@@ -629,6 +633,12 @@ meta_wayland_surface_state_merge_into (MetaWaylandSurfaceState *from,
       from->subsurface_placement_ops = NULL;
     }
 
+  if (from->fifo_wait)
+    to->fifo_wait = TRUE;
+
+  if (from->fifo_barrier)
+    to->fifo_barrier = TRUE;
+
   /*
    * A new commit indicates a new content update, so any previous
    * content update did not go on screen and needs to be discarded.
@@ -801,6 +811,9 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
          (state->buffer->type != META_WAYLAND_BUFFER_TYPE_SHM &&
           state->buffer->type != META_WAYLAND_BUFFER_TYPE_SINGLE_PIXEL));
     }
+
+  if (state->fifo_barrier)
+    meta_wayland_fifo_barrier_applied (surface);
 
   if (state->has_new_buffer_transform)
     surface->buffer_transform = state->buffer_transform;

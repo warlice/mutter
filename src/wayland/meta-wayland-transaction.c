@@ -240,15 +240,24 @@ has_dependencies (MetaWaylandTransaction *transaction)
 {
   GHashTableIter iter;
   MetaWaylandSurface *surface;
+  MetaWaylandTransactionEntry *entry;
 
   if (transaction->buf_sources &&
       g_hash_table_size (transaction->buf_sources) > 0)
     return TRUE;
 
   g_hash_table_iter_init (&iter, transaction->entries);
-  while (g_hash_table_iter_next (&iter, (gpointer *) &surface, NULL))
+  while (g_hash_table_iter_next (&iter, (gpointer *) &surface,
+                                        (gpointer *) &entry))
     {
       if (surface->transaction.first_committed != transaction)
+        return TRUE;
+
+      if (!entry || !entry->state)
+        continue;
+
+      if (entry->state->fifo_wait && surface->fifo_barrier &&
+          !meta_wayland_surface_is_synchronized (surface))
         return TRUE;
     }
 

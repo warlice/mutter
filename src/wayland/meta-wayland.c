@@ -40,6 +40,7 @@
 #include "wayland/meta-wayland-activation.h"
 #include "wayland/meta-wayland-buffer.h"
 #include "wayland/meta-wayland-color-management.h"
+#include "wayland/meta-wayland-fifo.h"
 #include "wayland/meta-wayland-data-device.h"
 #include "wayland/meta-wayland-dma-buf.h"
 #include "wayland/meta-wayland-egl-stream.h"
@@ -895,6 +896,7 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_init_xdg_wm_dialog (compositor);
   meta_wayland_init_color_management (compositor);
   meta_wayland_xdg_session_management_init (compositor);
+  meta_wayland_init_fifo (compositor);
 
 #ifdef HAVE_NATIVE_BACKEND
   meta_wayland_drm_lease_manager_init (compositor);
