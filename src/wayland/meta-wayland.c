@@ -700,6 +700,7 @@ meta_wayland_compositor_finalize (GObject *object)
 
   g_signal_handlers_disconnect_by_func (stage, on_after_update, compositor);
   g_signal_handlers_disconnect_by_func (stage, on_presented, compositor);
+  g_signal_handlers_disconnect_by_func (stage, on_started, compositor);
 
   meta_wayland_transaction_finalize (compositor);
 
@@ -857,7 +858,6 @@ meta_wayland_compositor_new (MetaContext *context)
                     G_CALLBACK (on_after_update), compositor);
   g_signal_connect (stage, "presented",
                     G_CALLBACK (on_presented), compositor);
-
   g_signal_connect (context, "started",
                     G_CALLBACK (on_started), compositor);
 
