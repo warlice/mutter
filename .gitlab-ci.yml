@@ -450,7 +450,6 @@ build-without-native-backend-and-wayland@x86_64:
     - meson setup . build --werror --prefix /usr
         -Dbuildtype=debugoptimized
         -Dnative_backend=false
-        -Dudev=false
         -Dwayland=false
         -Dxwayland=false
         -Dtests=disabled

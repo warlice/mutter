@@ -20,7 +20,7 @@
 
 #include <gudev/gudev.h>
 
-#include "backends/native/meta-backend-native-types.h"
+#include "backends/meta-backend-types.h"
 #include "core/util-private.h"
 
 typedef enum _MetaUdevDeviceType
@@ -54,8 +54,12 @@ GList * meta_udev_list_drm_devices (MetaUdev            *udev,
                                     MetaUdevDeviceType   device_type,
                                     GError             **error);
 
+GUdevDevice * meta_udev_get_backlight_for (MetaUdev   *udev,
+                                           const char *connector_name,
+                                           gboolean    is_internal);
+
 void meta_udev_pause (MetaUdev *udev);
 
 void meta_udev_resume (MetaUdev *udev);
 
-MetaUdev * meta_udev_new (MetaBackendNative *backend_native);
+MetaUdev * meta_udev_new (MetaBackend *backend);

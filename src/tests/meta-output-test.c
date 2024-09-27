@@ -21,34 +21,7 @@
 
 G_DEFINE_TYPE (MetaOutputTest, meta_output_test, META_TYPE_OUTPUT_NATIVE)
 
-static void
-on_backlight_changed (MetaOutput *output)
-{
-  const MetaOutputInfo *info = meta_output_get_info (output);
-  int value = meta_output_get_backlight (output);
-
-  g_assert_cmpint (info->backlight_min, <=, value);
-  g_assert_cmpint (info->backlight_max, >=, value);
-}
-
-static void
-meta_output_test_constructed (GObject *object)
-{
-  MetaOutput *output = META_OUTPUT (object);
-  const MetaOutputInfo *info = meta_output_get_info (output);
-
-  if (info->backlight_min != info->backlight_max)
-    {
-      int backlight_range = info->backlight_max - info->backlight_min;
-
-      meta_output_set_backlight (output,
-                                 info->backlight_min + backlight_range / 2);
-      g_signal_connect (output, "backlight-changed",
-                        G_CALLBACK (on_backlight_changed), NULL);
-    }
-
-  G_OBJECT_CLASS (meta_output_test_parent_class)->constructed (object);
-}
+G_DEFINE_TYPE (MetaBacklightTest, meta_backlight_test, META_TYPE_BACKLIGHT)
 
 static GBytes *
 meta_output_test_read_edid (MetaOutputNative *output_native)
@@ -59,10 +32,7 @@ meta_output_test_read_edid (MetaOutputNative *output_native)
 static void
 meta_output_test_class_init (MetaOutputTestClass *klass)
 {
-  GObjectClass *object_class = G_OBJECT_CLASS (klass);
   MetaOutputNativeClass *output_native_class = META_OUTPUT_NATIVE_CLASS (klass);
-
-  object_class->constructed = meta_output_test_constructed;
 
   output_native_class->read_edid = meta_output_test_read_edid;
 }
@@ -71,4 +41,44 @@ static void
 meta_output_test_init (MetaOutputTest *output_test)
 {
   output_test->scale = 1;
+}
+
+static void
+meta_backlight_test_set_brightness (MetaBacklight       *backlight,
+                                    int                  brightness_target,
+                                    GCancellable        *cancellable,
+                                    GAsyncReadyCallback  callback,
+                                    gpointer             user_data)
+{
+  MetaBacklightTest *backlight_test = META_BACKLIGHT_TEST (backlight);
+  g_autoptr (GTask) task = NULL;
+
+  task = g_task_new (backlight_test, cancellable, callback, user_data);
+  g_task_set_task_data (task, GINT_TO_POINTER (brightness_target), NULL);
+
+  g_task_return_int (task, brightness_target);
+}
+
+static int
+meta_backlight_test_set_brightness_finish (MetaBacklight  *backlight,
+                                           GAsyncResult   *result,
+                                           GError        **error)
+{
+  g_return_val_if_fail (g_task_is_valid (result, backlight), -1);
+
+  return g_task_propagate_int (G_TASK (result), error);
+}
+
+static void
+meta_backlight_test_class_init (MetaBacklightTestClass *klass)
+{
+  MetaBacklightClass *backlight_class = META_BACKLIGHT_CLASS (klass);
+
+  backlight_class->set_brightness = meta_backlight_test_set_brightness;
+  backlight_class->set_brightness_finish = meta_backlight_test_set_brightness_finish;
+}
+
+static void
+meta_backlight_test_init (MetaBacklightTest *backlight_test)
+{
 }

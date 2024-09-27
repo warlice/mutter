@@ -21,8 +21,8 @@
 
 #include "backends/meta-logical-monitor.h"
 #include "backends/meta-monitor-manager-private.h"
+#include "backends/meta-udev.h"
 #include "backends/native/meta-backend-native.h"
-#include "backends/native/meta-udev.h"
 #include "core/display-private.h"
 #include "meta-test/meta-context-test.h"
 #include "tests/drm-mock/drm-mock.h"
@@ -72,7 +72,7 @@ static void
 meta_test_headless_monitor_connect (void)
 {
   MetaBackend *backend = meta_context_get_backend (test_context);
-  MetaUdev *udev = meta_backend_native_get_udev (META_BACKEND_NATIVE (backend));
+  MetaUdev *udev = meta_backend_get_udev (backend);
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
   g_autolist (GObject) udev_devices = NULL;

@@ -27,6 +27,7 @@
 #include "backends/meta-monitor-manager-private.h"
 #include "backends/meta-settings-private.h"
 #include "backends/meta-output.h"
+#include "backends/meta-backlight.h"
 #include "core/boxes-private.h"
 
 #define SCALE_FACTORS_PER_INTEGER 4
@@ -386,16 +387,7 @@ meta_monitor_is_laptop_panel (MetaMonitor *monitor)
   const MetaOutputInfo *output_info =
     meta_monitor_get_main_output_info (monitor);
 
-  switch (output_info->connector_type)
-    {
-    case META_CONNECTOR_TYPE_eDP:
-    case META_CONNECTOR_TYPE_LVDS:
-    case META_CONNECTOR_TYPE_DSI:
-    case META_CONNECTOR_TYPE_DPI:
-      return TRUE;
-    default:
-      return FALSE;
-    }
+  return meta_output_info_is_laptop_panel (output_info);
 }
 
 gboolean
@@ -2408,23 +2400,15 @@ meta_monitor_get_backlight_info (MetaMonitor *monitor,
                                  int         *backlight_max)
 {
   MetaOutput *main_output;
-  int value;
+  MetaBacklight *backlight;
 
   main_output = meta_monitor_get_main_output (monitor);
-  value = meta_output_get_backlight (main_output);
-  if (value >= 0)
-    {
-      const MetaOutputInfo *output_info = meta_output_get_info (main_output);
-      if (backlight_min)
-        *backlight_min = output_info->backlight_min;
-      if (backlight_max)
-        *backlight_max = output_info->backlight_max;
-      return TRUE;
-    }
-  else
-    {
-      return FALSE;
-    }
+  backlight = meta_output_get_backlight (main_output);
+  if (!backlight)
+    return FALSE;
+
+  meta_backlight_get_brightness_info (backlight, backlight_min, backlight_max);
+  return TRUE;
 }
 
 void
@@ -2437,8 +2421,12 @@ meta_monitor_set_backlight (MetaMonitor *monitor,
   for (l = priv->outputs; l; l = l->next)
     {
       MetaOutput *output = l->data;
+      MetaBacklight *backlight = meta_output_get_backlight (output);
 
-      meta_output_set_backlight (output, value);
+      if (!backlight)
+        continue;
+
+      meta_backlight_set_brightness (backlight, value);
     }
 }
 
@@ -2446,16 +2434,16 @@ gboolean
 meta_monitor_get_backlight (MetaMonitor *monitor,
                             int         *value)
 {
-  if (meta_monitor_get_backlight_info (monitor, NULL, NULL))
-    {
-      MetaOutput *main_output;
+  MetaOutput *main_output;
+  MetaBacklight *backlight;
 
-      main_output = meta_monitor_get_main_output (monitor);
-      *value = meta_output_get_backlight (main_output);
-      return TRUE;
-    }
-  else
-    {
-      return FALSE;
-    }
+  main_output = meta_monitor_get_main_output (monitor);
+  backlight = meta_output_get_backlight (main_output);
+  if (!backlight)
+    return FALSE;
+
+  if (value)
+    *value = meta_backlight_get_brightness (backlight);
+
+  return TRUE;
 }

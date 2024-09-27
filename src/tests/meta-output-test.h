@@ -17,11 +17,12 @@
 
 #pragma once
 
+#include "backends/meta-backlight-private.h"
 #include "backends/native/meta-output-native.h"
 
 struct _MetaOutputTest
 {
-  MetaOutput parent;
+  MetaOutputNative parent;
 
   float scale;
 };
@@ -31,3 +32,14 @@ META_EXPORT
 G_DECLARE_FINAL_TYPE (MetaOutputTest, meta_output_test,
                       META, OUTPUT_TEST,
                       MetaOutputNative)
+
+struct _MetaBacklightTest
+{
+  MetaBacklight parent;
+};
+
+#define META_TYPE_BACKLIGHT_TEST (meta_backlight_test_get_type ())
+META_EXPORT
+G_DECLARE_FINAL_TYPE (MetaBacklightTest, meta_backlight_test,
+                      META, BACKLIGHT_TEST,
+                      MetaBacklight)

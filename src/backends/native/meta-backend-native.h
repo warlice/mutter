@@ -23,11 +23,12 @@
 #pragma once
 
 #include "backends/meta-backend-private.h"
+#include "backends/meta-launcher.h"
+#include "backends/meta-udev.h"
 #include "backends/native/meta-clutter-backend-native.h"
 #include "backends/native/meta-kms-types.h"
-#include "backends/native/meta-launcher.h"
-#include "backends/native/meta-udev.h"
 
+#define META_BACKEND_HEADLESS_INPUT_SEAT "meta-headless-seat0"
 #define META_BACKEND_TEST_INPUT_SEAT "meta-test-seat0"
 
 #define META_TYPE_BACKEND_NATIVE (meta_backend_native_get_type ())
@@ -38,15 +39,6 @@ G_DECLARE_DERIVABLE_TYPE (MetaBackendNative, meta_backend_native,
 gboolean meta_backend_native_activate_vt (MetaBackendNative  *backend_native,
                                           int                 vt,
                                           GError            **error);
-
-void meta_backend_native_pause (MetaBackendNative *backend_native);
-
-void meta_backend_native_resume (MetaBackendNative *backend_native);
-
-MetaLauncher * meta_backend_native_get_launcher (MetaBackendNative *native);
-
-META_EXPORT_TEST
-MetaUdev * meta_backend_native_get_udev (MetaBackendNative *native);
 
 META_EXPORT_TEST
 MetaKms * meta_backend_native_get_kms (MetaBackendNative *native);

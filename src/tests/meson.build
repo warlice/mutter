@@ -49,6 +49,7 @@ tests_deps = [
   locally_compiled_schemas_dep,
   wayland_client_dep,
   gvdb_dep,
+  umockdev_dep,
 ]
 
 libmutter_test = shared_library(libmutter_test_name,
@@ -198,7 +199,6 @@ tests_datadir = pkgdatadir / 'tests'
 install_data(
   [
     'mutter_dbusrunner.py',
-    'logind_helpers.py',
     'socket-launch.sh',
   ],
   install_dir: tests_datadir,
@@ -238,6 +238,23 @@ privileged_test_cases = []
 
 subdir('mtk')
 
+backlight_client = executable('monitor-backlight-client',
+  sources: [
+    'monitor-backlight-client.c',
+    built_dbus_sources['meta-dbus-display-config'],
+  ],
+  include_directories: tests_includes,
+  c_args: [
+    tests_c_args,
+    '-DG_LOG_DOMAIN="mutter-monitor-backlight-test-client"',
+  ],
+  dependencies: [
+    gio_dep,
+  ],
+  install: have_installed_tests,
+  install_dir: mutter_installed_tests_libexecdir,
+)
+
 test_cases += [
   {
     'name': 'unit',
@@ -275,7 +292,10 @@ test_cases += [
   {
     'name': 'monitor-backlight',
     'suite': 'backend',
-    'sources': [ 'monitor-backlight-tests.c', ]
+    'sources': [ 'monitor-backlight-tests.c', ],
+    'depends': [
+      backlight_client,
+    ],
   },
   {
     'name': 'stage-views',
@@ -334,23 +354,6 @@ screen_cast_client = executable('mutter-screen-cast-client',
   install: have_installed_tests,
   install_dir: mutter_installed_tests_libexecdir,
   install_rpath: pkglibdir,
-)
-
-backlight_client = executable('monitor-backlight-client',
-  sources: [
-    'monitor-backlight-client.c',
-    built_dbus_sources['meta-dbus-display-config'],
-  ],
-  include_directories: tests_includes,
-  c_args: [
-    tests_c_args,
-    '-DG_LOG_DOMAIN="mutter-monitor-backlight-test-client"',
-  ],
-  dependencies: [
-    gio_dep,
-  ],
-  install: have_installed_tests,
-  install_dir: mutter_installed_tests_libexecdir,
 )
 
 input_capture_client = executable('mutter-input-capture-test-client',

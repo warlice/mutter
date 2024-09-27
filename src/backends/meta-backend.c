@@ -62,7 +62,9 @@
 #include "backends/meta-input-capture.h"
 #include "backends/meta-input-mapper-private.h"
 #include "backends/meta-input-settings-private.h"
+#include "backends/meta-launcher.h"
 #include "backends/meta-logical-monitor.h"
+#include "backends/meta-udev.h"
 #include "backends/meta-monitor-manager-dummy.h"
 #include "backends/meta-remote-access-controller-private.h"
 #include "backends/meta-settings-private.h"
@@ -142,6 +144,8 @@ struct _MetaBackendPrivate
   MetaIdleManager *idle_manager;
   MetaRenderer *renderer;
   MetaColorManager *color_manager;
+  MetaLauncher *launcher;
+  MetaUdev *udev;
 #ifdef HAVE_EGL
   MetaEgl *egl;
 #endif
@@ -206,6 +210,14 @@ G_DEFINE_ABSTRACT_TYPE_WITH_CODE (MetaBackend, meta_backend, G_TYPE_OBJECT,
                                   G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                          initable_iface_init));
 
+static void on_device_added (ClutterSeat        *seat,
+                             ClutterInputDevice *device,
+                             gpointer            user_data);
+
+static void on_device_removed (ClutterSeat        *seat,
+                               ClutterInputDevice *device,
+                               gpointer            user_data);
+
 static void
 meta_backend_dispose (GObject *object)
 {
@@ -225,33 +237,7 @@ meta_backend_dispose (GObject *object)
   g_clear_object (&priv->remote_access_controller);
   g_clear_object (&priv->dnd);
 
-#ifdef HAVE_LIBWACOM
-  g_clear_pointer (&priv->wacom_db, libwacom_database_destroy);
-#endif
-#ifdef HAVE_GNOME_DESKTOP
-  g_clear_object (&priv->pnp_ids);
-#endif
-
-  if (priv->sleep_signal_id)
-    {
-      g_dbus_connection_signal_unsubscribe (priv->system_bus, priv->sleep_signal_id);
-      priv->sleep_signal_id = 0;
-    }
-
-  if (priv->upower_watch_id)
-    {
-      g_bus_unwatch_name (priv->upower_watch_id);
-      priv->upower_watch_id = 0;
-    }
-
-  g_cancellable_cancel (priv->cancellable);
-  g_clear_object (&priv->cancellable);
-  g_clear_object (&priv->system_bus);
-  g_clear_object (&priv->upower_proxy);
-
   g_clear_handle_id (&priv->device_update_idle_id, g_source_remove);
-
-  g_clear_object (&priv->settings);
 
   g_clear_pointer (&priv->default_seat, clutter_seat_destroy);
   g_clear_pointer (&priv->stage, clutter_actor_destroy);
@@ -260,13 +246,49 @@ meta_backend_dispose (GObject *object)
   /* the renderer keeps references to color devices which keep references
    * to the color manager. */
   g_clear_object (&priv->color_manager);
-#ifdef HAVE_EGL
-  g_clear_object (&priv->egl);
-#endif
   g_clear_pointer (&priv->clutter_context, clutter_context_destroy);
   g_clear_list (&priv->gpus, g_object_unref);
 
   G_OBJECT_CLASS (meta_backend_parent_class)->dispose (object);
+}
+
+static void
+meta_backend_finalize (GObject *object)
+{
+  MetaBackend *backend = META_BACKEND (object);
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  g_cancellable_cancel (priv->cancellable);
+  g_clear_object (&priv->cancellable);
+
+  if (priv->sleep_signal_id)
+    {
+      g_dbus_connection_signal_unsubscribe (priv->system_bus, priv->sleep_signal_id);
+      priv->sleep_signal_id = 0;
+    }
+  g_clear_object (&priv->system_bus);
+
+  if (priv->upower_watch_id)
+    {
+      g_bus_unwatch_name (priv->upower_watch_id);
+      priv->upower_watch_id = 0;
+    }
+  g_clear_object (&priv->upower_proxy);
+
+  g_clear_object (&priv->settings);
+  g_clear_object (&priv->launcher);
+  g_clear_object (&priv->udev);
+ #ifdef HAVE_EGL
+  g_clear_object (&priv->egl);
+ #endif
+#ifdef HAVE_LIBWACOM
+  g_clear_pointer (&priv->wacom_db, libwacom_database_destroy);
+#endif
+#ifdef HAVE_GNOME_DESKTOP
+  g_clear_object (&priv->pnp_ids);
+#endif
+
+  G_OBJECT_CLASS (meta_backend_parent_class)->finalize (object);
 }
 
 void
@@ -499,33 +521,6 @@ on_device_removed (ClutterSeat        *seat,
 }
 
 static void
-input_mapper_device_mapped_cb (MetaInputMapper    *mapper,
-                               ClutterInputDevice *device,
-                               float               matrix[6],
-                               MetaInputSettings  *input_settings)
-{
-  meta_input_settings_set_device_matrix (input_settings, device, matrix);
-}
-
-static void
-input_mapper_device_enabled_cb (MetaInputMapper    *mapper,
-                                ClutterInputDevice *device,
-                                gboolean            enabled,
-                                MetaInputSettings  *input_settings)
-{
-  meta_input_settings_set_device_enabled (input_settings, device, enabled);
-}
-
-static void
-input_mapper_device_aspect_ratio_cb (MetaInputMapper    *mapper,
-                                     ClutterInputDevice *device,
-                                     double              aspect_ratio,
-                                     MetaInputSettings  *input_settings)
-{
-  meta_input_settings_set_device_aspect_ratio (input_settings, device, aspect_ratio);
-}
-
-static void
 on_prepare_shutdown (MetaContext *context,
                      MetaBackend *backend)
 {
@@ -543,76 +538,20 @@ on_started (MetaContext *context,
                                            determine_hotplug_pointer_visibility (seat));
 }
 
-static void
-meta_backend_real_post_init (MetaBackend *backend)
+static gboolean
+meta_backend_real_init_basic (MetaBackend  *backend,
+                              GError      **error)
 {
-  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
-  ClutterSeat *seat = priv->default_seat;
-  MetaInputSettings *input_settings;
+  /* Do nothing */
+  return TRUE;
+}
 
-  priv->stage = meta_stage_new (backend);
-  clutter_actor_realize (priv->stage);
-  META_BACKEND_GET_CLASS (backend)->select_stage_events (backend);
-
-  meta_monitor_manager_setup (priv->monitor_manager);
-
-  meta_backend_update_stage (backend);
-
-  priv->idle_manager = meta_idle_manager_new (backend);
-
-  g_signal_connect_object (seat, "device-added",
-                           G_CALLBACK (on_device_added), backend, 0);
-  g_signal_connect_object (seat, "device-removed",
-                           G_CALLBACK (on_device_removed), backend,
-                           G_CONNECT_AFTER);
-
-  priv->input_mapper = meta_input_mapper_new (backend);
-
-  input_settings = meta_backend_get_input_settings (backend);
-
-  if (input_settings)
-    {
-      g_signal_connect (priv->input_mapper, "device-mapped",
-                        G_CALLBACK (input_mapper_device_mapped_cb),
-                        input_settings);
-      g_signal_connect (priv->input_mapper, "device-enabled",
-                        G_CALLBACK (input_mapper_device_enabled_cb),
-                        input_settings);
-      g_signal_connect (priv->input_mapper, "device-aspect-ratio",
-                        G_CALLBACK (input_mapper_device_aspect_ratio_cb),
-                        input_settings);
-    }
-
-  priv->remote_access_controller =
-    meta_remote_access_controller_new ();
-  priv->dbus_session_watcher =
-    g_object_new (META_TYPE_DBUS_SESSION_WATCHER, NULL);
-
-#ifdef HAVE_REMOTE_DESKTOP
-  priv->screen_cast = meta_screen_cast_new (backend);
-  meta_remote_access_controller_add (
-    priv->remote_access_controller,
-    META_DBUS_SESSION_MANAGER (priv->screen_cast));
-  priv->remote_desktop = meta_remote_desktop_new (backend);
-  meta_remote_access_controller_add (
-    priv->remote_access_controller,
-    META_DBUS_SESSION_MANAGER (priv->remote_desktop));
-#endif /* HAVE_REMOTE_DESKTOP */
-
-  priv->input_capture = meta_input_capture_new (backend);
-  meta_remote_access_controller_add (
-    priv->remote_access_controller,
-    META_DBUS_SESSION_MANAGER (priv->input_capture));
-
-  if (!meta_monitor_manager_is_headless (priv->monitor_manager))
-    init_pointer_position (backend);
-
-  meta_monitor_manager_post_init (priv->monitor_manager);
-
-  g_signal_connect (priv->context, "prepare-shutdown",
-                    G_CALLBACK (on_prepare_shutdown), backend);
-  g_signal_connect (priv->context, "started",
-                    G_CALLBACK (on_started), backend);
+static gboolean
+meta_backend_real_init_render (MetaBackend  *backend,
+                               GError      **error)
+{
+  /* Do nothing */
+  return TRUE;
 }
 
 static gboolean
@@ -653,6 +592,57 @@ meta_backend_real_create_cursor_tracker (MetaBackend *backend)
   return g_object_new (META_TYPE_CURSOR_TRACKER,
                        "backend", backend,
                        NULL);
+}
+
+static void
+input_mapper_device_mapped_cb (MetaInputMapper    *mapper,
+                               ClutterInputDevice *device,
+                               float               matrix[6],
+                               MetaInputSettings  *input_settings)
+{
+  meta_input_settings_set_device_matrix (input_settings, device, matrix);
+}
+
+static void
+input_mapper_device_enabled_cb (MetaInputMapper    *mapper,
+                                ClutterInputDevice *device,
+                                gboolean            enabled,
+                                MetaInputSettings  *input_settings)
+{
+  meta_input_settings_set_device_enabled (input_settings, device, enabled);
+}
+
+static void
+input_mapper_device_aspect_ratio_cb (MetaInputMapper    *mapper,
+                                     ClutterInputDevice *device,
+                                     double              aspect_ratio,
+                                     MetaInputSettings  *input_settings)
+{
+  meta_input_settings_set_device_aspect_ratio (input_settings, device, aspect_ratio);
+}
+
+static MetaInputMapper *
+meta_backend_create_input_mapper (MetaBackend *backend)
+{
+  MetaInputSettings *input_settings = meta_backend_get_input_settings (backend);
+  MetaInputMapper *input_mapper;
+
+  input_mapper = meta_input_mapper_new (backend);
+
+  if (input_settings)
+    {
+      g_signal_connect (input_mapper, "device-mapped",
+                        G_CALLBACK (input_mapper_device_mapped_cb),
+                        input_settings);
+      g_signal_connect (input_mapper, "device-enabled",
+                        G_CALLBACK (input_mapper_device_enabled_cb),
+                        input_settings);
+      g_signal_connect (input_mapper, "device-aspect-ratio",
+                        G_CALLBACK (input_mapper_device_aspect_ratio_cb),
+                        input_settings);
+    }
+
+  return input_mapper;
 }
 
 static gboolean
@@ -836,45 +826,6 @@ upower_vanished (GDBusConnection *connection,
 }
 
 static void
-meta_backend_constructed (GObject *object)
-{
-  MetaBackend *backend = META_BACKEND (object);
-  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
-  MetaBackendClass *backend_class =
-   META_BACKEND_GET_CLASS (backend);
-
-  g_assert (priv->context);
-
-  priv->settings = meta_settings_new (backend);
-
-#ifdef HAVE_LIBWACOM
-  priv->wacom_db = libwacom_database_new ();
-  if (!priv->wacom_db)
-    {
-      g_warning ("Could not create database of Wacom devices, "
-                 "expect tablets to misbehave");
-    }
-#endif
-
-  if (backend_class->is_lid_closed == meta_backend_real_is_lid_closed)
-    {
-      priv->upower_watch_id = g_bus_watch_name (G_BUS_TYPE_SYSTEM,
-                                                "org.freedesktop.UPower",
-                                                G_BUS_NAME_WATCHER_FLAGS_NONE,
-                                                upower_appeared,
-                                                upower_vanished,
-                                                backend,
-                                                NULL);
-    }
-
-#ifdef HAVE_EGL
-  priv->egl = g_object_new (META_TYPE_EGL, NULL);
-#endif
-
-  G_OBJECT_CLASS (meta_backend_parent_class)->constructed (object);
-}
-
-static void
 meta_backend_set_property (GObject      *object,
                            guint         prop_id,
                            const GValue *value,
@@ -923,11 +874,12 @@ meta_backend_class_init (MetaBackendClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->dispose = meta_backend_dispose;
-  object_class->constructed = meta_backend_constructed;
+  object_class->finalize = meta_backend_finalize;
   object_class->set_property = meta_backend_set_property;
   object_class->get_property = meta_backend_get_property;
 
-  klass->post_init = meta_backend_real_post_init;
+  klass->init_basic = meta_backend_real_init_basic;
+  klass->init_render = meta_backend_real_init_render;
   klass->grab_device = meta_backend_real_grab_device;
   klass->ungrab_device = meta_backend_real_ungrab_device;
   klass->select_stage_events = meta_backend_real_select_stage_events;
@@ -998,6 +950,49 @@ meta_backend_class_init (MetaBackendClass *klass)
                   G_TYPE_NONE, 0);
 }
 
+static void
+on_session_active_changed (MetaLauncher *launcher,
+                           GParamSpec   *pspec,
+                           MetaBackend  *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+  gboolean active = meta_launcher_is_session_active (launcher);
+
+  if (!active)
+    {
+      meta_renderer_pause (priv->renderer);
+      meta_udev_pause (priv->udev);
+    }
+
+  if (META_BACKEND_GET_CLASS (backend)->active_changed)
+    META_BACKEND_GET_CLASS (backend)->active_changed (backend, active);
+
+  if (active)
+    {
+      meta_udev_resume (priv->udev);
+      meta_renderer_resume (priv->renderer);
+    }
+}
+
+static MetaLauncher *
+meta_backend_create_launcher (MetaBackend  *backend,
+                              GError      **error)
+{
+  MetaLauncher *launcher;
+
+  launcher = META_BACKEND_GET_CLASS (backend)->create_launcher (backend, error);
+
+  if (launcher)
+    {
+      g_signal_connect_object (launcher, "notify::session-active",
+                               G_CALLBACK (on_session_active_changed),
+                               backend,
+                               G_CONNECT_DEFAULT);
+    }
+
+  return launcher;
+}
+
 static MetaMonitorManager *
 meta_backend_create_monitor_manager (MetaBackend *backend,
                                      GError     **error)
@@ -1017,6 +1012,12 @@ meta_backend_create_renderer (MetaBackend *backend,
                               GError     **error)
 {
   return META_BACKEND_GET_CLASS (backend)->create_renderer (backend, error);
+}
+
+static MetaCursorTracker *
+meta_backend_create_cursor_tracker (MetaBackend *backend)
+{
+  return META_BACKEND_GET_CLASS (backend)->create_cursor_tracker (backend);
 }
 
 static void
@@ -1242,17 +1243,25 @@ init_clutter (MetaBackend  *backend,
   g_source_attach (source, NULL);
   g_source_unref (source);
 
+  g_signal_connect_object (priv->default_seat, "device-added",
+                           G_CALLBACK (on_device_added), backend, 0);
+  g_signal_connect_object (priv->default_seat, "device-removed",
+                           G_CALLBACK (on_device_removed), backend,
+                           G_CONNECT_AFTER);
+
   return TRUE;
 }
 
 static void
-meta_backend_post_init (MetaBackend *backend)
+init_stage (MetaBackend *backend)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
 
-  META_BACKEND_GET_CLASS (backend)->post_init (backend);
+  priv->stage = meta_stage_new (backend);
 
-  meta_settings_post_init (priv->settings);
+  clutter_actor_realize (priv->stage);
+
+  META_BACKEND_GET_CLASS (backend)->select_stage_events (backend);
 }
 
 static gboolean
@@ -1262,8 +1271,62 @@ meta_backend_initable_init (GInitable     *initable,
 {
   MetaBackend *backend = META_BACKEND (initable);
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+  MetaBackendClass *backend_class =
+   META_BACKEND_GET_CLASS (backend);
+  g_autoptr (GError) local_error = NULL;
+
+  g_assert (priv->context);
+
+  priv->cancellable = g_cancellable_new ();
+
+  g_bus_get (G_BUS_TYPE_SYSTEM,
+             priv->cancellable,
+             system_bus_gotten_cb,
+             backend);
+
+  priv->settings = meta_settings_new (backend);
+
+  priv->launcher = meta_backend_create_launcher (backend, &local_error);
+  if (!priv->launcher && local_error)
+    {
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+
+  priv->udev = meta_udev_new (backend);
+
+  priv->dnd = meta_dnd_new (backend);
 
   priv->orientation_manager = g_object_new (META_TYPE_ORIENTATION_MANAGER, NULL);
+
+  priv->cursor_tracker = meta_backend_create_cursor_tracker (backend);
+
+  if (backend_class->is_lid_closed == meta_backend_real_is_lid_closed)
+    {
+      priv->upower_watch_id = g_bus_watch_name (G_BUS_TYPE_SYSTEM,
+                                                "org.freedesktop.UPower",
+                                                G_BUS_NAME_WATCHER_FLAGS_NONE,
+                                                upower_appeared,
+                                                upower_vanished,
+                                                backend,
+                                                NULL);
+    }
+
+#ifdef HAVE_LIBWACOM
+  priv->wacom_db = libwacom_database_new ();
+  if (!priv->wacom_db)
+    {
+      g_warning ("Could not create database of Wacom devices, "
+                 "expect tablets to misbehave");
+    }
+#endif
+
+#ifdef HAVE_EGL
+  priv->egl = g_object_new (META_TYPE_EGL, NULL);
+#endif
+
+  if (!META_BACKEND_GET_CLASS (backend)->init_basic (backend, error))
+    return FALSE;
 
   priv->monitor_manager = meta_backend_create_monitor_manager (backend, error);
   if (!priv->monitor_manager)
@@ -1275,21 +1338,53 @@ meta_backend_initable_init (GInitable     *initable,
   if (!priv->renderer)
     return FALSE;
 
-  priv->cursor_tracker =
-    META_BACKEND_GET_CLASS (backend)->create_cursor_tracker (backend);
-
-  priv->dnd = meta_dnd_new (backend);
-
-  priv->cancellable = g_cancellable_new ();
-  g_bus_get (G_BUS_TYPE_SYSTEM,
-             priv->cancellable,
-             system_bus_gotten_cb,
-             backend);
-
   if (!init_clutter (backend, error))
     return FALSE;
 
-  meta_backend_post_init (backend);
+  priv->idle_manager = meta_idle_manager_new (backend);
+
+  priv->input_mapper = meta_backend_create_input_mapper (backend);
+
+  if (!META_BACKEND_GET_CLASS (backend)->init_render (backend, error))
+    return FALSE;
+
+  init_stage (backend);
+
+  meta_monitor_manager_setup (priv->monitor_manager);
+
+  meta_backend_update_stage (backend);
+
+  priv->remote_access_controller =
+    meta_remote_access_controller_new ();
+
+  priv->dbus_session_watcher =
+    g_object_new (META_TYPE_DBUS_SESSION_WATCHER, NULL);
+
+#ifdef HAVE_REMOTE_DESKTOP
+  priv->screen_cast = meta_screen_cast_new (backend);
+  meta_remote_access_controller_add (priv->remote_access_controller,
+                                     META_DBUS_SESSION_MANAGER (priv->screen_cast));
+
+  priv->remote_desktop = meta_remote_desktop_new (backend);
+  meta_remote_access_controller_add (priv->remote_access_controller,
+                                     META_DBUS_SESSION_MANAGER (priv->remote_desktop));
+#endif /* HAVE_REMOTE_DESKTOP */
+
+  priv->input_capture = meta_input_capture_new (backend);
+  meta_remote_access_controller_add (priv->remote_access_controller,
+                                     META_DBUS_SESSION_MANAGER (priv->input_capture));
+
+  if (!meta_monitor_manager_is_headless (priv->monitor_manager))
+    init_pointer_position (backend);
+
+  meta_monitor_manager_post_init (priv->monitor_manager);
+
+  meta_settings_post_init (priv->settings);
+
+  g_signal_connect (priv->context, "prepare-shutdown",
+                    G_CALLBACK (on_prepare_shutdown), backend);
+  g_signal_connect (priv->context, "started",
+                    G_CALLBACK (on_started), backend);
 
   while (TRUE)
     {
@@ -1376,6 +1471,28 @@ meta_backend_get_color_manager (MetaBackend *backend)
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
 
   return priv->color_manager;
+}
+
+/**
+ * meta_backend_get_launcher: (skip)
+ */
+MetaLauncher *
+meta_backend_get_launcher (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  return priv->launcher;
+}
+
+/**
+ * meta_backend_get_udev: (skip)
+ */
+MetaUdev *
+meta_backend_get_udev (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  return priv->udev;
 }
 
 /**

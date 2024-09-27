@@ -22,6 +22,7 @@
 
 #include "backends/edid.h"
 #include "backends/meta-backend-types.h"
+#include "backends/meta-backlight.h"
 #include "backends/meta-gpu.h"
 #include "core/util-private.h"
 
@@ -156,9 +157,6 @@ typedef struct _MetaOutputInfo
   MetaOutput **possible_clones;
   unsigned int n_possible_clones;
 
-  int backlight_min;
-  int backlight_max;
-
   gboolean supports_underscanning;
   gboolean supports_color_transform;
   gboolean supports_privacy_screen;
@@ -213,6 +211,8 @@ void meta_output_info_parse_edid (MetaOutputInfo *output_info,
 gboolean meta_output_info_get_min_refresh_rate (const MetaOutputInfo *output_info,
                                                 int                  *min_refresh_rate);
 
+gboolean meta_output_info_is_laptop_panel (const MetaOutputInfo *output_info);
+
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (MetaOutputInfo, meta_output_info_unref)
 
 #define META_TYPE_OUTPUT (meta_output_get_type ())
@@ -259,11 +259,7 @@ gboolean meta_output_get_max_bpc (MetaOutput   *output,
                                   unsigned int *max_bpc);
 
 META_EXPORT_TEST
-void meta_output_set_backlight (MetaOutput *output,
-                                int         backlight);
-
-META_EXPORT_TEST
-int meta_output_get_backlight (MetaOutput *output);
+MetaBacklight * meta_output_get_backlight (MetaOutput *output);
 
 MetaPrivacyScreenState meta_output_get_privacy_screen_state (MetaOutput *output);
 

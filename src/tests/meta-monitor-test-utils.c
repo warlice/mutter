@@ -22,12 +22,15 @@
 #include "tests/meta-monitor-test-utils.h"
 
 #include <float.h>
+#include <umockdev.h>
 
 #include "backends/meta-backend-private.h"
+#include "backends/meta-backlight-sysfs-private.h"
 #include "backends/meta-crtc.h"
 #include "backends/meta-logical-monitor.h"
 #include "backends/meta-monitor-config-manager.h"
 #include "backends/meta-monitor-config-store.h"
+#include "meta-test/meta-context-test.h"
 #include "tests/meta-crtc-test.h"
 #include "tests/meta-output-test.h"
 #include "tests/meta-test-utils.h"
@@ -644,6 +647,8 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
                                 MonitorTestCaseSetup *setup,
                                 MonitorTestFlag       flags)
 {
+  MetaContextTest *context_test =
+    META_CONTEXT_TEST (meta_backend_get_context (backend));
   MetaMonitorTestSetup *test_setup;
   int i;
   int n_laptop_panels = 0;
@@ -692,6 +697,7 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
   for (i = 0; i < setup->n_outputs; i++)
     {
       MetaOutput *output;
+      g_autoptr (MetaBacklight) backlight = NULL;
       MetaOutputTest *output_test;
       int crtc_index;
       MetaCrtc *crtc;
@@ -771,8 +777,6 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
           output_info->suggested_x = -1;
           output_info->suggested_y = -1;
         }
-      output_info->backlight_min = setup->outputs[i].backlight_min;
-      output_info->backlight_max = setup->outputs[i].backlight_max;
       output_info->width_mm = setup->outputs[i].width_mm;
       output_info->height_mm = setup->outputs[i].height_mm;
       output_info->subpixel_order = META_SUBPIXEL_ORDER_UNKNOWN;
@@ -798,10 +802,79 @@ meta_create_monitor_test_setup (MetaBackend          *backend,
                                          sizeof (setup->outputs[i].edid_info));
         }
 
+      if (is_laptop_panel &&
+          setup->outputs[i].backlight_min > 0 &&
+          setup->outputs[i].backlight_max > 0)
+        {
+          backlight =
+            g_object_new (META_TYPE_BACKLIGHT_TEST,
+                          "name", output_info->name,
+                          "brightness-min", setup->outputs[i].backlight_min,
+                          "brightness-max", setup->outputs[i].backlight_max,
+                          "brightness", setup->outputs[i].backlight_max,
+                          NULL);
+        }
+
+      if (setup->outputs[i].sysfs_backlight)
+        {
+          UMockdevTestbed *udev_testbed =
+            meta_context_test_get_udev_testbed (context_test);
+          g_autofree char *max_str = NULL;
+          g_autofree char *connector_name = NULL;
+          g_autofree char *connector_udev = NULL;
+          g_autofree char *backlight_udev = NULL;
+          int min;
+
+          g_assert_true (umockdev_in_mock_environment ());
+
+          umockdev_testbed_clear (udev_testbed);
+
+          max_str = g_strdup_printf ("%i", setup->outputs[i].backlight_max);
+          connector_name = g_strdup_printf ("card0-%s", output_info->name);
+
+          /* add an enabled drm connector which will be the parent of the backlight */
+          connector_udev = umockdev_testbed_add_device (udev_testbed,
+                                                        /* subsystem */
+                                                        "drm",
+                                                        /* name */
+                                                        connector_name,
+                                                        /* parent */
+                                                        NULL,
+                                                        /* attributes */
+                                                        "enabled", "enabled",
+                                                        NULL,
+                                                        /* properties */
+                                                        NULL);
+
+          backlight_udev = umockdev_testbed_add_device (udev_testbed,
+                                                        /* subsystem */
+                                                        "backlight",
+                                                        /* name */
+                                                        setup->outputs[i].sysfs_backlight,
+                                                        /* parent */
+                                                        connector_udev,
+                                                        /* attributes */
+                                                        "type", "raw",
+                                                        "max_brightness", max_str,
+                                                        "brightness", max_str,
+                                                        NULL,
+                                                        /* properties */
+                                                        NULL);
+
+          backlight = META_BACKLIGHT (meta_backlight_sysfs_new (backend,
+                                                                output_info,
+                                                                NULL));
+          g_assert_nonnull (backlight);
+
+          meta_backlight_get_brightness_info (backlight, &min, NULL);
+          g_assert_cmpint (min, ==, setup->outputs[i].backlight_min);
+        }
+
       output = g_object_new (META_TYPE_OUTPUT_TEST,
                              "id", (uint64_t) i,
                              "gpu", meta_test_get_gpu (backend),
                              "info", output_info,
+                             "backlight", backlight,
                              NULL);
 
       output_test = META_OUTPUT_TEST (output);

@@ -39,10 +39,9 @@ libwacom_req = '>= 0.13'
 atk_req = '>= 2.5.3'
 harfbuzz_req = '>= 2.6'
 libei_req = '>= 1.0.901'
-
-# optional version requirements
 udev_req = '>= 228'
 gudev_req = '>= 232'
+umockdev_req = '>= 0.3.0'
 
 # wayland version requirements
 wayland_server_req = '>= 1.23'
@@ -130,6 +129,14 @@ harfbuzz_dep = dependency('harfbuzz', version: harfbuzz_req)
 libeis_dep = dependency('libeis-1.0', version: libei_req)
 libei_dep = dependency('libei-1.0', version: libei_req)
 gvdb_dep = dependency('gvdb')
+libudev_dep = dependency('libudev', version: udev_req)
+gudev_dep = dependency('gudev-1.0', version: gudev_req)
+udev_dep = dependency('udev')
+
+udev_dir = get_option('udev_dir')
+if udev_dir == ''
+  udev_dir = udev_dep.get_variable('udevdir')
+endif
 
 have_wayland = get_option('wayland')
 have_x11 = get_option('x11')
@@ -231,31 +238,19 @@ if have_wayland
   endif
 endif
 
-have_libgudev = get_option('udev')
-if have_libgudev
-  libudev_dep = dependency('libudev', version: udev_req)
-  gudev_dep = dependency('gudev-1.0', version: gudev_req)
-  udev_dep = dependency('udev')
-
-  udev_dir = get_option('udev_dir')
-  if udev_dir == ''
-    udev_dir = udev_dep.get_variable('udevdir')
-  endif
-endif
-
 have_libsystemd = get_option('systemd')
 libsystemd_dep = dependency('libsystemd', required: have_libsystemd)
+
+if libsystemd_dep.found()
+  logind_provider_dep = libsystemd_dep
+else
+  logind_provider_dep = dependency('libelogind')
+endif
 
 have_native_backend = get_option('native_backend')
 if have_native_backend
   libgbm_dep = dependency('gbm', version: gbm_req)
   libinput_dep = dependency('libinput', version: libinput_req)
-
-  if libsystemd_dep.found()
-    logind_provider_dep = libsystemd_dep
-  else
-    logind_provider_dep = dependency('libelogind')
-  endif
 
   if not have_egl
     error('The native backend requires EGL to be enabled')
@@ -263,10 +258,6 @@ if have_native_backend
 
   if not have_gles2
     error('The native backend requires GLESv2 to be enabled')
-  endif
-
-  if not have_libgudev
-    error('The native backend requires udev to be enabled')
   endif
 endif
 
@@ -361,6 +352,7 @@ have_x11_tests = false
 if have_tests
   gtk3_dep = dependency('gtk+-3.0', version: gtk3_req)
   dbusmock_dep = python.find_installation('python3', modules: ['dbusmock'], required: false)
+  umockdev_dep = dependency('umockdev-1.0', version: umockdev_req)
 
   if not have_native_backend
     error('Tests require the native backend to be enabled')
@@ -556,7 +548,6 @@ cdata.set('HAVE_GNOME_DESKTOP', have_gnome_desktop)
 cdata.set('HAVE_SOUND_PLAYER', have_sound_player)
 cdata.set('HAVE_EGL_DEVICE', have_egl_device)
 cdata.set('HAVE_WAYLAND_EGLSTREAM', have_wayland_eglstream)
-cdata.set('HAVE_LIBGUDEV', have_libgudev)
 cdata.set('HAVE_LIBWACOM', have_libwacom)
 cdata.set('HAVE_LIBWACOM_GET_NUM_RINGS', have_libwacom_get_num_rings)
 cdata.set('HAVE_SM', have_sm)
@@ -737,7 +728,6 @@ summary('Remote desktop', have_remote_desktop, section: 'Options')
 summary('libgnome-desktop', have_gnome_desktop, section: 'Options')
 summary('libdisplay-info', have_libdisplay_info, section: 'Options')
 summary('Sound player', have_sound_player, section: 'Options')
-summary('gudev', have_libgudev, section: 'Options')
 summary('Wacom', have_libwacom, section: 'Options')
 summary('SM', have_sm, section: 'Options')
 summary('Startup notification', have_startup_notification, section: 'Options')

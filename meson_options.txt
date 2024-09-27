@@ -87,12 +87,6 @@ option('wayland_eglstream',
   description: 'Enable Wayland EGLStream support client support'
 )
 
-option('udev',
-  type: 'boolean',
-  value: true,
-  description: 'Enable udev support when using the X11 backend'
-)
-
 option('udev_dir',
   type: 'string',
   value: '',

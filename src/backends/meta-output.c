@@ -17,9 +17,9 @@
 
 #include "config.h"
 
-#include "backends/edid.h"
 #include "backends/meta-output.h"
 
+#include "backends/edid.h"
 #include "backends/meta-crtc.h"
 
 enum
@@ -30,6 +30,7 @@ enum
   PROP_GPU,
   PROP_INFO,
   PROP_IS_PRIVACY_SCREEN_ENABLED,
+  PROP_BACKLIGHT,
 
   N_PROPS
 };
@@ -40,7 +41,6 @@ enum
 {
   COLOR_SPACE_CHANGED,
   HDR_METADATA_CHANGED,
-  BACKLIGHT_CHANGED,
 
   N_SIGNALS
 };
@@ -60,6 +60,8 @@ typedef struct _MetaOutputPrivate
   /* The CRTC driving this output, NULL if the output is not enabled */
   MetaCrtc *crtc;
 
+  MetaBacklight *backlight;
+
   gboolean is_primary;
   gboolean is_presentation;
 
@@ -67,8 +69,6 @@ typedef struct _MetaOutputPrivate
 
   gboolean has_max_bpc;
   unsigned int max_bpc;
-
-  int backlight;
 
   MetaPrivacyScreenState privacy_screen_state;
   gboolean is_privacy_screen_enabled;
@@ -211,21 +211,7 @@ meta_output_get_max_bpc (MetaOutput   *output,
   return priv->has_max_bpc;
 }
 
-void
-meta_output_set_backlight (MetaOutput *output,
-                           int         backlight)
-{
-  MetaOutputPrivate *priv = meta_output_get_instance_private (output);
-
-  g_return_if_fail (backlight >= priv->info->backlight_min);
-  g_return_if_fail (backlight <= priv->info->backlight_max);
-
-  priv->backlight = backlight;
-
-  g_signal_emit (output, signals[BACKLIGHT_CHANGED], 0);
-}
-
-int
+MetaBacklight *
 meta_output_get_backlight (MetaOutput *output)
 {
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
@@ -407,6 +393,9 @@ meta_output_set_property (GObject      *object,
     case PROP_IS_PRIVACY_SCREEN_ENABLED:
       priv->is_privacy_screen_enabled = g_value_get_boolean (value);
       break;
+    case PROP_BACKLIGHT:
+      g_set_object (&priv->backlight, g_value_get_object (value));
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -435,6 +424,9 @@ meta_output_get_property (GObject    *object,
     case PROP_IS_PRIVACY_SCREEN_ENABLED:
       g_value_set_boolean (value, priv->is_privacy_screen_enabled);
       break;
+    case PROP_BACKLIGHT:
+      g_value_set_object (value, priv->backlight);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -447,6 +439,7 @@ meta_output_dispose (GObject *object)
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
 
   g_clear_object (&priv->crtc);
+  g_clear_object (&priv->backlight);
 
   G_OBJECT_CLASS (meta_output_parent_class)->dispose (object);
 }
@@ -532,6 +525,21 @@ meta_output_info_get_min_refresh_rate (const MetaOutputInfo *output_info,
   *min_refresh_rate = min_vert_rate_hz;
 
   return TRUE;
+}
+
+gboolean
+meta_output_info_is_laptop_panel (const MetaOutputInfo *output_info)
+{
+  switch (output_info->connector_type)
+    {
+    case META_CONNECTOR_TYPE_eDP:
+    case META_CONNECTOR_TYPE_LVDS:
+    case META_CONNECTOR_TYPE_DSI:
+    case META_CONNECTOR_TYPE_DPI:
+      return TRUE;
+    default:
+      return FALSE;
+    }
 }
 
 void
@@ -622,7 +630,6 @@ meta_output_init (MetaOutput *output)
 {
   MetaOutputPrivate *priv = meta_output_get_instance_private (output);
 
-  priv->backlight = -1;
   priv->is_primary = FALSE;
   priv->is_presentation = FALSE;
   priv->is_underscanning = FALSE;
@@ -666,6 +673,12 @@ meta_output_class_init (MetaOutputClass *klass)
                           FALSE,
                           G_PARAM_READWRITE |
                           G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_BACKLIGHT] =
+    g_param_spec_object ("backlight", NULL, NULL,
+                          META_TYPE_BACKLIGHT,
+                          G_PARAM_READWRITE |
+                          G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS);
   g_object_class_install_properties (object_class, N_PROPS, obj_props);
 
   signals[COLOR_SPACE_CHANGED] =
@@ -677,13 +690,6 @@ meta_output_class_init (MetaOutputClass *klass)
                   G_TYPE_NONE, 0);
   signals[HDR_METADATA_CHANGED] =
     g_signal_new ("hdr-metadata-changed",
-                  G_TYPE_FROM_CLASS (klass),
-                  G_SIGNAL_RUN_LAST,
-                  0,
-                  NULL, NULL, NULL,
-                  G_TYPE_NONE, 0);
-  signals[BACKLIGHT_CHANGED] =
-    g_signal_new ("backlight-changed",
                   G_TYPE_FROM_CLASS (klass),
                   G_SIGNAL_RUN_LAST,
                   0,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Red Hat, Inc.
+ * Copyright (C) 2024 Red Hat
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -19,12 +19,17 @@
 
 #include <glib-object.h>
 
-#include "backends/native/meta-backend-native-types.h"
-#include "backends/native/meta-device-pool.h"
+#include "backends/meta-backend-types.h"
+#include "backends/meta-backlight-private.h"
+#include "backends/meta-output.h"
 
-#define META_TYPE_DEVICE_POOL (meta_device_pool_get_type ())
-G_DECLARE_FINAL_TYPE (MetaDevicePool, meta_device_pool,
-                      META, DEVICE_POOL,
-                      GObject)
+#include <X11/extensions/Xrandr.h>
 
-MetaDevicePool * meta_device_pool_new (MetaBackendNative *backend_native);
+#define META_TYPE_BACKLIGHT_X11 (meta_backlight_x11_get_type ())
+G_DECLARE_FINAL_TYPE (MetaBacklightX11, meta_backlight_x11,
+                      META, BACKLIGHT_X11, MetaBacklight)
+
+MetaBacklightX11 * meta_backlight_x11_new (Display         *xdisplay,
+                                           RROutput         output_id,
+                                           MetaOutputInfo  *output_info,
+                                           GError         **error);

@@ -63,7 +63,9 @@ struct _MetaBackendX11Cm
   MetaInputSettings *input_settings;
 };
 
-G_DEFINE_TYPE (MetaBackendX11Cm, meta_backend_x11_cm, META_TYPE_BACKEND_X11)
+G_DEFINE_FINAL_TYPE (MetaBackendX11Cm,
+                     meta_backend_x11_cm,
+                     META_TYPE_BACKEND_X11);
 
 static void
 apply_keymap (MetaBackendX11 *x11);
@@ -97,24 +99,52 @@ on_device_added (ClutterSeat        *seat,
     apply_keymap (x11);
 }
 
-static void
-meta_backend_x11_cm_post_init (MetaBackend *backend)
+static gboolean
+meta_backend_x11_cm_init_basic (MetaBackend  *backend,
+                                GError      **error)
 {
   MetaBackendClass *parent_backend_class =
     META_BACKEND_CLASS (meta_backend_x11_cm_parent_class);
-  MetaBackendX11Cm *x11_cm = META_BACKEND_X11_CM (backend);
+  MetaBackendX11Cm *backend_x11_cm = META_BACKEND_X11_CM (backend);
+  MetaGpuXrandr *gpu_xrandr;
+
+  /*
+   * The X server deals with multiple GPUs for us, so we just see what the X
+   * server gives us as one single GPU, even though it may actually be backed
+   * by multiple.
+   */
+  gpu_xrandr = meta_gpu_xrandr_new (META_BACKEND_X11 (backend_x11_cm));
+  meta_backend_add_gpu (backend, META_GPU (gpu_xrandr));
+
+  if (backend_x11_cm->display_name)
+    g_setenv ("DISPLAY", backend_x11_cm->display_name, TRUE);
+
+  return parent_backend_class->init_basic (backend, error);
+}
+
+static gboolean
+meta_backend_x11_cm_init_render (MetaBackend  *backend,
+                                 GError      **error)
+{
+  MetaBackendClass *parent_backend_class =
+    META_BACKEND_CLASS (meta_backend_x11_cm_parent_class);
+  MetaBackendX11Cm *backend_x11_cm = META_BACKEND_X11_CM (backend);
   ClutterSeat *seat;
 
   seat = clutter_backend_get_default_seat (meta_backend_get_clutter_backend (backend));
   g_signal_connect_object (seat, "device-added",
                            G_CALLBACK (on_device_added), backend, 0);
 
-  x11_cm->input_settings = g_object_new (META_TYPE_INPUT_SETTINGS_X11,
-                                         "backend", backend,
-                                         NULL);
+  backend_x11_cm->input_settings = g_object_new (META_TYPE_INPUT_SETTINGS_X11,
+                                                 "backend", backend,
+                                                 NULL);
 
-  parent_backend_class->post_init (backend);
+  if (!parent_backend_class->init_render (backend, error))
+    return FALSE;
+
   take_touch_grab (backend);
+
+  return TRUE;
 }
 
 static MetaBackendCapabilities
@@ -504,29 +534,8 @@ meta_backend_x11_cm_finalize (GObject *object)
 }
 
 static void
-meta_backend_x11_cm_constructed (GObject *object)
-{
-  MetaBackendX11Cm *x11_cm = META_BACKEND_X11_CM (object);
-
-  if (x11_cm->display_name)
-    g_setenv ("DISPLAY", x11_cm->display_name, TRUE);
-
-  G_OBJECT_CLASS (meta_backend_x11_cm_parent_class)->constructed (object);
-}
-
-static void
 meta_backend_x11_cm_init (MetaBackendX11Cm *backend_x11_cm)
 {
-  MetaGpuXrandr *gpu_xrandr;
-
-  /*
-   * The X server deals with multiple GPUs for us, so we just see what the X
-   * server gives us as one single GPU, even though it may actually be backed
-   * by multiple.
-   */
-  gpu_xrandr = meta_gpu_xrandr_new (META_BACKEND_X11 (backend_x11_cm));
-  meta_backend_add_gpu (META_BACKEND (backend_x11_cm),
-                        META_GPU (gpu_xrandr));
 }
 
 static void
@@ -538,9 +547,9 @@ meta_backend_x11_cm_class_init (MetaBackendX11CmClass *klass)
 
   object_class->set_property = meta_backend_x11_cm_set_property;
   object_class->finalize = meta_backend_x11_cm_finalize;
-  object_class->constructed = meta_backend_x11_cm_constructed;
 
-  backend_class->post_init = meta_backend_x11_cm_post_init;
+  backend_class->init_basic = meta_backend_x11_cm_init_basic;
+  backend_class->init_render = meta_backend_x11_cm_init_render;
   backend_class->get_capabilities = meta_backend_x11_cm_get_capabilities;
   backend_class->create_renderer = meta_backend_x11_cm_create_renderer;
   backend_class->create_monitor_manager = meta_backend_x11_cm_create_monitor_manager;

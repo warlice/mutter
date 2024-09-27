@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Red Hat
+ * Copyright (C) 2024 Red Hat
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -18,17 +18,23 @@
 #pragma once
 
 #include <glib-object.h>
+#include <gio/gio.h>
 
-#include "backends/x11/meta-backend-x11.h"
+#include "backends/meta-backend-types.h"
 #include "core/util-private.h"
 
-#define META_TYPE_BACKEND_X11_NESTED (meta_backend_x11_nested_get_type ())
-G_DECLARE_FINAL_TYPE (MetaBackendX11Nested, meta_backend_x11_nested,
-                      META, BACKEND_X11_NESTED, MetaBackendX11)
+#define META_TYPE_BACKLIGHT (meta_backlight_get_type ())
+META_EXPORT_TEST
+G_DECLARE_DERIVABLE_TYPE (MetaBacklight, meta_backlight,
+                          META, BACKLIGHT, GObject)
 
-struct _MetaBackendX11NestedClass
-{
-  MetaBackendX11Class parent_class;
+META_EXPORT_TEST
+void meta_backlight_get_brightness_info (MetaBacklight *backlight,
+                                         int           *brightness_min_out,
+                                         int           *brightness_max);
 
-  void (* init_gpus) (MetaBackendX11Nested *backend_x11_nested);
-};
+META_EXPORT_TEST
+int meta_backlight_get_brightness (MetaBacklight *backlight);
+
+void meta_backlight_set_brightness (MetaBacklight *backlight,
+                                    int            brightness);

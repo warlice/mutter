@@ -18,13 +18,10 @@
  */
 #include "config.h"
 
+#include <gudev/gudev.h>
 #include <linux/input-event-codes.h>
 #include <X11/extensions/XInput2.h>
 #include <X11/extensions/XKB.h>
-
-#ifdef HAVE_LIBGUDEV
-#include <gudev/gudev.h>
-#endif
 
 #include "backends/meta-input-settings-private.h"
 #include "backends/x11/meta-backend-x11.h"
@@ -76,11 +73,7 @@ struct _MetaSeatX11
   GHashTable *tools_by_serial;
   GHashTable *touch_coords;
   MetaKeymapX11 *keymap;
-
-#ifdef HAVE_LIBGUDEV
   GUdevClient *udev_client;
-#endif
-
   int pointer_id;
   int keyboard_id;
   int opcode;
@@ -572,7 +565,6 @@ guess_source_from_wacom_type (MetaSeatX11              *seat_x11,
   return TRUE;
 }
 
-#ifdef HAVE_LIBGUDEV
 static gboolean
 has_udev_property (GUdevDevice *udev_device,
                    const char  *property_name)
@@ -589,7 +581,6 @@ has_udev_property (GUdevDevice *udev_device,
 
   return g_udev_device_get_property (parent_udev_device, property_name) != NULL;
 }
-#endif
 
 static ClutterInputDevice *
 create_device (MetaSeatX11    *seat_x11,
@@ -687,7 +678,6 @@ create_device (MetaSeatX11    *seat_x11,
       node_path = get_device_node_path (seat_x11, info);
     }
 
-#ifdef HAVE_LIBGUDEV
   if (node_path)
     {
       g_autoptr (GUdevDevice) udev_device = NULL;
@@ -702,7 +692,6 @@ create_device (MetaSeatX11    *seat_x11,
             capabilities |= CLUTTER_INPUT_CAPABILITY_TRACKPOINT;
         }
     }
-#endif
 
   if (source == CLUTTER_PAD_DEVICE)
     get_pad_features (info, &num_rings, &num_strips);
@@ -1592,11 +1581,9 @@ meta_seat_x11_constructed (GObject *object)
   XIEventMask event_mask;
   unsigned char mask[XIMaskLen(XI_LASTEVENT)] = { 0, };
   int n_devices, i;
-#ifdef HAVE_LIBGUDEV
   const char *udev_subsystems[] = { "input", NULL };
 
   seat_x11->udev_client = g_udev_client_new (udev_subsystems);
-#endif
 
   info = XIQueryDevice (xdisplay, XIAllDevices, &n_devices);
 
@@ -1662,10 +1649,7 @@ meta_seat_x11_finalize (GObject *object)
 {
   MetaSeatX11 *seat_x11 = META_SEAT_X11 (object);
 
-#ifdef HAVE_LIBGUDEV
   g_clear_object (&seat_x11->udev_client);
-#endif
-
   g_hash_table_unref (seat_x11->devices_by_id);
   g_hash_table_unref (seat_x11->tools_by_serial);
   g_hash_table_unref (seat_x11->touch_coords);

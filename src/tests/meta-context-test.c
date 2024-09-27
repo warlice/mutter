@@ -53,6 +53,7 @@ typedef struct _MetaContextTestPrivate
   MetaContextTestType type;
   MetaContextTestFlag flags;
   MetaSessionManager *session_manager;
+  UMockdevTestbed *udev_testbed;
 } MetaContextTestPrivate;
 
 struct _MetaContextTestClass
@@ -86,6 +87,7 @@ meta_context_test_finalize (GObject *object)
     meta_context_test_get_instance_private (context_test);
 
   g_clear_object (&priv->session_manager);
+  g_clear_object (&priv->udev_testbed);
 
   G_OBJECT_CLASS (meta_context_test_parent_class)->finalize (object);
 }
@@ -314,10 +316,8 @@ meta_context_test_run_tests (MetaContextTest  *context_test,
       if ((flags & META_TEST_RUN_FLAG_CAN_SKIP) &&
           ((g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND) &&
             strstr (error->message, "No GPUs found")) ||
-           (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_DBUS_ERROR) &&
-            strstr (error->message, "Could not take control")) ||
-           (g_error_matches (error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD) &&
-            strstr (error->message, "Could not take control"))))
+           (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_FAILED) &&
+            strstr (error->message, "Native backend mode needs to be session controller"))))
         {
           g_printerr ("Test skipped: %s\n", error->message);
           return 77;
@@ -362,6 +362,18 @@ meta_context_test_wait_for_x11_display (MetaContextTest *context_test)
 }
 
 /**
+ * meta_context_test_get_udev_testbed: (skip)
+ */
+UMockdevTestbed *
+meta_context_test_get_udev_testbed (MetaContextTest *context_test)
+{
+  MetaContextTestPrivate *priv =
+    meta_context_test_get_instance_private (context_test);
+
+  return priv->udev_testbed;
+}
+
+/**
  * meta_create_test_context: (skip)
  */
 MetaContext *
@@ -377,6 +389,7 @@ meta_create_test_context (MetaContextTestType type,
   priv = meta_context_test_get_instance_private (context_test);
   priv->type = type;
   priv->flags = flags;
+  priv->udev_testbed = umockdev_testbed_new ();
 
   return META_CONTEXT (context_test);
 }

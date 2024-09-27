@@ -21,6 +21,8 @@
 #include <meta/common.h>
 #include <meta/meta-context.h>
 
+#include <umockdev.h>
+
 typedef enum _MetaContextTestType
 {
   META_CONTEXT_TEST_TYPE_HEADLESS,
@@ -57,3 +59,6 @@ int meta_context_test_run_tests (MetaContextTest  *context_test,
 
 META_EXPORT
 void meta_context_test_wait_for_x11_display (MetaContextTest *context_test);
+
+META_EXPORT
+UMockdevTestbed * meta_context_test_get_udev_testbed (MetaContextTest *context_test);
