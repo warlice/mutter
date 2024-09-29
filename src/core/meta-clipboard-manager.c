@@ -147,12 +147,10 @@ owner_changed_cb (MetaSelection       *selection,
                                      (GAsyncReadyCallback) transfer_cb,
                                      output);
     }
-  else if (!new_owner && display->saved_clipboard)
+  else if (!new_owner && display->saved_clipboard && display->saved_clipboard_mimetype)
     {
       g_autoptr (GError) error = NULL;
       g_autoptr (MetaSelectionSource) new_source = NULL;
-
-      g_assert (display->saved_clipboard_mimetype != NULL);
 
       /* Old owner is gone, time to take over */
       new_source = meta_selection_source_memory_new (display->saved_clipboard_mimetype,
