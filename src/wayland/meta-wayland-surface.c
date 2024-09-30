@@ -460,6 +460,8 @@ meta_wayland_surface_state_set_default (MetaWaylandSurfaceState *state)
 
   state->fifo_wait = FALSE;
   state->fifo_barrier = FALSE;
+  state->fifo_barrier_blocking = FALSE;
+  state->fifo_barrier_timeout = 0;
 }
 
 static void
@@ -639,6 +641,13 @@ meta_wayland_surface_state_merge_into (MetaWaylandSurfaceState *from,
   if (from->fifo_barrier)
     to->fifo_barrier = TRUE;
 
+  if (from->fifo_barrier_blocking)
+    to->fifo_barrier_blocking = TRUE;
+
+  if (from->fifo_barrier_timeout > 0 &&
+      from->fifo_barrier_timeout < to->fifo_barrier_timeout)
+    to->fifo_barrier_timeout = from->fifo_barrier_timeout;
+
   /*
    * A new commit indicates a new content update, so any previous
    * content update did not go on screen and needs to be discarded.
@@ -812,8 +821,7 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
           state->buffer->type != META_WAYLAND_BUFFER_TYPE_SINGLE_PIXEL));
     }
 
-  if (state->fifo_barrier)
-    meta_wayland_fifo_barrier_applied (surface);
+  meta_wayland_fifo_barrier_applied (surface, state);
 
   if (state->has_new_buffer_transform)
     surface->buffer_transform = state->buffer_transform;

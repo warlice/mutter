@@ -52,7 +52,25 @@ typedef struct _MetaWaylandFifoSurface
   gulong destroy_handler_id;
 } MetaWaylandFifoSurface;
 
+typedef struct _FifoSurfaceData
+{
+  MetaWaylandFifo *fifo;
+  MetaWaylandSurface *surface;
+  ClutterStageView *stage_view;
+  guint barrier_timeout_id;
+  gboolean barrier_blocking;
+} FifoSurfaceData;
+
 static void ensure_fallback_timer (MetaWaylandFifo *fifo);
+
+static void meta_wayland_fifo_barrier_unset_surface (FifoSurfaceData *surface_data);
+
+static void
+fifo_surface_data_free (FifoSurfaceData *surface_data)
+{
+  g_clear_handle_id (&surface_data->barrier_timeout_id, g_source_remove);
+  g_free (surface_data);
+}
 
 static MetaBackend *
 get_backend (MetaWaylandSurface *surface)
@@ -97,24 +115,53 @@ get_stage_view (MetaWaylandSurface *surface)
   return CLUTTER_STAGE_VIEW (renderer_view);
 }
 
-void
-meta_wayland_fifo_barrier_applied (MetaWaylandSurface *surface)
+static void
+meta_wayland_fifo_barrier_timeout (FifoSurfaceData *surface_data)
 {
-  MetaWaylandCompositor *compositor =
-    meta_wayland_surface_get_compositor (surface);
-  MetaWaylandFifo *fifo =
-    g_object_get_data (G_OBJECT (compositor), "-meta-wayland-fifo");
-  ClutterStageView *surface_stage_view = get_stage_view (surface);
+  meta_wayland_fifo_barrier_unset_surface (surface_data);
+}
+
+void
+meta_wayland_fifo_barrier_applied (MetaWaylandSurface      *surface,
+                                   MetaWaylandSurfaceState *state)
+{
+  MetaWaylandCompositor *compositor;
+  MetaWaylandFifo *fifo;
+  ClutterStageView *surface_stage_view;
+  FifoSurfaceData *surface_data = NULL;
+
+  if (!state->fifo_barrier)
+    return;
+
+  compositor = meta_wayland_surface_get_compositor (surface);
+  fifo = g_object_get_data (G_OBJECT (compositor), "-meta-wayland-fifo");
+  surface_stage_view = get_stage_view (surface);
 
   surface->fifo_barrier = TRUE;
+
+  surface_data = g_new0 (FifoSurfaceData, 1);
+  surface_data->fifo = fifo;
+  surface_data->surface = surface;
+  surface_data->stage_view = surface_stage_view;
+  surface_data->barrier_blocking = state->fifo_barrier_blocking;
+
+  if (state->fifo_barrier_timeout > 0)
+    {
+      surface_data->barrier_timeout_id =
+        g_timeout_add_once (state->fifo_barrier_timeout * 1000 * 1000,
+                            (GSourceOnceFunc) meta_wayland_fifo_barrier_timeout,
+                            surface_data);
+    }
+
   g_hash_table_insert (fifo->barrier_surfaces,
-                       g_object_ref (surface), surface_stage_view);
+                       g_object_ref (surface),
+                       surface_data);
 
   ensure_fallback_timer (fifo);
 
-  if (surface_stage_view)
+  if (surface_stage_view && !state->fifo_barrier_blocking)
     clutter_stage_view_schedule_update (surface_stage_view);
-  else
+  if (!surface_stage_view && !state->fifo_barrier_blocking)
     g_warn_if_fail (fifo->fallback_timeout_id != 0);
 }
 
@@ -124,15 +171,26 @@ meta_wayland_fifo_barrier_unset (MetaWaylandFifo  *fifo,
 {
   GHashTableIter iter;
   MetaWaylandSurface *surface;
-  ClutterStageView *surface_stage_view;
+  FifoSurfaceData *surface_data;
 
   g_hash_table_iter_init (&iter, fifo->barrier_surfaces);
   while (g_hash_table_iter_next (&iter,
                                  (gpointer *) &surface,
-                                 (gpointer *) &surface_stage_view))
+                                 (gpointer *) &surface_data))
     {
+      ClutterStageView *surface_stage_view = surface_data->stage_view;
+
       if (!surface_stage_view || surface_stage_view != stage_view)
         continue;
+
+      if (surface_data->barrier_blocking)
+        {
+          MetaSurfaceActor *actor;
+
+          actor = meta_wayland_surface_get_actor (surface);
+          if (!actor || meta_surface_actor_is_effectively_obscured (actor))
+            continue;
+        }
 
       surface->fifo_barrier = FALSE;
       g_hash_table_iter_remove (&iter);
@@ -155,6 +213,28 @@ meta_wayland_fifo_barrier_unset_all (MetaWaylandFifo *fifo)
       g_hash_table_iter_remove (&iter);
       meta_wayland_transaction_consider_surface (surface);
     }
+
+  ensure_fallback_timer (fifo);
+}
+
+static void
+meta_wayland_fifo_barrier_unset_surface (FifoSurfaceData *surface_data)
+{
+  MetaWaylandFifo *fifo = surface_data->fifo;
+  MetaWaylandSurface *surface = surface_data->surface;
+
+  if (surface_data->barrier_blocking)
+    {
+      MetaSurfaceActor *actor;
+
+      actor = meta_wayland_surface_get_actor (surface);
+      if (!actor || meta_surface_actor_is_effectively_obscured (actor))
+        return;
+    }
+
+  surface->fifo_barrier = FALSE;
+  g_hash_table_remove (fifo->barrier_surfaces, surface);
+  meta_wayland_transaction_consider_surface (surface);
 
   ensure_fallback_timer (fifo);
 }
@@ -204,6 +284,47 @@ set_barrier (struct wl_client   *client,
 }
 
 static void
+set_blocking (struct wl_client   *client,
+              struct wl_resource *resource)
+{
+  MetaWaylandFifoSurface *fifo_surf = wl_resource_get_user_data (resource);
+  MetaWaylandSurface *surface = fifo_surf->surface;
+  MetaWaylandSurfaceState *pending;
+
+  if (!surface)
+    {
+      wl_resource_post_error (resource,
+                              WP_FIFO_V1_ERROR_SURFACE_DESTROYED,
+                              "surface destroyed");
+      return;
+    }
+
+  pending = meta_wayland_surface_get_pending_state (surface);
+  pending->fifo_barrier_blocking = true;
+}
+
+static void
+set_timeout (struct wl_client   *client,
+             struct wl_resource *resource,
+             uint32_t            timeout_ns)
+{
+  MetaWaylandFifoSurface *fifo_surf = wl_resource_get_user_data (resource);
+  MetaWaylandSurface *surface = fifo_surf->surface;
+  MetaWaylandSurfaceState *pending;
+
+  if (!surface)
+    {
+      wl_resource_post_error (resource,
+                              WP_FIFO_V1_ERROR_SURFACE_DESTROYED,
+                              "surface destroyed");
+      return;
+    }
+
+  pending = meta_wayland_surface_get_pending_state (surface);
+  pending->fifo_barrier_timeout = timeout_ns;
+}
+
+static void
 wait_barrier (struct wl_client   *client,
               struct wl_resource *resource)
 {
@@ -226,6 +347,8 @@ wait_barrier (struct wl_client   *client,
 static const struct wp_fifo_v1_interface meta_wayland_fifo_interface =
 {
   set_barrier,
+  set_blocking,
+  set_timeout,
   wait_barrier,
   fifo_destroy,
 };
@@ -328,7 +451,7 @@ meta_wayland_fifo_init (MetaWaylandFifo *fifo)
   fifo->barrier_surfaces =
     g_hash_table_new_full (NULL, NULL,
                            (GDestroyNotify) g_object_unref,
-                           NULL);
+                           (GDestroyNotify) fifo_surface_data_free);
 }
 
 static void
@@ -363,6 +486,8 @@ ensure_fallback_timer (MetaWaylandFifo *fifo)
   has_primary_monitor = primary_logical_monitor != NULL;
   has_fifo_barriers = g_hash_table_size (fifo->barrier_surfaces) > 0;
   needs_fallback = !has_primary_monitor && has_fifo_barriers;
+
+  /* TODO: we don't need the fallback timer if we only have blocking FIFO */
 
   if (needs_fallback && !fifo->fallback_timeout_id)
     {

@@ -140,6 +140,8 @@ struct _MetaWaylandSurfaceState
   ClutterColorState *color_state;
 
   gboolean fifo_barrier;
+  gboolean fifo_barrier_blocking;
+  uint32_t fifo_barrier_timeout;
   gboolean fifo_wait;
 };
 

@@ -25,4 +25,5 @@
 
 void meta_wayland_init_fifo (MetaWaylandCompositor *compositor);
 
-void meta_wayland_fifo_barrier_applied (MetaWaylandSurface *surface);
+void meta_wayland_fifo_barrier_applied (MetaWaylandSurface      *surface,
+                                        MetaWaylandSurfaceState *state);
