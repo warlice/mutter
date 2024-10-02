@@ -65,6 +65,7 @@
 #include "backends/meta-logical-monitor.h"
 #include "backends/meta-monitor-manager-dummy.h"
 #include "backends/meta-remote-access-controller-private.h"
+#include "backends/meta-renderdoc.h"
 #include "backends/meta-settings-private.h"
 #include "backends/meta-stage-private.h"
 #include "clutter/clutter-mutter.h"
@@ -187,6 +188,8 @@ struct _MetaBackendPrivate
   GDBusConnection *system_bus;
 
   uint32_t last_pointer_motion;
+
+  MetaRenderdoc *renderdoc;
 };
 typedef struct _MetaBackendPrivate MetaBackendPrivate;
 
@@ -224,6 +227,7 @@ meta_backend_dispose (GObject *object)
   g_clear_object (&priv->dbus_session_watcher);
   g_clear_object (&priv->remote_access_controller);
   g_clear_object (&priv->dnd);
+  g_clear_object (&priv->renderdoc);
 
 #ifdef HAVE_LIBWACOM
   g_clear_pointer (&priv->wacom_db, libwacom_database_destroy);
@@ -1263,6 +1267,8 @@ meta_backend_initable_init (GInitable     *initable,
   MetaBackend *backend = META_BACKEND (initable);
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
 
+  priv->renderdoc = meta_renderdoc_new (backend);
+
   priv->orientation_manager = g_object_new (META_TYPE_ORIENTATION_MANAGER, NULL);
 
   priv->monitor_manager = meta_backend_create_monitor_manager (backend, error);
@@ -1927,4 +1933,12 @@ meta_evdev_button_to_clutter (uint32_t evdev_button)
   g_return_val_if_fail (evdev_button > BTN_LEFT, 0);
 
   return (evdev_button - (BTN_LEFT - 1)) + 4;
+}
+
+void
+meta_backend_renderdoc_capture (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+
+  meta_renderdoc_queue_capture_all (priv->renderdoc);
 }
