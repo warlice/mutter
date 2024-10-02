@@ -23,6 +23,7 @@
 
 #include "backends/native/meta-drm-buffer-gbm.h"
 
+#include <EGL/egl.h>
 #include <drm_fourcc.h>
 #include <errno.h>
 #include <gio/gio.h>
@@ -42,6 +43,14 @@ struct _MetaDrmBufferGbm
 
   struct gbm_bo *bo;
 };
+
+typedef struct _MetaDrmBufferGbmBoUserData
+{
+  EGLImageKHR egl_image;
+
+  MetaEgl *egl;
+  EGLDisplay egl_display;
+} MetaDrmBufferGbmBoUserData;
 
 static void
 cogl_scanout_buffer_iface_init (CoglScanoutBufferInterface *iface);
@@ -227,6 +236,120 @@ meta_drm_buffer_gbm_new_take (MetaDeviceFile      *device_file,
   buffer_gbm->bo = bo;
 
   return buffer_gbm;
+}
+
+static EGLImageKHR
+meta_drm_buffer_gbm_create_native_blit_image (MetaEgl        *egl,
+                                              EGLDisplay      egl_display,
+                                              struct gbm_bo  *shared_bo,
+                                              GError        **error)
+{
+  int shared_bo_fd;
+  unsigned int width;
+  unsigned int height;
+  uint32_t i, n_planes;
+  uint32_t strides[4] = { 0 };
+  uint32_t offsets[4] = { 0 };
+  uint64_t modifiers[4] = { 0 };
+  int fds[4] = { -1, -1, -1, -1 };
+  uint32_t format;
+  EGLImageKHR egl_image;
+  gboolean use_modifiers;
+
+  shared_bo_fd = gbm_bo_get_fd (shared_bo);
+  if (shared_bo_fd < 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to export gbm_bo: %s", strerror (errno));
+      return FALSE;
+    }
+
+  width = gbm_bo_get_width (shared_bo);
+  height = gbm_bo_get_height (shared_bo);
+  format = gbm_bo_get_format (shared_bo);
+
+  n_planes = gbm_bo_get_plane_count (shared_bo);
+  for (i = 0; i < n_planes; i++)
+    {
+      strides[i] = gbm_bo_get_stride_for_plane (shared_bo, i);
+      offsets[i] = gbm_bo_get_offset (shared_bo, i);
+      modifiers[i] = gbm_bo_get_modifier (shared_bo);
+      fds[i] = shared_bo_fd;
+    }
+
+  /* Workaround for https://gitlab.gnome.org/GNOME/mutter/issues/18 */
+  if (modifiers[0] == DRM_FORMAT_MOD_LINEAR ||
+      modifiers[0] == DRM_FORMAT_MOD_INVALID)
+    use_modifiers = FALSE;
+  else
+    use_modifiers = TRUE;
+
+  egl_image = meta_egl_create_dmabuf_image (egl,
+                                            egl_display,
+                                            width,
+                                            height,
+                                            format,
+                                            n_planes,
+                                            fds,
+                                            strides,
+                                            offsets,
+                                            use_modifiers ? modifiers : NULL,
+                                            error);
+  close (shared_bo_fd);
+
+  return egl_image;
+}
+
+static void
+meta_drm_buffer_gbm_free_native_blit_image (struct gbm_bo *bo,
+                                            void          *data)
+{
+  MetaDrmBufferGbmBoUserData *user_data = data;
+  g_autoptr (GError) error = NULL;
+
+  if (!meta_egl_destroy_image (user_data->egl,
+                               user_data->egl_display,
+                               user_data->egl_image,
+                               &error))
+    g_prefix_error (&error, "Could not destroy EGLImage: ");
+
+  g_free (data);
+}
+
+
+EGLImageKHR
+meta_drm_buffer_gbm_get_native_blit_image (MetaEgl        *egl,
+                                           EGLDisplay      egl_display,
+                                           struct gbm_bo  *bo,
+                                           GError        **error)
+{
+  MetaDrmBufferGbmBoUserData *bo_user_data = NULL;
+
+  bo_user_data = gbm_bo_get_user_data (bo);
+
+  if (!bo_user_data)
+    {
+      EGLImageKHR egl_image = EGL_NO_IMAGE;
+
+      egl_image = meta_drm_buffer_gbm_create_native_blit_image (egl,
+                                                                egl_display,
+                                                                bo,
+                                                                error);
+
+      if (!egl_image)
+        {
+          return EGL_NO_IMAGE;
+        }
+
+      bo_user_data = g_new0 (MetaDrmBufferGbmBoUserData, 1);
+      bo_user_data->egl = egl;
+      bo_user_data->egl_display = egl_display;
+      bo_user_data->egl_image = egl_image;
+
+      gbm_bo_set_user_data (bo, bo_user_data, meta_drm_buffer_gbm_free_native_blit_image);
+    }
+
+  return bo_user_data->egl_image;
 }
 
 static gboolean
