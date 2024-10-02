@@ -108,6 +108,8 @@ typedef struct _MetaContextPrivate
 #endif
 
   MetaDebugControl *debug_control;
+
+  char *started_dir;
 } MetaContextPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (MetaContext, meta_context, G_TYPE_OBJECT)
@@ -865,6 +867,8 @@ meta_context_dispose (GObject *object)
 
   g_clear_object (&priv->debug_control);
 
+  g_clear_pointer (&priv->started_dir, g_free);
+
   g_clear_pointer (&priv->option_context, g_option_context_free);
   g_clear_pointer (&priv->main_loop, g_main_loop_unref);
 
@@ -946,6 +950,8 @@ meta_context_init (MetaContext *context)
   MetaContextPrivate *priv = meta_context_get_instance_private (context);
   g_autoptr (GError) error = NULL;
 
+  priv->started_dir = g_get_current_dir ();
+
   priv->plugin_gtype = G_TYPE_NONE;
   priv->gnome_wm_keybindings = g_strdup ("Mutter");
 
@@ -984,4 +990,12 @@ MetaSessionManager *
 meta_context_get_session_manager (MetaContext *context)
 {
   return META_CONTEXT_GET_CLASS (context)->get_session_manager (context);
+}
+
+const char *
+meta_context_get_started_dir (MetaContext *context)
+{
+  MetaContextPrivate *priv = meta_context_get_instance_private (context);
+
+  return priv->started_dir;
 }
