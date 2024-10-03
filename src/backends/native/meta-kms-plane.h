@@ -64,6 +64,9 @@ gboolean meta_kms_plane_supports_cursor_hotspot (MetaKmsPlane *plane);
 GArray * meta_kms_plane_get_modifiers_for_format (MetaKmsPlane *plane,
                                                   uint32_t      format);
 
+GArray * meta_kms_plane_get_tearing_modifiers_for_format (MetaKmsPlane *plane,
+                                                          uint32_t      format);
+
 GArray * meta_kms_plane_copy_drm_format_list (MetaKmsPlane *plane);
 
 gboolean meta_kms_plane_is_format_supported (MetaKmsPlane *plane,
