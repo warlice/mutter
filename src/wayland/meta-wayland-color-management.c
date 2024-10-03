@@ -200,6 +200,10 @@ wayland_tf_to_clutter (enum xx_color_manager_v4_transfer_function  tf,
       eotf->type = CLUTTER_EOTF_TYPE_NAMED;
       eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_PQ;
       return TRUE;
+    case XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_BT709:
+      eotf->type = CLUTTER_EOTF_TYPE_NAMED;
+      eotf->tf_name = CLUTTER_TRANSFER_FUNCTION_BT709;
+      return TRUE;
     default:
       return FALSE;
     }
@@ -214,6 +218,8 @@ clutter_tf_to_wayland (ClutterTransferFunction tf)
       return XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_SRGB;
     case CLUTTER_TRANSFER_FUNCTION_PQ:
       return XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_ST2084_PQ;
+    case CLUTTER_TRANSFER_FUNCTION_BT709:
+      return XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_BT709;
     case CLUTTER_TRANSFER_FUNCTION_LINEAR:
       return XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_LINEAR;
     }
@@ -234,20 +240,26 @@ wayland_primaries_to_clutter (enum xx_color_manager_v4_primaries  primaries,
       colorimetry->type = CLUTTER_COLORIMETRY_TYPE_COLORSPACE;
       colorimetry->colorspace = CLUTTER_COLORSPACE_BT2020;
       return TRUE;
+    case XX_COLOR_MANAGER_V4_PRIMARIES_NTSC:
+      colorimetry->type = CLUTTER_COLORIMETRY_TYPE_COLORSPACE;
+      colorimetry->colorspace = CLUTTER_COLORSPACE_NTSC;
+      return TRUE;
     default:
       return FALSE;
     }
 }
 
 static enum xx_color_manager_v4_primaries
-clutter_primaries_to_wayland (ClutterColorspace primaries)
+clutter_colorspace_to_wayland (ClutterColorspace colorspace)
 {
-  switch (primaries)
+  switch (colorspace)
     {
     case CLUTTER_COLORSPACE_SRGB:
       return XX_COLOR_MANAGER_V4_PRIMARIES_SRGB;
     case CLUTTER_COLORSPACE_BT2020:
       return XX_COLOR_MANAGER_V4_PRIMARIES_BT2020;
+    case CLUTTER_COLORSPACE_NTSC:
+      return XX_COLOR_MANAGER_V4_PRIMARIES_NTSC;
     }
   g_assert_not_reached ();
 }
@@ -353,9 +365,10 @@ static void
 send_information (struct wl_resource *info_resource,
                   ClutterColorState  *color_state)
 {
-  enum xx_color_manager_v4_primaries primaries;
+  enum xx_color_manager_v4_primaries primaries_named;
   enum xx_color_manager_v4_transfer_function tf;
   const ClutterColorimetry *colorimetry;
+  const ClutterPrimaries *primaries;
   const ClutterEOTF *eotf;
   const ClutterLuminance *lum;
 
@@ -363,9 +376,21 @@ send_information (struct wl_resource *info_resource,
   switch (colorimetry->type)
     {
     case CLUTTER_COLORIMETRY_TYPE_COLORSPACE:
-      primaries = clutter_primaries_to_wayland (colorimetry->colorspace);
+      primaries_named = clutter_colorspace_to_wayland (colorimetry->colorspace);
       xx_image_description_info_v4_send_primaries_named (info_resource,
-                                                         primaries);
+                                                         primaries_named);
+
+      primaries = clutter_colorspace_to_primaries (colorimetry->colorspace);
+      xx_image_description_info_v4_send_primaries (
+        info_resource,
+        float_to_scaled_uint32 (primaries->r_x),
+        float_to_scaled_uint32 (primaries->r_y),
+        float_to_scaled_uint32 (primaries->g_x),
+        float_to_scaled_uint32 (primaries->g_y),
+        float_to_scaled_uint32 (primaries->b_x),
+        float_to_scaled_uint32 (primaries->b_y),
+        float_to_scaled_uint32 (primaries->w_x),
+        float_to_scaled_uint32 (primaries->w_y));
       break;
     case CLUTTER_COLORIMETRY_TYPE_PRIMARIES:
       xx_image_description_info_v4_send_primaries (
@@ -1424,10 +1449,14 @@ color_manager_send_supported_events (struct wl_resource *resource)
                                                XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_SRGB);
   xx_color_manager_v4_send_supported_tf_named (resource,
                                                XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_ST2084_PQ);
+  xx_color_manager_v4_send_supported_tf_named (resource,
+                                               XX_COLOR_MANAGER_V4_TRANSFER_FUNCTION_BT709);
   xx_color_manager_v4_send_supported_primaries_named (resource,
                                                       XX_COLOR_MANAGER_V4_PRIMARIES_SRGB);
   xx_color_manager_v4_send_supported_primaries_named (resource,
                                                       XX_COLOR_MANAGER_V4_PRIMARIES_BT2020);
+  xx_color_manager_v4_send_supported_primaries_named (resource,
+                                                      XX_COLOR_MANAGER_V4_PRIMARIES_NTSC);
 }
 
 static const struct xx_color_manager_v4_interface

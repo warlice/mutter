@@ -36,12 +36,14 @@ typedef enum
 {
   CLUTTER_COLORSPACE_SRGB,
   CLUTTER_COLORSPACE_BT2020,
+  CLUTTER_COLORSPACE_NTSC,
 } ClutterColorspace;
 
 typedef enum
 {
   CLUTTER_TRANSFER_FUNCTION_SRGB,
   CLUTTER_TRANSFER_FUNCTION_PQ,
+  CLUTTER_TRANSFER_FUNCTION_BT709,
   CLUTTER_TRANSFER_FUNCTION_LINEAR,
 } ClutterTransferFunction;
 
@@ -159,6 +161,9 @@ ClutterColorState * clutter_color_state_get_blending (ClutterColorState *color_s
 
 CLUTTER_EXPORT
 const ClutterLuminance * clutter_eotf_get_default_luminance (ClutterEOTF eotf);
+
+CLUTTER_EXPORT
+const ClutterPrimaries * clutter_colorspace_to_primaries (ClutterColorspace colorspace);
 
 CLUTTER_EXPORT
 void clutter_primaries_ensure_normalized_range (ClutterPrimaries *primaries);
