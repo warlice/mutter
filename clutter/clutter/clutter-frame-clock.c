@@ -52,6 +52,11 @@ typedef struct _ClutterFrameListener
   gpointer user_data;
 } ClutterFrameListener;
 
+typedef struct _DeferredTime
+{
+  int64_t target_time_us;
+} DeferredTime;
+
 typedef struct _ClutterClockSource
 {
   GSource source;
@@ -70,6 +75,7 @@ typedef enum _ClutterFrameClockState
   CLUTTER_FRAME_CLOCK_STATE_IDLE,
   CLUTTER_FRAME_CLOCK_STATE_SCHEDULED,
   CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW,
+  CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER,
   CLUTTER_FRAME_CLOCK_STATE_DISPATCHING,
   CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED,
 } ClutterFrameClockState;
@@ -140,10 +146,16 @@ struct _ClutterFrameClock
   int64_t deadline_evasion_us;
 
   char *output_name;
+
+  GQueue *deferred_times;
 };
 
 G_DEFINE_TYPE (ClutterFrameClock, clutter_frame_clock,
                G_TYPE_OBJECT)
+
+static void
+clutter_frame_clock_schedule_update_later (ClutterFrameClock *frame_clock,
+                                           int64_t            target_us);
 
 float
 clutter_frame_clock_get_refresh_rate (ClutterFrameClock *frame_clock)
@@ -225,23 +237,55 @@ advance_timelines (ClutterFrameClock *frame_clock,
   g_list_free_full (timelines, g_object_unref);
 }
 
+static int64_t
+get_next_deferred_time (ClutterFrameClock *frame_clock)
+{
+  DeferredTime *head;
+  int64_t current_time_us;
+  int64_t next_time_us = 0;
+
+  if (frame_clock->is_next_presentation_time_valid)
+    current_time_us = frame_clock->next_presentation_time_us;
+  else
+    current_time_us = g_get_monotonic_time ();
+
+  while ((head = g_queue_peek_head (frame_clock->deferred_times)))
+    {
+      if (head->target_time_us >= current_time_us)
+        {
+          next_time_us = head->target_time_us;
+          break;
+        }
+      g_free (g_queue_pop_head (frame_clock->deferred_times));
+    }
+
+  return next_time_us;
+}
+
 static void
 maybe_reschedule_update (ClutterFrameClock *frame_clock)
 {
-  if (frame_clock->pending_reschedule ||
-      frame_clock->timelines)
-    {
-      frame_clock->pending_reschedule = FALSE;
+  int64_t deferred_time_us = get_next_deferred_time (frame_clock);
 
+  if (frame_clock->pending_reschedule ||
+      frame_clock->timelines ||
+      deferred_time_us)
+    {
       if (frame_clock->pending_reschedule_now)
         {
           frame_clock->pending_reschedule_now = FALSE;
           clutter_frame_clock_schedule_update_now (frame_clock);
         }
-      else
+      else if (frame_clock->pending_reschedule)
         {
           clutter_frame_clock_schedule_update (frame_clock);
         }
+      else
+        {
+          clutter_frame_clock_schedule_update_later (frame_clock, deferred_time_us);
+        }
+
+      frame_clock->pending_reschedule = FALSE;
     }
 }
 
@@ -419,6 +463,7 @@ clutter_frame_clock_notify_presented (ClutterFrameClock *frame_clock,
     case CLUTTER_FRAME_CLOCK_STATE_IDLE:
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
       g_warn_if_reached ();
       break;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHING:
@@ -441,6 +486,7 @@ clutter_frame_clock_notify_ready (ClutterFrameClock *frame_clock)
     case CLUTTER_FRAME_CLOCK_STATE_IDLE:
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
       g_warn_if_reached ();
       break;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHING:
@@ -734,6 +780,7 @@ clutter_frame_clock_inhibit (ClutterFrameClock *frame_clock)
         case CLUTTER_FRAME_CLOCK_STATE_IDLE:
           break;
         case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
+        case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
           frame_clock->pending_reschedule = TRUE;
           frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_IDLE;
           break;
@@ -779,6 +826,7 @@ clutter_frame_clock_schedule_update_now (ClutterFrameClock *frame_clock)
     case CLUTTER_FRAME_CLOCK_STATE_INIT:
     case CLUTTER_FRAME_CLOCK_STATE_IDLE:
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
       break;
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW:
       return;
@@ -834,6 +882,7 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
       frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_SCHEDULED;
       return;
     case CLUTTER_FRAME_CLOCK_STATE_IDLE:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
       break;
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW:
@@ -871,6 +920,90 @@ clutter_frame_clock_schedule_update (ClutterFrameClock *frame_clock)
   frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_SCHEDULED;
 }
 
+static void
+clutter_frame_clock_schedule_update_later (ClutterFrameClock *frame_clock,
+                                           int64_t            target_us)
+{
+  int64_t next_update_time_us = -1;
+  int64_t next_presentation_time_us;
+  int64_t next_frame_deadline_us;
+
+  if (frame_clock->inhibit_count > 0)
+    {
+      frame_clock->pending_reschedule = TRUE;
+      return;
+    }
+
+  switch (frame_clock->state)
+    {
+    case CLUTTER_FRAME_CLOCK_STATE_INIT:
+    case CLUTTER_FRAME_CLOCK_STATE_IDLE:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
+      break;
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW:
+      return;
+    case CLUTTER_FRAME_CLOCK_STATE_DISPATCHING:
+    case CLUTTER_FRAME_CLOCK_STATE_PENDING_PRESENTED:
+      frame_clock->pending_reschedule = TRUE;
+      frame_clock->pending_reschedule_now = TRUE;
+      return;
+    }
+
+  switch (frame_clock->mode)
+    {
+    case CLUTTER_FRAME_CLOCK_MODE_FIXED:
+      calculate_next_update_time_us (frame_clock,
+                                     &next_update_time_us,
+                                     &next_presentation_time_us,
+                                     &next_frame_deadline_us);
+      break;
+    case CLUTTER_FRAME_CLOCK_MODE_VARIABLE:
+      calculate_next_variable_update_timeout_us (frame_clock,
+                                                 &next_update_time_us);
+      break;
+    }
+
+  g_warn_if_fail (next_update_time_us != -1);
+
+  if (next_update_time_us >= target_us)
+    {
+      clutter_frame_clock_schedule_update (frame_clock);
+    }
+  else
+    {
+      g_source_set_ready_time (frame_clock->source, target_us);
+      frame_clock->pending_reschedule = TRUE;
+      frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER;
+    }
+}
+
+static int
+compare_times (const DeferredTime *a,
+               const DeferredTime *b,
+               void               *data)
+{
+  if (a->target_time_us > b->target_time_us)
+    return 1;
+
+  if (a->target_time_us < b->target_time_us)
+    return -1;
+
+  return 0;
+}
+
+void
+clutter_frame_clock_add_future_time (ClutterFrameClock *frame_clock,
+                                     int64_t            when_us)
+{
+  DeferredTime *time = g_new (DeferredTime, 1);
+  time->target_time_us = when_us;
+  g_queue_insert_sorted (frame_clock->deferred_times, time,
+                         (GCompareDataFunc)compare_times, NULL);
+
+  maybe_reschedule_update (frame_clock);
+}
+
 void
 clutter_frame_clock_set_mode (ClutterFrameClock     *frame_clock,
                               ClutterFrameClockMode  mode)
@@ -886,6 +1019,7 @@ clutter_frame_clock_set_mode (ClutterFrameClock     *frame_clock,
     case CLUTTER_FRAME_CLOCK_STATE_IDLE:
       break;
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
       frame_clock->pending_reschedule = TRUE;
       frame_clock->state = CLUTTER_FRAME_CLOCK_STATE_IDLE;
       break;
@@ -995,6 +1129,7 @@ clutter_frame_clock_dispatch (ClutterFrameClock *frame_clock,
     case CLUTTER_FRAME_CLOCK_STATE_IDLE:
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED:
     case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_NOW:
+    case CLUTTER_FRAME_CLOCK_STATE_SCHEDULED_LATER:
       break;
     case CLUTTER_FRAME_CLOCK_STATE_DISPATCHING:
       switch (result)
@@ -1204,6 +1339,8 @@ clutter_frame_clock_new (float                            refresh_rate,
 
   frame_clock->output_name = g_strdup (output_name);
 
+  frame_clock->deferred_times = g_queue_new ();
+
   return frame_clock;
 }
 
@@ -1229,6 +1366,10 @@ clutter_frame_clock_dispose (GObject *object)
     }
 
   g_clear_pointer (&frame_clock->output_name, g_free);
+
+  if (frame_clock->deferred_times)
+    g_queue_free_full (frame_clock->deferred_times, g_free);
+  frame_clock->deferred_times = NULL;
 
   G_OBJECT_CLASS (clutter_frame_clock_parent_class)->dispose (object);
 }
