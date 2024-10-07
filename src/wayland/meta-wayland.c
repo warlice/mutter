@@ -357,6 +357,43 @@ ensure_source_for_stage_view (MetaWaylandCompositor *compositor,
 #endif /* HAVE_NATIVE_BACKEND */
 
 static void
+clear_time_constraints_for_stage_view_transactions (MetaWaylandCompositor *compositor,
+                                                    ClutterStageView      *stage_view,
+                                                    int64_t                target_time_us)
+{
+  GList *l;
+
+  l = compositor->timed_transactions;
+  while (l)
+    {
+      GList *l_cur = l;
+      MetaWaylandTransaction *transaction = l->data;
+
+      l = l->next;
+
+      if (meta_wayland_transaction_unblock_timed (transaction, target_time_us))
+        {
+          compositor->timed_transactions =
+            g_list_delete_link (compositor->timed_transactions, l_cur);
+        }
+    }
+}
+
+static void
+on_before_update (ClutterStage          *stage,
+                  ClutterStageView      *stage_view,
+                  ClutterFrame          *frame,
+                  MetaWaylandCompositor *compositor)
+{
+  int64_t target_time_us;
+
+  if (!clutter_frame_get_target_presentation_time (frame, &target_time_us))
+    target_time_us = g_get_monotonic_time ();
+
+  clear_time_constraints_for_stage_view_transactions (compositor, stage_view, target_time_us);
+}
+
+static void
 on_after_update (ClutterStage          *stage,
                  ClutterStageView      *stage_view,
                  ClutterFrame          *frame,
@@ -602,6 +639,25 @@ meta_wayland_compositor_remove_presentation_feedback_surface (MetaWaylandComposi
 {
   compositor->presentation_time.feedback_surfaces =
     g_list_remove (compositor->presentation_time.feedback_surfaces, surface);
+}
+
+void
+meta_wayland_compositor_add_timed_transaction (MetaWaylandCompositor  *compositor,
+                                               MetaWaylandTransaction *transaction)
+{
+  if (g_list_find (compositor->timed_transactions, transaction))
+    return;
+
+  compositor->timed_transactions =
+    g_list_prepend (compositor->timed_transactions, transaction);
+}
+
+void
+meta_wayland_compositor_remove_timed_transaction (MetaWaylandCompositor  *compositor,
+                                                  MetaWaylandTransaction *transaction)
+{
+  compositor->timed_transactions =
+    g_list_remove (compositor->timed_transactions, transaction);
 }
 
 GQueue *
@@ -853,6 +909,8 @@ meta_wayland_compositor_new (MetaContext *context)
   compositor->source = wayland_event_source;
   g_source_unref (wayland_event_source);
 
+  g_signal_connect (stage, "before-update",
+                    G_CALLBACK (on_before_update), compositor);
   g_signal_connect (stage, "after-update",
                     G_CALLBACK (on_after_update), compositor);
   g_signal_connect (stage, "presented",
