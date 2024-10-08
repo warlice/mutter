@@ -148,7 +148,8 @@ verify_results (Data *data,
      painted. This should cause a redraw */
   pixel = clutter_stage_read_pixels (CLUTTER_STAGE (data->stage),
                                      50, 50, /* x/y */
-                                     1, 1 /* width/height */);
+                                     1, 1 /* width/height */,
+                                     NULL);
 
   g_assert_cmpint (expected_paint_count, ==, data->foo_actor->paint_count);
   g_assert_cmpint (expected_paint_opacity,
