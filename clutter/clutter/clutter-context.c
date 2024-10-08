@@ -21,6 +21,7 @@
 #include "clutter/clutter-context-private.h"
 
 #include <hb-glib.h>
+#include <pango/pangocairo.h>
 
 #include "clutter/clutter-accessibility-private.h"
 #include "clutter/clutter-backend-private.h"
@@ -30,6 +31,7 @@
 #include "clutter/clutter-private.h"
 #include "clutter/clutter-paint-node-private.h"
 #include "clutter/clutter-settings-private.h"
+#include "clutter/pango/clutter-pango-private.h"
 
 static gboolean clutter_show_fps = FALSE;
 static gboolean clutter_enable_accessibility = TRUE;
@@ -99,6 +101,7 @@ clutter_context_dispose (GObject *object)
   g_clear_pointer (&context->backend, clutter_backend_destroy);
   g_clear_object (&context->stage_manager);
   g_clear_object (&context->settings);
+  g_clear_object (&context->font_map);
 
   G_OBJECT_CLASS (clutter_context_parent_class)->dispose (object);
 }
@@ -303,10 +306,11 @@ clutter_context_get_backend (ClutterContext *context)
   return context->backend;
 }
 
-CoglPangoFontMap *
+PangoFontMap *
 clutter_context_get_pango_fontmap (ClutterContext *context)
 {
-  CoglPangoFontMap *font_map;
+  PangoFontMap *font_map;
+  PangoRenderer *font_renderer;
   gdouble resolution;
   ClutterBackend *backend;
   CoglContext *cogl_context;
@@ -316,12 +320,15 @@ clutter_context_get_pango_fontmap (ClutterContext *context)
 
   backend = clutter_context_get_backend (context);
   cogl_context = clutter_backend_get_cogl_context (backend);
-  font_map = COGL_PANGO_FONT_MAP (cogl_pango_font_map_new (cogl_context));
+  font_map = pango_cairo_font_map_new ();
+  font_renderer = clutter_pango_renderer_new (cogl_context);
 
   resolution = clutter_backend_get_resolution (context->backend);
-  cogl_pango_font_map_set_resolution (font_map, resolution);
+  pango_cairo_font_map_set_resolution (PANGO_CAIRO_FONT_MAP (font_map),
+                                       resolution);
 
   context->font_map = font_map;
+  context->font_renderer = font_renderer;
 
   return context->font_map;
 }
@@ -384,4 +391,12 @@ clutter_context_get_settings (ClutterContext *context)
   g_return_val_if_fail (CLUTTER_IS_CONTEXT (context), NULL);
 
   return context->settings;
+}
+
+PangoRenderer *
+clutter_context_get_font_renderer (ClutterContext *context)
+{
+  g_return_val_if_fail (CLUTTER_IS_CONTEXT (context), NULL);
+
+  return context->font_renderer;
 }

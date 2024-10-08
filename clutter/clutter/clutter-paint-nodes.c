@@ -30,6 +30,7 @@
 #include <pango/pango.h>
 
 #include "cogl/cogl.h"
+#include "clutter/pango/clutter-pango-private.h"
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-blur-private.h"
 #include "clutter/clutter-debug.h"
@@ -736,27 +737,6 @@ clutter_text_node_pre_draw (ClutterPaintNode    *node,
   return tnode->layout != NULL;
 }
 
-typedef struct
-{
-  ClutterColorState *color_state;
-  ClutterColorState *target_color_state;
-} PangoPipelineData;
-
-static void
-setup_pango_pipeline (CoglPipeline *pipeline,
-                      gpointer      user_data)
-{
-  PangoPipelineData *pango_pipeline_data = user_data;
-  ClutterColorState *color_state =
-    pango_pipeline_data->color_state;
-  ClutterColorState *target_color_state =
-    pango_pipeline_data->target_color_state;
-
-  clutter_color_state_add_pipeline_transform (color_state,
-                                              target_color_state,
-                                              pipeline);
-}
-
 static void
 clutter_text_node_draw (ClutterPaintNode    *node,
                         ClutterPaintContext *paint_context)
@@ -769,15 +749,9 @@ clutter_text_node_draw (ClutterPaintNode    *node,
   PangoRectangle extents;
   CoglFramebuffer *fb;
   guint i;
-  PangoPipelineData pango_pipeline_data = {};
 
   if (node->operations == NULL)
     return;
-
-  pango_pipeline_data = (PangoPipelineData) {
-    .color_state = color_state,
-    .target_color_state = target_color_state,
-  };
 
   fb = get_target_framebuffer (node, paint_context);
 
@@ -812,13 +786,13 @@ clutter_text_node_draw (ClutterPaintNode    *node,
               clipped = TRUE;
             }
 
-          cogl_pango_show_layout (fb,
-                                  tnode->layout,
-                                  op->op.texrect[0],
-                                  op->op.texrect[1],
-                                  &tnode->color,
-                                  setup_pango_pipeline,
-                                  &pango_pipeline_data);
+          clutter_show_layout (fb,
+                               tnode->layout,
+                               op->op.texrect[0],
+                               op->op.texrect[1],
+                               &tnode->color,
+                               color_state,
+                               target_color_state);
 
           if (clipped)
             cogl_framebuffer_pop_clip (fb);

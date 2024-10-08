@@ -1,10 +1,9 @@
 /*
- * Cogl
+ * Clutter.
  *
- * A Low Level GPU Graphics and Utilities API
+ * An OpenGL based 'interactive canvas' library.
  *
- * Copyright (C) 2008 OpenedHand
- * Copyright (C) 2012 Intel Corporation.
+ * Copyright (C) 2011 Intel Corporation.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -27,19 +26,38 @@
  * SOFTWARE.
  *
  *
+ *
  * Authors:
  *   Neil Roberts <neil@linux.intel.com>
- *   Robert Bragg <robert@linux.intel.com>
- *   Matthew Allum  <mallum@openedhand.com>
  */
 
 #pragma once
 
-#include "cogl-pango/cogl-pango.h"
+#include <glib.h>
+
+#include "cogl/cogl.h"
 
 G_BEGIN_DECLS
 
-PangoRenderer *
-_cogl_pango_renderer_new (CoglContext *context);
+typedef struct
+{
+  CoglContext *ctx;
+
+  GHashTable *hash_table;
+
+  CoglPipeline *base_texture_alpha_pipeline;
+  CoglPipeline *base_texture_rgba_pipeline;
+} ClutterPangoPipelineCache;
+
+
+ClutterPangoPipelineCache * clutter_pango_pipeline_cache_new (CoglContext *ctx);
+
+/* Returns a pipeline that can be used to render glyphs in the given
+   texture. The pipeline has a new reference so it is up to the caller
+   to unref it */
+CoglPipeline * clutter_pango_pipeline_cache_get (ClutterPangoPipelineCache *cache,
+                                                 CoglTexture               *texture);
+
+void clutter_pango_pipeline_cache_free (ClutterPangoPipelineCache *cache);
 
 G_END_DECLS

@@ -19,10 +19,10 @@
 
 #pragma once
 
+#include <pango/pango.h>
+
 #include "clutter-backend.h"
 #include "clutter-settings.h"
-#include "cogl-pango/cogl-pango.h"
-
 
 typedef ClutterBackend * (* ClutterBackendConstructor) (ClutterContext *context,
                                                         gpointer        user_data);
@@ -56,7 +56,7 @@ ClutterBackend * clutter_context_get_backend (ClutterContext *context);
 /**
  * clutter_context_get_pango_fontmap: (skip)
  */
-CoglPangoFontMap * clutter_context_get_pango_fontmap (ClutterContext *context);
+PangoFontMap * clutter_context_get_pango_fontmap (ClutterContext *context);
 
 ClutterTextDirection clutter_context_get_text_direction (ClutterContext *context);
 

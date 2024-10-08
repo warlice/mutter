@@ -1,7 +1,7 @@
 /*
- * Cogl
+ * Clutter.
  *
- * A Low Level GPU Graphics and Utilities API
+ * An OpenGL based 'interactive canvas' library.
  *
  * Copyright (C) 2011 Intel Corporation.
  *
@@ -35,15 +35,11 @@
 
 #include <glib.h>
 
-#include "cogl-pango/cogl-pango-pipeline-cache.h"
-#include "cogl/cogl-context-private.h"
-#include "cogl/cogl-texture-private.h"
-
-typedef struct _CoglPangoPipelineCacheEntry CoglPangoPipelineCacheEntry;
+#include "clutter/pango/clutter-pango-pipeline-cache.h"
 
 static GQuark pipeline_destroy_notify_key = 0;
 
-struct _CoglPangoPipelineCacheEntry
+typedef struct _PangoPipelineCacheEntry
 {
   /* This will take a reference or it can be NULL to represent the
      pipeline used to render colors */
@@ -51,22 +47,21 @@ struct _CoglPangoPipelineCacheEntry
 
   /* This will only take a weak reference */
   CoglPipeline *pipeline;
-};
+} PangoPipelineCacheEntry;
 
 static void
-_cogl_pango_pipeline_cache_key_destroy (void *data)
+clutter_pango_pipeline_cache_key_destroy (void *data)
 {
   if (data)
     g_object_unref (data);
 }
 
 static void
-_cogl_pango_pipeline_cache_value_destroy (void *data)
+clutter_pango_pipeline_cache_value_destroy (void *data)
 {
-  CoglPangoPipelineCacheEntry *cache_entry = data;
+  PangoPipelineCacheEntry *cache_entry = data;
 
-  if (cache_entry->texture)
-    g_object_unref (cache_entry->texture);
+  g_clear_object (&cache_entry->texture);
 
   /* We don't need to unref the pipeline because it only takes a weak
      reference */
@@ -74,11 +69,10 @@ _cogl_pango_pipeline_cache_value_destroy (void *data)
   g_free (cache_entry);
 }
 
-CoglPangoPipelineCache *
-_cogl_pango_pipeline_cache_new (CoglContext *ctx,
-                                gboolean use_mipmapping)
+ClutterPangoPipelineCache *
+clutter_pango_pipeline_cache_new (CoglContext *ctx)
 {
-  CoglPangoPipelineCache *cache = g_new (CoglPangoPipelineCache, 1);
+  ClutterPangoPipelineCache *cache = g_new (ClutterPangoPipelineCache, 1);
 
   cache->ctx = g_object_ref (ctx);
 
@@ -88,19 +82,17 @@ _cogl_pango_pipeline_cache_new (CoglContext *ctx,
   cache->hash_table =
     g_hash_table_new_full (g_direct_hash,
                            g_direct_equal,
-                           _cogl_pango_pipeline_cache_key_destroy,
-                           _cogl_pango_pipeline_cache_value_destroy);
+                           clutter_pango_pipeline_cache_key_destroy,
+                           clutter_pango_pipeline_cache_value_destroy);
 
   cache->base_texture_rgba_pipeline = NULL;
   cache->base_texture_alpha_pipeline = NULL;
-
-  cache->use_mipmapping = use_mipmapping;
 
   return cache;
 }
 
 static CoglPipeline *
-get_base_texture_rgba_pipeline (CoglPangoPipelineCache *cache)
+get_base_texture_rgba_pipeline (ClutterPangoPipelineCache *cache)
 {
   if (cache->base_texture_rgba_pipeline == NULL)
     {
@@ -112,19 +104,13 @@ get_base_texture_rgba_pipeline (CoglPangoPipelineCache *cache)
 
       cogl_pipeline_set_layer_wrap_mode (pipeline, 0,
                                          COGL_PIPELINE_WRAP_MODE_CLAMP_TO_EDGE);
-
-      if (cache->use_mipmapping)
-        cogl_pipeline_set_layer_filters
-          (pipeline, 0,
-           COGL_PIPELINE_FILTER_LINEAR_MIPMAP_LINEAR,
-           COGL_PIPELINE_FILTER_LINEAR);
     }
 
   return cache->base_texture_rgba_pipeline;
 }
 
 static CoglPipeline *
-get_base_texture_alpha_pipeline (CoglPangoPipelineCache *cache)
+get_base_texture_alpha_pipeline (ClutterPangoPipelineCache *cache)
 {
   if (cache->base_texture_alpha_pipeline == NULL)
     {
@@ -158,7 +144,7 @@ get_base_texture_alpha_pipeline (CoglPangoPipelineCache *cache)
 
 typedef struct
 {
-  CoglPangoPipelineCache *cache;
+  ClutterPangoPipelineCache *cache;
   CoglTexture *texture;
 } PipelineDestroyNotifyData;
 
@@ -172,12 +158,12 @@ pipeline_destroy_notify_cb (void *user_data)
 }
 
 CoglPipeline *
-_cogl_pango_pipeline_cache_get (CoglPangoPipelineCache *cache,
-                                CoglTexture            *texture)
+clutter_pango_pipeline_cache_get (ClutterPangoPipelineCache *cache,
+                                  CoglTexture               *texture)
 {
-  CoglPangoPipelineCacheEntry *entry;
+  PangoPipelineCacheEntry *entry;
   PipelineDestroyNotifyData *destroy_data;
-  pipeline_destroy_notify_key = g_quark_from_static_string ("-cogl-pango-pipeline-cache-key");
+  pipeline_destroy_notify_key = g_quark_from_static_string ("-clutter-pango-pipeline-cache-key");
 
   /* Look for an existing entry */
   entry = g_hash_table_lookup (cache->hash_table, texture);
@@ -186,7 +172,7 @@ _cogl_pango_pipeline_cache_get (CoglPangoPipelineCache *cache,
     return g_object_ref (entry->pipeline);
 
   /* No existing pipeline was found so let's create another */
-  entry = g_new0 (CoglPangoPipelineCacheEntry, 1);
+  entry = g_new0 (PangoPipelineCacheEntry, 1);
 
   if (texture)
     {
@@ -230,16 +216,14 @@ _cogl_pango_pipeline_cache_get (CoglPangoPipelineCache *cache,
 }
 
 void
-_cogl_pango_pipeline_cache_free (CoglPangoPipelineCache *cache)
+clutter_pango_pipeline_cache_free (ClutterPangoPipelineCache *cache)
 {
-  if (cache->base_texture_rgba_pipeline)
-    g_object_unref (cache->base_texture_rgba_pipeline);
-  if (cache->base_texture_alpha_pipeline)
-    g_object_unref (cache->base_texture_alpha_pipeline);
+  g_clear_object (&cache->base_texture_rgba_pipeline);
+  g_clear_object (&cache->base_texture_alpha_pipeline);
 
-  g_hash_table_destroy (cache->hash_table);
+  g_clear_pointer (&cache->hash_table, g_hash_table_destroy);
 
-  g_object_unref (cache->ctx);
+  g_clear_object (&cache->ctx);
 
   g_free (cache);
 }

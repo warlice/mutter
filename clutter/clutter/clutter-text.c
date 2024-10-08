@@ -46,6 +46,7 @@
 
 #include "clutter/clutter-text.h"
 
+#include "clutter/pango/clutter-pango-private.h"
 #include "clutter/clutter-text-accessible-private.h"
 #include "clutter/clutter-actor-private.h"
 #include "clutter/clutter-animatable.h"
@@ -56,7 +57,7 @@
 #include "clutter/clutter-keysyms.h"
 #include "clutter/clutter-main.h"
 #include "clutter/clutter-marshal.h"
-#include "clutter/clutter-private.h"    /* includes <cogl-pango/cogl-pango.h> */
+#include "clutter/clutter-private.h"
 #include "clutter/clutter-property-transition.h"
 #include "clutter/clutter-text-buffer.h"
 #include "clutter/clutter-paint-volume-private.h"
@@ -1073,7 +1074,7 @@ clutter_text_create_layout (ClutterText *text,
   oldest_cache->layout =
     clutter_text_create_layout_no_cache (text, width, height, ellipsize);
 
-  cogl_pango_ensure_glyph_cache_for_layout (oldest_cache->layout);
+  clutter_ensure_glyph_cache_for_layout (oldest_cache->layout);
 
   /* Mark the 'time' this cache was created and advance the time */
   oldest_cache->age = priv->cache_age++;
@@ -1944,27 +1945,6 @@ clutter_text_foreach_selection_rectangle_prescaled (ClutterText              *se
   clutter_text_foreach_selection_rectangle (self, 1.0f, func, paint_context, user_data);
 }
 
-typedef struct
-{
-  ClutterColorState *color_state;
-  ClutterColorState *target_color_state;
-} PangoPipelineData;
-
-static void
-setup_pango_pipeline (CoglPipeline *pipeline,
-                      gpointer      user_data)
-{
-  PangoPipelineData *pango_pipeline_data = user_data;
-  ClutterColorState *color_state =
-    pango_pipeline_data->color_state;
-  ClutterColorState *target_color_state =
-    pango_pipeline_data->target_color_state;
-
-  clutter_color_state_add_pipeline_transform (color_state,
-                                              target_color_state,
-                                              pipeline);
-}
-
 static void
 paint_selection_rectangle (ClutterText           *self,
                            const ClutterActorBox *box,
@@ -1986,7 +1966,6 @@ paint_selection_rectangle (ClutterText           *self,
     clutter_paint_context_get_target_color_state (paint_context);
   CoglColor cogl_color = { 0, };
   const CoglColor *color;
-  PangoPipelineData pango_pipeline_data = {};
 
   /* Paint selection background */
   if (priv->selection_color_set)
@@ -2004,10 +1983,6 @@ paint_selection_rectangle (ClutterText           *self,
   cogl_color_premultiply (&cogl_color);
   cogl_pipeline_set_color (color_pipeline, &cogl_color);
 
-  pango_pipeline_data = (PangoPipelineData) {
-    .color_state = color_state,
-    .target_color_state = target_color_state,
-  };
   clutter_color_state_add_pipeline_transform (color_state,
                                               target_color_state,
                                               color_pipeline);
@@ -2030,9 +2005,8 @@ paint_selection_rectangle (ClutterText           *self,
                            color->blue / 255.0f,
                            paint_opacity / 255.0f * color->alpha / 255.0f);
 
-  cogl_pango_show_layout (fb, layout, priv->text_x, 0, &cogl_color,
-                          setup_pango_pipeline,
-                          &pango_pipeline_data);
+  clutter_show_layout (fb, layout, priv->text_x, 0, &cogl_color,
+                       color_state, target_color_state);
 
   cogl_framebuffer_pop_clip (fb);
   g_object_unref (color_pipeline);
@@ -2706,7 +2680,6 @@ clutter_text_paint (ClutterActor        *self,
   float alloc_width;
   float alloc_height;
   float resource_scale;
-  PangoPipelineData pango_pipeline_data = {};
 
   fb = clutter_paint_context_get_framebuffer (paint_context);
 
@@ -2859,13 +2832,8 @@ clutter_text_paint (ClutterActor        *self,
                            priv->text_color.blue / 255.0f,
                            real_opacity / 255.0f);
 
-  pango_pipeline_data = (PangoPipelineData) {
-    .color_state = color_state,
-    .target_color_state = target_color_state,
-  };
-  cogl_pango_show_layout (fb, layout, priv->text_x, priv->text_y, &color,
-                          setup_pango_pipeline,
-                          &pango_pipeline_data);
+  clutter_show_layout (fb, layout, priv->text_x, priv->text_y, &color,
+                       color_state, target_color_state);
 
   selection_paint (text, fb, paint_context);
 

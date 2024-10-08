@@ -482,6 +482,7 @@
 #include <math.h>
 
 #include <gobject/gvaluecollector.h>
+#include <pango/pangocairo.h>
 
 #include "cogl/cogl.h"
 
@@ -13054,7 +13055,7 @@ update_pango_context (ClutterBackend *backend,
  * stored by the #ClutterBackend change.
  *
  * You can use the returned #PangoContext to create a #PangoLayout
- * and render text using cogl_pango_show_layout() to reuse the
+ * and render text using clutter_show_layout() to reuse the
  * glyphs cache also used by Clutter.
  *
  * Return value: (transfer none): the #PangoContext for a #ClutterActor.
@@ -13106,13 +13107,13 @@ clutter_actor_get_pango_context (ClutterActor *self)
 PangoContext *
 clutter_actor_create_pango_context (ClutterActor *self)
 {
-  CoglPangoFontMap *font_map;
+  PangoFontMap *font_map;
   ClutterContext *context = clutter_actor_get_context (self);
   PangoContext *pango_context;
 
   font_map = clutter_context_get_pango_fontmap (context);
 
-  pango_context = cogl_pango_font_map_create_context (font_map);
+  pango_context = pango_font_map_create_context (font_map);
   update_pango_context (clutter_context_get_backend (context), pango_context);
   pango_context_set_language (pango_context, pango_language_get_default ());
 
