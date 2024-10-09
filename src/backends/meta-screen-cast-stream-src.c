@@ -79,7 +79,11 @@ enum
   PROP_0,
 
   PROP_STREAM,
+
+  N_PROPS
 };
+
+static GParamSpec *obj_props[N_PROPS];
 
 enum
 {
@@ -119,6 +123,8 @@ typedef struct _MetaScreenCastStreamSrcPrivate
 
   int64_t last_frame_timestamp_us;
   guint follow_up_frame_source_id;
+
+  uint64_t buffer_sequence_counter;
 
   int buffer_count;
   gboolean needs_follow_up_with_buffers;
@@ -173,7 +179,6 @@ syncobj_data_from_buffer (struct spa_buffer *spa_buffer,
 
 #endif /* HAVE_NATIVE_BACKEND */
 
-
 static gboolean
 spa_video_format_from_cogl_pixel_format (CoglPixelFormat        cogl_format,
                                          enum spa_video_format *out_spa_format)
@@ -213,10 +218,10 @@ cogl_pixel_format_from_spa_video_format (enum spa_video_format  spa_format,
 }
 
 static struct spa_pod *
-push_format_object (enum spa_video_format   format,
-                    uint64_t               *modifiers,
-                    int                     n_modifiers,
-                    gboolean                fixate_modifier,
+push_format_object (enum spa_video_format  format,
+                    uint64_t              *modifiers,
+                    int                    n_modifiers,
+                    gboolean               fixate_modifier,
                     ...)
 {
   struct spa_pod_dynamic_builder pod_builder;
@@ -1148,6 +1153,15 @@ meta_screen_cast_stream_src_maybe_record_frame_with_timestamp (MetaScreenCastStr
     {
       header->pts = frame_timestamp_us * SPA_NSEC_PER_USEC;
       header->flags = 0;
+      header->seq = ++priv->buffer_sequence_counter;
+      meta_topic (META_DEBUG_SCREEN_CAST,
+                  "Queuing PipeWire buffer #%" G_GUINT64_FORMAT " (%p)",
+                  header->seq,
+                  buffer->buffer);
+    }
+  else
+    {
+      meta_topic (META_DEBUG_SCREEN_CAST, "Queuing unsequenced PipeWire buffer");
     }
 
   pw_stream_queue_buffer (priv->pipewire_stream, buffer);
@@ -1329,8 +1343,9 @@ on_stream_state_changed (void                 *data,
     meta_screen_cast_stream_src_get_instance_private (src);
 
   meta_topic (META_DEBUG_SCREEN_CAST,
-              "New PipeWire stream (%u) state '%s'",
+              "Pipewire stream (%u) state changed from %s to %s",
               priv->node_id,
+              pw_stream_state_as_string (old),
               pw_stream_state_as_string (state));
 
   switch (state)
@@ -2153,13 +2168,15 @@ meta_screen_cast_stream_src_class_init (MetaScreenCastStreamSrcClass *klass)
   klass->get_preferred_format =
     meta_screen_cast_stream_src_default_get_preferred_format;
 
-  g_object_class_install_property (object_class,
-                                   PROP_STREAM,
-                                   g_param_spec_object ("stream", NULL, NULL,
-                                                        META_TYPE_SCREEN_CAST_STREAM,
-                                                        G_PARAM_READWRITE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS));
+  obj_props[PROP_STREAM] =
+    g_param_spec_object ("stream", NULL, NULL,
+                         META_TYPE_SCREEN_CAST_STREAM,
+                         G_PARAM_READWRITE |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+  g_object_class_install_properties (object_class,
+                                     N_PROPS,
+                                     obj_props);
 
   signals[READY] = g_signal_new ("ready",
                                  G_TYPE_FROM_CLASS (klass),
