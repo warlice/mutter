@@ -699,17 +699,6 @@ meta_wayland_seat_get_current_surface (MetaWaylandSeat      *seat,
       caps = clutter_input_device_get_capabilities (device);
 
       if (caps &
-          (CLUTTER_INPUT_CAPABILITY_KEYBOARD |
-           CLUTTER_INPUT_CAPABILITY_TABLET_PAD))
-        return seat->input_focus;
-
-      if (caps & CLUTTER_INPUT_CAPABILITY_TABLET_TOOL)
-        {
-          return meta_wayland_tablet_seat_get_current_surface (seat->tablet_seat,
-                                                               device);
-        }
-
-      if (caps &
           (CLUTTER_INPUT_CAPABILITY_POINTER |
            CLUTTER_INPUT_CAPABILITY_TOUCHPAD |
            CLUTTER_INPUT_CAPABILITY_TRACKBALL |
@@ -726,6 +715,17 @@ meta_wayland_seat_get_current_surface (MetaWaylandSeat      *seat,
             return implicit_grab_surface;
           else
             return meta_wayland_pointer_get_current_surface (seat->pointer);
+        }
+
+      if (caps &
+          (CLUTTER_INPUT_CAPABILITY_KEYBOARD |
+           CLUTTER_INPUT_CAPABILITY_TABLET_PAD))
+        return seat->input_focus;
+
+      if (caps & CLUTTER_INPUT_CAPABILITY_TABLET_TOOL)
+        {
+          return meta_wayland_tablet_seat_get_current_surface (seat->tablet_seat,
+                                                               device);
         }
     }
 
