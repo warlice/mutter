@@ -97,15 +97,9 @@ typedef struct _MetaBackendNativePrivate
 #endif
 } MetaBackendNativePrivate;
 
-static GInitableIface *initable_parent_iface;
-
-static void
-initable_iface_init (GInitableIface *initable_iface);
-
-G_DEFINE_TYPE_WITH_CODE (MetaBackendNative, meta_backend_native, META_TYPE_BACKEND,
-                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                initable_iface_init)
-                         G_ADD_PRIVATE (MetaBackendNative))
+G_DEFINE_TYPE_WITH_PRIVATE (MetaBackendNative,
+                            meta_backend_native,
+                            META_TYPE_BACKEND)
 
 static void
 meta_backend_native_dispose (GObject *object)
@@ -183,8 +177,9 @@ update_viewports (MetaBackend *backend)
   g_object_unref (viewports);
 }
 
-static void
-meta_backend_native_post_init (MetaBackend *backend)
+static gboolean
+meta_backend_native_init_post (MetaBackend  *backend,
+                               GError      **error)
 {
   MetaBackendNative *backend_native = META_BACKEND_NATIVE (backend);
   MetaBackendNativePrivate *priv =
@@ -192,14 +187,14 @@ meta_backend_native_post_init (MetaBackend *backend)
   MetaMonitorManager *monitor_manager =
     meta_backend_get_monitor_manager (backend);
 
-  META_BACKEND_CLASS (meta_backend_native_parent_class)->post_init (backend);
-
   g_clear_pointer (&priv->startup_render_devices,
                    g_hash_table_unref);
 
   g_signal_connect_swapped (monitor_manager, "monitors-changed-internal",
                             G_CALLBACK (update_viewports), backend);
   update_viewports (backend);
+
+  return TRUE;
 }
 
 static MetaBackendCapabilities
@@ -736,17 +731,19 @@ on_started (MetaContext *context,
 }
 
 static gboolean
-meta_backend_native_initable_init (GInitable     *initable,
-                                   GCancellable  *cancellable,
-                                   GError       **error)
+meta_backend_native_init_basic (MetaBackend  *backend,
+                                GError      **error)
 {
-  MetaBackendNative *native = META_BACKEND_NATIVE (initable);
+  MetaBackendNative *native = META_BACKEND_NATIVE (backend);
   MetaBackendNativePrivate *priv =
     meta_backend_native_get_instance_private (native);
-  MetaBackend *backend = META_BACKEND (native);
   MetaKmsFlags kms_flags;
   const char *session_id = NULL;
   const char *seat_id = NULL;
+
+  priv->startup_render_devices =
+    g_hash_table_new_full (g_str_hash, g_str_equal,
+                           g_free, g_object_unref);
 
   switch (priv->mode)
     {
@@ -796,7 +793,7 @@ meta_backend_native_initable_init (GInitable     *initable,
                     G_CALLBACK (on_started),
                     backend);
 
-  return initable_parent_iface->init (initable, cancellable, error);
+  return TRUE;
 }
 
 static void
@@ -821,14 +818,6 @@ meta_backend_native_set_property (GObject      *object,
 }
 
 static void
-initable_iface_init (GInitableIface *initable_iface)
-{
-  initable_parent_iface = g_type_interface_peek_parent (initable_iface);
-
-  initable_iface->init = meta_backend_native_initable_init;
-}
-
-static void
 meta_backend_native_class_init (MetaBackendNativeClass *klass)
 {
   MetaBackendClass *backend_class = META_BACKEND_CLASS (klass);
@@ -840,7 +829,8 @@ meta_backend_native_class_init (MetaBackendNativeClass *klass)
   backend_class->create_clutter_backend = meta_backend_native_create_clutter_backend;
   backend_class->create_default_seat = meta_backend_native_create_default_seat;
 
-  backend_class->post_init = meta_backend_native_post_init;
+  backend_class->init_basic = meta_backend_native_init_basic;
+  backend_class->init_post = meta_backend_native_init_post;
   backend_class->get_capabilities = meta_backend_native_get_capabilities;
 
   backend_class->create_monitor_manager = meta_backend_native_create_monitor_manager;
@@ -874,12 +864,6 @@ meta_backend_native_class_init (MetaBackendNativeClass *klass)
 static void
 meta_backend_native_init (MetaBackendNative *backend_native)
 {
-  MetaBackendNativePrivate *priv =
-    meta_backend_native_get_instance_private (backend_native);
-
-  priv->startup_render_devices =
-    g_hash_table_new_full (g_str_hash, g_str_equal,
-                           g_free, g_object_unref);
 }
 
 MetaLauncher *
