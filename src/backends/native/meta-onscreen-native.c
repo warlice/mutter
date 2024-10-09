@@ -1304,7 +1304,7 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   MetaFrameNative *frame_native = meta_frame_native_from_frame (frame);
   MetaKmsUpdate *kms_update;
   CoglOnscreenClass *parent_class;
-  gboolean create_timestamp_query = TRUE;
+  gboolean secondary_gpu_used = FALSE;
   MetaPowerSave power_save_mode;
   g_autoptr (GError) error = NULL;
   MetaDrmBufferFlags buffer_flags;
@@ -1314,7 +1314,6 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
   g_autoptr (MetaDrmBuffer) buffer = NULL;
   MetaKmsCrtc *kms_crtc;
   MetaKmsDevice *kms_device;
-  int sync_fd;
 
   COGL_TRACE_SCOPED_ANCHOR (MetaRendererNativePostKmsUpdate);
 
@@ -1334,12 +1333,12 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
       secondary_gpu_data =
         meta_renderer_native_get_gpu_data (renderer_native,
                                            secondary_gpu_state->gpu_kms);
-      if (secondary_gpu_data->secondary.copy_mode ==
-          META_SHARED_FRAMEBUFFER_COPY_MODE_SECONDARY_GPU)
-        create_timestamp_query = FALSE;
+      secondary_gpu_used =
+        secondary_gpu_data->secondary.copy_mode ==
+        META_SHARED_FRAMEBUFFER_COPY_MODE_SECONDARY_GPU;
     }
 
-  if (create_timestamp_query)
+  if (!secondary_gpu_used)
     cogl_onscreen_egl_maybe_create_timestamp_query (onscreen, frame_info);
 
   parent_class = COGL_ONSCREEN_CLASS (meta_onscreen_native_parent_class);
@@ -1499,8 +1498,15 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen  *onscreen,
               meta_kms_device_get_path (kms_device));
 
   kms_update = meta_frame_native_steal_kms_update (frame_native);
-  sync_fd = cogl_context_get_latest_sync_fd (cogl_context);
-  meta_kms_update_set_sync_fd (kms_update, sync_fd);
+
+  if (!secondary_gpu_used)
+    {
+      int sync_fd;
+
+      sync_fd = cogl_context_get_latest_sync_fd (cogl_context);
+      meta_kms_update_set_sync_fd (kms_update, sync_fd);
+    }
+
   meta_kms_device_post_update (kms_device, kms_update,
                                META_KMS_UPDATE_FLAG_NONE);
   clutter_frame_set_result (frame, CLUTTER_FRAME_RESULT_PENDING_PRESENTED);
