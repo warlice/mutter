@@ -40,6 +40,7 @@
 #include "wayland/meta-wayland-activation.h"
 #include "wayland/meta-wayland-buffer.h"
 #include "wayland/meta-wayland-color-management.h"
+#include "wayland/meta-wayland-fifo.h"
 #include "wayland/meta-wayland-data-device.h"
 #include "wayland/meta-wayland-dma-buf.h"
 #include "wayland/meta-wayland-egl-stream.h"
@@ -700,6 +701,7 @@ meta_wayland_compositor_finalize (GObject *object)
 
   g_signal_handlers_disconnect_by_func (stage, on_after_update, compositor);
   g_signal_handlers_disconnect_by_func (stage, on_presented, compositor);
+  g_signal_handlers_disconnect_by_func (stage, on_started, compositor);
 
   meta_wayland_transaction_finalize (compositor);
 
@@ -857,7 +859,6 @@ meta_wayland_compositor_new (MetaContext *context)
                     G_CALLBACK (on_after_update), compositor);
   g_signal_connect (stage, "presented",
                     G_CALLBACK (on_presented), compositor);
-
   g_signal_connect (context, "started",
                     G_CALLBACK (on_started), compositor);
 
@@ -895,6 +896,7 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_init_xdg_wm_dialog (compositor);
   meta_wayland_init_color_management (compositor);
   meta_wayland_xdg_session_management_init (compositor);
+  meta_wayland_init_fifo (compositor);
 
 #ifdef HAVE_NATIVE_BACKEND
   meta_wayland_drm_lease_manager_init (compositor);

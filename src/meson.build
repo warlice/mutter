@@ -604,6 +604,7 @@ if have_wayland
     'wayland/meta-wayland-client-private.h',
     'wayland/meta-wayland-color-management.c',
     'wayland/meta-wayland-color-management.h',
+    'wayland/meta-wayland-fifo.c',
     'wayland/meta-wayland-cursor-surface.c',
     'wayland/meta-wayland-cursor-surface.h',
     'wayland/meta-wayland-data-device.c',
@@ -1096,6 +1097,7 @@ if have_wayland
   #  - protocol version (if stability is 'unstable')
   wayland_protocols = [
     ['drm-lease', 'staging', 'v1', ],
+    ['fifo-v1', 'private', ],
     ['fractional-scale', 'staging', 'v1', ],
     ['gtk-shell', 'private', ],
     ['idle-inhibit', 'unstable', 'v1', ],

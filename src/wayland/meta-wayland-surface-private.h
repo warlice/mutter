@@ -138,6 +138,11 @@ struct _MetaWaylandSurfaceState
 
   gboolean has_new_color_state;
   ClutterColorState *color_state;
+
+  gboolean fifo_barrier;
+  gboolean fifo_barrier_blocking;
+  uint32_t fifo_barrier_timeout;
+  gboolean fifo_wait;
 };
 
 struct _MetaWaylandDragDestFuncs
@@ -281,6 +286,9 @@ struct _MetaWaylandSurface
 
   /* color-management */
   ClutterColorState *color_state;
+
+  /* fifo */
+  gboolean fifo_barrier;
 };
 
 void                meta_wayland_shell_init     (MetaWaylandCompositor *compositor);

@@ -444,8 +444,13 @@ wl_subsurface_set_sync (struct wl_client   *client,
                         struct wl_resource *resource)
 {
   MetaWaylandSurface *surface = wl_resource_get_user_data (resource);
+  MetaWaylandSurface *subsurface_surface;
 
   surface->sub.synchronous = TRUE;
+
+  META_WAYLAND_SURFACE_FOREACH_SUBSURFACE (&surface->applied_state,
+                                           subsurface_surface)
+    meta_wayland_transaction_consider_surface (subsurface_surface);
 }
 
 static void
