@@ -104,3 +104,6 @@ gboolean meta_context_restore_rlimit_nofile (MetaContext  *context,
 
 META_EXPORT
 MetaDebugControl * meta_context_get_debug_control (MetaContext *context);
+
+META_EXPORT
+const char * meta_context_get_started_dir (MetaContext *context);
