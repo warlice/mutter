@@ -131,6 +131,11 @@ libeis_dep = dependency('libeis-1.0', version: libei_req)
 libei_dep = dependency('libei-1.0', version: libei_req)
 gvdb_dep = dependency('gvdb')
 
+have_libghe = get_option('libghe')
+if have_libghe
+  libghe_dep = dependency('libghe')
+endif
+
 have_wayland = get_option('wayland')
 have_x11 = get_option('x11')
 have_xwayland = get_option('xwayland')
@@ -568,6 +573,7 @@ cdata.set('HAVE_TIMERFD', have_timerfd)
 cdata.set('HAVE_MALLOC_TRIM', have_malloc_trim)
 cdata.set('HAVE_EVENTFD', have_eventfd)
 cdata.set('HAVE_DRM_PLANE_SIZE_HINT', have_drm_plane_size_hint)
+cdata.set('HAVE_LIBGHE', have_libghe)
 
 if have_x11_client
   xkb_base = xkeyboard_config_dep.get_variable('xkb_base')
@@ -718,6 +724,7 @@ meson.add_dist_script('meson/check-version.py', meson.project_version(), 'NEWS')
 summary('prefix', prefix, section: 'Directories')
 summary('libexecdir', libexecdir, section: 'Directories')
 summary('pkgdatadir', pkgdatadir, section: 'Directories')
+summary('libghe', have_libghe, section: 'Options')
 
 summary('buildtype', get_option('buildtype'), section: 'Build Configuration')
 summary('debug', get_option('debug'), section: 'Build Configuration')

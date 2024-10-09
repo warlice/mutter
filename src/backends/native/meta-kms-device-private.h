@@ -25,7 +25,8 @@ MetaKmsImplDevice * meta_kms_device_get_impl_device (MetaKmsDevice *device);
 
 MetaKmsResourceChanges meta_kms_device_update_states_in_impl (MetaKmsDevice *device,
                                                               uint32_t       crtc_id,
-                                                              uint32_t       connector_id);
+                                                              uint32_t       connector_id,
+                                                              gboolean       read_histogram);
 
 MetaKmsCrtc * meta_kms_device_find_crtc_in_impl (MetaKmsDevice *device,
                                                  uint32_t       crtc_id);

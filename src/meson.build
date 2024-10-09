@@ -10,6 +10,7 @@ mutter_includes = [
 
 mutter_lib_deps = [
   m_dep,
+  libghe_dep,
 ]
 
 mutter_pkg_deps = [

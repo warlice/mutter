@@ -259,7 +259,8 @@ meta_kms_device_disable (MetaKmsDevice *device)
 MetaKmsResourceChanges
 meta_kms_device_update_states_in_impl (MetaKmsDevice *device,
                                        uint32_t       crtc_id,
-                                       uint32_t       connector_id)
+                                       uint32_t       connector_id,
+                                       gboolean       read_histogram)
 {
   MetaKmsImplDevice *impl_device = meta_kms_device_get_impl_device (device);
   MetaKmsResourceChanges changes;
@@ -268,7 +269,8 @@ meta_kms_device_update_states_in_impl (MetaKmsDevice *device,
   meta_assert_is_waiting_for_kms_impl_task (device->kms);
 
   changes = meta_kms_impl_device_update_states (impl_device, crtc_id,
-                                                connector_id);
+                                                connector_id,
+                                                read_histogram);
 
   if (changes == META_KMS_RESOURCE_CHANGE_NONE)
     return changes;

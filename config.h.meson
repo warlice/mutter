@@ -141,3 +141,5 @@
 
 /* libdrm defines struct drm_plane_size_hint */
 #mesondefine HAVE_DRM_PLANE_SIZE_HINT
+/* Defined if libGHE is installed */
+#mesondefine HAVE_LIBGHE
