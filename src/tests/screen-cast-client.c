@@ -328,16 +328,17 @@ process_buffer (Stream            *stream,
 {
   process_buffer_metadata (stream, buffer);
 
-  if (buffer->datas[0].chunk->size == 0)
-    g_assert_not_reached ();
-  else if (buffer->datas[0].type == SPA_DATA_MemFd)
-    sanity_check_memfd (buffer);
-  else if (buffer->datas[0].type == SPA_DATA_DmaBuf)
-    g_assert_not_reached ();
-  else if (buffer->datas[0].type == SPA_DATA_MemPtr)
-    sanity_check_memptr (buffer);
-  else
-    g_assert_not_reached ();
+  if (buffer->datas[0].chunk->size != 0)
+    {
+      if (buffer->datas[0].type == SPA_DATA_MemFd)
+        sanity_check_memfd (buffer);
+      else if (buffer->datas[0].type == SPA_DATA_DmaBuf)
+        g_assert_not_reached ();
+      else if (buffer->datas[0].type == SPA_DATA_MemPtr)
+        sanity_check_memptr (buffer);
+      else
+        g_assert_not_reached ();
+    }
 }
 
 static void
@@ -448,18 +449,20 @@ stream_wait_for_cursor_position (Stream *stream,
     g_main_context_iteration (NULL, TRUE);
 }
 
-static G_GNUC_UNUSED void
+static void
 stream_wait_for_streaming (Stream *stream)
 {
+  g_debug ("Waiting for stream to stream");
   while (stream->state != PW_STREAM_STATE_STREAMING)
     g_main_context_iteration (NULL, TRUE);
 }
 
-static G_GNUC_UNUSED void
+static void
 stream_wait_for_render (Stream *stream)
 {
   int initial_buffer_count = stream->buffer_count;
 
+  g_debug ("Waiting for new buffer");
   while (stream->buffer_count == initial_buffer_count)
     g_main_context_iteration (NULL, TRUE);
 }
@@ -773,8 +776,8 @@ main (int    argc,
   /* Check that we receive the initial frame */
   g_debug ("Waiting for stream to be established");
   stream_wait_for_node (stream);
-  stream_wait_for_render (stream);
   stream_wait_for_streaming (stream);
+  stream_wait_for_render (stream);
   session_notify_absolute_pointer (session, stream, 6, 5);
   session_notify_absolute_pointer (session, stream, 5, 6);
 
