@@ -56,6 +56,8 @@ struct _MetaKmsPlane
    */
   GHashTable *formats_modifiers;
 
+  GHashTable *tearing_formats_modifiers;
+
   MetaKmsPlaneCursorSizeHints size_hints;
 
   MetaKmsPlanePropTable prop_table;
@@ -235,6 +237,14 @@ meta_kms_plane_get_modifiers_for_format (MetaKmsPlane *plane,
 }
 
 GArray *
+meta_kms_plane_get_tearing_modifiers_for_format (MetaKmsPlane *plane,
+                                                 uint32_t      format)
+{
+  return g_hash_table_lookup (plane->tearing_formats_modifiers,
+                              GUINT_TO_POINTER (format));
+}
+
+GArray *
 meta_kms_plane_copy_drm_format_list (MetaKmsPlane *plane)
 {
   GArray *formats;
@@ -341,7 +351,7 @@ update_formats (MetaKmsPlane      *plane,
 
   for (fmt_i = 0; fmt_i < blob_fmt->count_formats; fmt_i++)
     {
-      GArray *modifiers = g_array_new (FALSE, FALSE, sizeof (uint64_t));
+      g_autoptr (GArray) modifiers = g_array_new (FALSE, FALSE, sizeof (uint64_t));
 
       if (meta_is_topic_enabled (META_DEBUG_KMS))
         {
@@ -372,12 +382,86 @@ update_formats (MetaKmsPlane      *plane,
 
       if (modifiers->len == 0)
         {
-          free_modifier_array (modifiers);
+          g_steal_pointer (&modifiers);
           modifiers = NULL;
         }
 
       g_hash_table_insert (plane->formats_modifiers,
                            GUINT_TO_POINTER (formats[fmt_i]),
+                           modifiers);
+    }
+
+  drmModeFreePropertyBlob (blob);
+}
+
+static void
+update_tearing_formats (MetaKmsPlane      *plane,
+                        MetaKmsImplDevice *impl_device)
+{
+  uint64_t blob_id;
+  int fd;
+  drmModePropertyBlobPtr blob;
+  struct drm_format_modifier_blob *blob_fmt;
+  uint32_t *tearing_formats;
+  struct drm_format_modifier *drm_modifiers;
+  unsigned int fmt_i, mod_i;
+  MetaKmsProp *in_formats_tearing;
+
+  g_return_if_fail (g_hash_table_size (plane->tearing_formats_modifiers) == 0);
+
+  in_formats_tearing = &plane->prop_table.props[META_KMS_PLANE_PROP_IN_FORMATS_TEARING];
+  if (!in_formats_tearing)
+    return;
+
+  blob_id = in_formats_tearing->value;
+  if (blob_id == 0)
+    return;
+
+  fd = meta_kms_impl_device_get_fd (impl_device);
+  blob = drmModeGetPropertyBlob (fd, blob_id);
+  if (!blob)
+    return;
+
+  if (blob->length < sizeof (struct drm_format_modifier_blob))
+    {
+      drmModeFreePropertyBlob (blob);
+      return;
+    }
+
+  blob_fmt = blob->data;
+
+  tearing_formats = drm_formats_ptr (blob_fmt);
+  drm_modifiers = drm_modifiers_ptr (blob_fmt);
+
+  for (fmt_i = 0; fmt_i < blob_fmt->count_formats; fmt_i++)
+    {
+      g_autoptr (GArray) modifiers = g_array_new (FALSE, FALSE, sizeof (uint64_t));
+
+      for (mod_i = 0; mod_i < blob_fmt->count_modifiers; mod_i++)
+        {
+          struct drm_format_modifier *drm_modifier = &drm_modifiers[mod_i];
+
+          /*
+           * The modifier advertisement blob is partitioned into groups of
+           * 64 formats.
+           */
+          if (fmt_i < drm_modifier->offset || fmt_i > drm_modifier->offset + 63)
+            continue;
+
+          if (!(drm_modifier->formats & (1 << (fmt_i - drm_modifier->offset))))
+            continue;
+
+          g_array_append_val (modifiers, drm_modifier->modifier);
+        }
+
+      if (modifiers->len == 0)
+        {
+          g_steal_pointer (&modifiers);
+          modifiers = NULL;
+        }
+
+      g_hash_table_insert (plane->tearing_formats_modifiers,
+                           GUINT_TO_POINTER (tearing_formats[fmt_i]),
                            modifiers);
     }
 
@@ -504,6 +588,7 @@ meta_kms_plane_read_state (MetaKmsPlane            *plane,
                                           META_KMS_PLANE_N_PROPS);
 
   update_formats (plane, impl_device);
+  update_tearing_formats (plane, impl_device);
   update_cursor_size_hints (plane, impl_device);
   update_rotations (plane);
   update_legacy_formats (plane, drm_plane);
@@ -618,6 +703,11 @@ init_properties (MetaKmsPlane            *plane,
           .name = "SIZE_HINTS",
           .type = DRM_MODE_PROP_BLOB,
         },
+      [META_KMS_PLANE_PROP_IN_FORMATS_TEARING] =
+        {
+          .name = "IN_FORMATS_TEARING",
+          .type = DRM_MODE_PROP_BLOB,
+        },
     },
     .rotation_bitmask = {
       [META_KMS_PLANE_ROTATION_BIT_ROTATE_0] =
@@ -716,6 +806,7 @@ meta_kms_plane_finalize (GObject *object)
   MetaKmsPlane *plane = META_KMS_PLANE (object);
 
   g_hash_table_destroy (plane->formats_modifiers);
+  g_hash_table_destroy (plane->tearing_formats_modifiers);
   g_clear_pointer (&plane->size_hints.cursor_width, g_free);
   g_clear_pointer (&plane->size_hints.cursor_height, g_free);
 
@@ -726,6 +817,12 @@ static void
 meta_kms_plane_init (MetaKmsPlane *plane)
 {
   plane->formats_modifiers =
+    g_hash_table_new_full (g_direct_hash,
+                           g_direct_equal,
+                           NULL,
+                           (GDestroyNotify) free_modifier_array);
+
+  plane->tearing_formats_modifiers =
     g_hash_table_new_full (g_direct_hash,
                            g_direct_equal,
                            NULL,
