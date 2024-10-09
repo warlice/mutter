@@ -97,6 +97,7 @@ data_offer_receive (struct wl_client *client, struct wl_resource *resource,
   MetaSelectionType selection_type;
   GList *mime_types;
   gboolean found;
+  g_autoptr (GError) error = NULL;
 
   selection_type = offer->selection_type;
   mime_types = meta_selection_get_mimetypes (meta_display_get_selection (display),
@@ -104,7 +105,7 @@ data_offer_receive (struct wl_client *client, struct wl_resource *resource,
   found = g_list_find_custom (mime_types, mime_type, (GCompareFunc) g_strcmp0) != NULL;
   g_list_free_full (mime_types, g_free);
 
-  if (found)
+  if (found && g_unix_set_fd_nonblocking (fd, TRUE, &error))
     {
       GOutputStream *stream;
 
@@ -120,6 +121,9 @@ data_offer_receive (struct wl_client *client, struct wl_resource *resource,
     }
   else
     {
+      if (error)
+        g_warning ("Could not set FD nonblocking: %s", error->message);
+
       close (fd);
     }
 }
