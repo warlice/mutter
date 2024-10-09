@@ -21,21 +21,27 @@
 
 #include "backends/meta-backend-types.h"
 
-typedef struct _MetaLauncher MetaLauncher;
+#define META_TYPE_LAUNCHER (meta_launcher_get_type ())
+G_DECLARE_FINAL_TYPE (MetaLauncher,
+                      meta_launcher,
+                      META, LAUNCHER,
+                      GObject)
+
 typedef struct _MetaDBusLogin1Session MetaDBusLogin1Session;
 
-MetaLauncher     *meta_launcher_new                     (MetaBackend   *backend,
-                                                         const char    *session_id,
-                                                         const char    *custom_seat_id,
-                                                         GError       **error);
-void              meta_launcher_free                    (MetaLauncher  *self);
+MetaLauncher *meta_launcher_new (MetaBackend  *backend,
+                                 GError      **error);
 
-gboolean          meta_launcher_activate_vt             (MetaLauncher  *self,
-                                                         signed char    vt,
-                                                         GError       **error);
+MetaBackend * meta_launcher_get_backend (MetaLauncher *launcher);
 
-const char *      meta_launcher_get_seat_id             (MetaLauncher *launcher);
+gboolean meta_launcher_is_session_controller (MetaLauncher *launcher);
+
+gboolean meta_launcher_is_session_active (MetaLauncher *launcher);
+
+const char * meta_launcher_get_seat_id (MetaLauncher *launcher);
 
 MetaDBusLogin1Session * meta_launcher_get_session_proxy (MetaLauncher *launcher);
 
-MetaBackend * meta_launcher_get_backend (MetaLauncher *launcher);
+gboolean meta_launcher_activate_vt (MetaLauncher  *self,
+                                    signed char    vt,
+                                    GError       **error);
