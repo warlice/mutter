@@ -284,6 +284,8 @@ mutter_sources = [
   'backends/meta-viewport-info.h',
   'backends/meta-virtual-monitor.c',
   'backends/meta-virtual-monitor.h',
+  'common/meta-utils.c',
+  'common/meta-utils.h',
   'compositor/clutter-utils.c',
   'compositor/clutter-utils.h',
   'compositor/cogl-utils.c',

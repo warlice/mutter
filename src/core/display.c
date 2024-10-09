@@ -1718,7 +1718,8 @@ root_cursor_prepare_at (MetaCursorSpriteXcursor *sprite_xcursor,
         {
           meta_cursor_sprite_xcursor_set_theme_scale (sprite_xcursor,
                                                       (int) logical_monitor->scale);
-          meta_cursor_sprite_set_texture_scale (cursor_sprite, 1.0f);
+          meta_cursor_sprite_set_texture_scale (cursor_sprite,
+                                                1.0f / logical_monitor->scale);
         }
     }
 }
