@@ -232,6 +232,7 @@ default_focus (MetaWaylandEventHandler *handler,
                                                   surface);
       meta_wayland_tablet_seat_set_pad_focus (seat->tablet_seat, surface);
       meta_wayland_text_input_set_focus (seat->text_input, surface);
+      /* text-input-v1 will set focused surface on activate. */
     }
 
   if (caps & CLUTTER_INPUT_CAPABILITY_TABLET_TOOL)
@@ -297,6 +298,8 @@ meta_wayland_seat_new (MetaWaylandCompositor *compositor,
                               NULL);
 
   seat->text_input = meta_wayland_text_input_new (seat);
+  /* Chromium/Electron-based apps only support text-input-v1. */
+  seat->text_input_v1 = meta_wayland_text_input_v1_new (seat);
 
   meta_wayland_data_device_init (&seat->data_device, seat);
   meta_wayland_data_device_primary_init (&seat->primary_data_device, seat);
@@ -342,6 +345,7 @@ meta_wayland_seat_free (MetaWaylandSeat *seat)
   g_object_unref (seat->touch);
 
   meta_wayland_text_input_destroy (seat->text_input);
+  meta_wayland_text_input_v1_destroy (seat->text_input_v1);
 
   g_free (seat);
 }
@@ -494,7 +498,10 @@ meta_wayland_seat_handle_event_internal (MetaWaylandSeat    *seat,
   if (event_type == CLUTTER_BUTTON_PRESS ||
       event_type == CLUTTER_TOUCH_BEGIN)
     {
-      meta_wayland_text_input_handle_event (seat->text_input, event);
+      gboolean handled = FALSE;
+      handled = meta_wayland_text_input_handle_event (seat->text_input, event);
+      if (!handled)
+        handled = meta_wayland_text_input_v1_handle_event (seat->text_input_v1, event);
     }
 
   switch (event_type)
@@ -526,7 +533,8 @@ meta_wayland_seat_handle_event_internal (MetaWaylandSeat    *seat,
     case CLUTTER_IM_COMMIT:
     case CLUTTER_IM_DELETE:
     case CLUTTER_IM_PREEDIT:
-      if (meta_wayland_text_input_handle_event (seat->text_input, event))
+      if (meta_wayland_text_input_handle_event (seat->text_input, event) ||
+          meta_wayland_text_input_v1_handle_event (seat->text_input_v1, event))
         return TRUE;
 
       break;

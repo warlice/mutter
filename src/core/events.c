@@ -239,6 +239,7 @@ meta_display_handle_event (MetaDisplay        *display,
 #ifdef HAVE_WAYLAND
   MetaWaylandCompositor *wayland_compositor;
   MetaWaylandTextInput *wayland_text_input = NULL;
+  MetaWaylandTextInputV1 *wayland_text_input_v1 = NULL;
 #endif
 
 #ifdef HAVE_WAYLAND
@@ -247,6 +248,8 @@ meta_display_handle_event (MetaDisplay        *display,
     {
       wayland_text_input =
         meta_wayland_compositor_get_text_input (wayland_compositor);
+      wayland_text_input_v1 =
+        meta_wayland_compositor_get_text_input_v1 (wayland_compositor);
     }
 #endif
 
@@ -288,9 +291,11 @@ meta_display_handle_event (MetaDisplay        *display,
     }
 
 #ifdef HAVE_WAYLAND
-  if (wayland_text_input &&
-      !meta_compositor_get_current_window_drag (compositor) &&
-      meta_wayland_text_input_update (wayland_text_input, event))
+  if (!meta_compositor_get_current_window_drag (compositor) &&
+      ((wayland_text_input &&
+        meta_wayland_text_input_update (wayland_text_input, event)) ||
+       (wayland_text_input_v1 &&
+        meta_wayland_text_input_v1_update (wayland_text_input_v1, event))))
     return CLUTTER_EVENT_STOP;
 
   if (wayland_compositor)

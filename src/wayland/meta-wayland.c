@@ -887,6 +887,7 @@ meta_wayland_compositor_new (MetaContext *context)
   meta_wayland_keyboard_shortcuts_inhibit_init (compositor);
   meta_wayland_surface_inhibit_shortcuts_dialog_init ();
   meta_wayland_text_input_init (compositor);
+  meta_wayland_text_input_v1_init (compositor);
   meta_wayland_init_presentation_time (compositor);
   meta_wayland_activation_init (compositor);
   meta_wayland_transaction_init (compositor);
@@ -1151,6 +1152,12 @@ MetaWaylandTextInput *
 meta_wayland_compositor_get_text_input (MetaWaylandCompositor *compositor)
 {
   return compositor->seat->text_input;
+}
+
+MetaWaylandTextInputV1 *
+meta_wayland_compositor_get_text_input_v1 (MetaWaylandCompositor *compositor)
+{
+  return compositor->seat->text_input_v1;
 }
 
 static void

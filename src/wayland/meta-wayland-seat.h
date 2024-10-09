@@ -30,6 +30,7 @@
 #include "wayland/meta-wayland-pointer.h"
 #include "wayland/meta-wayland-tablet-tool.h"
 #include "wayland/meta-wayland-text-input.h"
+#include "wayland/meta-wayland-text-input-v1.h"
 #include "wayland/meta-wayland-touch.h"
 #include "wayland/meta-wayland-types.h"
 
@@ -51,6 +52,7 @@ struct _MetaWaylandSeat
   MetaWaylandDataDevicePrimary primary_data_device;
 
   MetaWaylandTextInput *text_input;
+  MetaWaylandTextInputV1 *text_input_v1;
 
   MetaWaylandInput *input_handler;
   MetaWaylandEventHandler *default_handler;

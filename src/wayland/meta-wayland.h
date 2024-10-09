@@ -26,6 +26,7 @@
 #include "meta/types.h"
 #include "meta/meta-wayland-compositor.h"
 #include "wayland/meta-wayland-text-input.h"
+#include "wayland/meta-wayland-text-input-v1.h"
 #include "wayland/meta-wayland-types.h"
 
 META_EXPORT_TEST
@@ -88,6 +89,7 @@ void                    meta_wayland_compositor_schedule_surface_association (Me
                                                                               MetaWindow            *window);
 
 MetaWaylandTextInput *  meta_wayland_compositor_get_text_input (MetaWaylandCompositor *compositor);
+MetaWaylandTextInputV1 *  meta_wayland_compositor_get_text_input_v1 (MetaWaylandCompositor *compositor);
 
 #ifdef HAVE_XWAYLAND
 void                    meta_wayland_compositor_notify_surface_id (MetaWaylandCompositor *compositor,
