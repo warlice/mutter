@@ -3392,6 +3392,13 @@ meta_window_make_fullscreen (MetaWindow  *window)
   g_return_if_fail (META_IS_WINDOW (window));
   g_return_if_fail (!window->override_redirect);
 
+  if (!window->has_fullscreen_func)
+    {
+      g_warning ("Window %s cannot be made fullscreen, but something tried "
+                 "anyways. Not having it!", window->desc);
+      return;
+    }
+
   if (!window->fullscreen)
     {
       MtkRectangle old_frame_rect, old_buffer_rect;
