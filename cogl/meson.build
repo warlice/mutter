@@ -31,6 +31,7 @@ endif
 if have_egl
   cogl_pkg_deps += [
     egl_dep,
+    libglvnd_dep,
   ]
 endif
 

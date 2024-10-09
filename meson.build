@@ -44,6 +44,9 @@ libei_req = '>= 1.0.901'
 udev_req = '>= 228'
 gudev_req = '>= 238'
 
+# egl version requirements
+libglvnd_req = '>= 1.6.0'
+
 # wayland version requirements
 wayland_server_req = '>= 1.23'
 wayland_protocols_req = '>= 1.36'
@@ -193,6 +196,7 @@ endif
 have_egl = get_option('egl')
 if have_egl
   egl_dep = dependency('egl')
+  libglvnd_dep = dependency('libglvnd', version: libglvnd_req)
 endif
 
 have_glx = get_option('glx') and have_x11
