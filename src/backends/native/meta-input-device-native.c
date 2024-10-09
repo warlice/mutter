@@ -1360,6 +1360,7 @@ meta_input_device_native_init (MetaInputDeviceNative *self)
   self->output_ratio = 0;
   self->width = -1;
   self->height = -1;
+  self->three_finger_drag_enabled = FALSE;
 }
 
 static void

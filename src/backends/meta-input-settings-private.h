@@ -102,6 +102,10 @@ struct _MetaInputSettingsClass
                               ClutterInputDevice           *device,
                               GDesktopTouchpadClickMethod   mode);
 
+  void (* set_three_finger_drag) (MetaInputSettings  *settings,
+                                  ClutterInputDevice *device,
+                                  gboolean            enabled);
+
   void (* set_keyboard_repeat) (MetaInputSettings *settings,
                                 gboolean           repeat,
                                 guint              delay,

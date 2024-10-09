@@ -913,6 +913,39 @@ update_touchpad_click_method (MetaInputSettings *input_settings,
 }
 
 static void
+update_touchpad_three_finger_drag (MetaInputSettings  *input_settings,
+                                   ClutterInputDevice *device)
+{
+  MetaInputSettingsClass *input_settings_class;
+  MetaInputSettingsPrivate *priv;
+  gboolean enabled;
+
+  if (device && clutter_input_device_get_device_type(device) != CLUTTER_TOUCHPAD_DEVICE)
+    return;
+
+  priv = meta_input_settings_get_instance_private (input_settings);
+  input_settings_class = META_INPUT_SETTINGS_GET_CLASS (input_settings);
+  enabled = g_settings_get_boolean (priv->touchpad_settings,
+                                    "three-finger-drag");
+
+  if (device)
+    {
+      settings_device_set_bool_setting (input_settings, device,
+                                        input_settings_class->set_three_finger_drag,
+                                        enabled);
+    }
+  else
+    {
+      settings_set_bool_setting (input_settings,
+                                 CLUTTER_INPUT_CAPABILITY_TOUCHPAD,
+                                 CLUTTER_INPUT_CAPABILITY_NONE,
+                                 NULL,
+                                 input_settings_class->set_three_finger_drag,
+                                 enabled);
+    }
+}
+
+static void
 update_touchpad_send_events (MetaInputSettings  *input_settings,
                              ClutterInputDevice *device)
 {
@@ -1234,6 +1267,8 @@ meta_input_settings_changed_cb (GSettings  *settings,
         update_touchpad_two_finger_scroll (input_settings, NULL);
       else if (strcmp (key, "click-method") == 0)
         update_touchpad_click_method (input_settings, NULL);
+      else if (strcmp (key, "three-finger-drag") == 0)
+        update_touchpad_three_finger_drag (input_settings, NULL);
       else if (strcmp (key, "middle-click-emulation") == 0)
         update_middle_click_emulation (input_settings, settings, NULL);
     }

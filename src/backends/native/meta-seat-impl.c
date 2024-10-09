@@ -1435,11 +1435,52 @@ notify_swipe_gesture_event (ClutterInputDevice          *input_device,
                             double                       dx_unaccel,
                             double                       dy_unaccel)
 {
+  MetaInputDeviceNative *device_evdev;
   MetaSeatImpl *seat_impl;
   ClutterEvent *event = NULL;
   float x, y;
 
+  device_evdev = META_INPUT_DEVICE_NATIVE (input_device);
   seat_impl = seat_impl_from_device (input_device);
+
+  if (device_evdev->three_finger_drag_enabled)
+    {
+      if (n_fingers == 3)
+        {
+          switch (phase)
+            {
+            case CLUTTER_TOUCHPAD_GESTURE_PHASE_BEGIN:
+              meta_seat_impl_notify_button_in_impl (seat_impl,
+                                                    input_device,
+                                                    time_us,
+                                                    BTN_LEFT,
+                                                    LIBINPUT_BUTTON_STATE_PRESSED);
+              return;
+            case CLUTTER_TOUCHPAD_GESTURE_PHASE_CANCEL:
+            case CLUTTER_TOUCHPAD_GESTURE_PHASE_END:
+              meta_seat_impl_notify_button_in_impl (seat_impl,
+                                                    input_device,
+                                                    time_us,
+                                                    BTN_LEFT,
+                                                    LIBINPUT_BUTTON_STATE_RELEASED);
+              return;
+            case CLUTTER_TOUCHPAD_GESTURE_PHASE_UPDATE:
+              meta_seat_impl_notify_relative_motion_in_impl (seat_impl,
+                                                             input_device,
+                                                             time_us,
+                                                             (float) dx,
+                                                             (float) dy,
+                                                             (float) dx_unaccel,
+                                                             (float) dy_unaccel,
+                                                             NULL);
+              return;
+            }
+        }
+      else if (n_fingers == 4)
+        {
+          n_fingers--;
+        }
+    }
 
   meta_input_device_native_get_coords_in_impl (META_INPUT_DEVICE_NATIVE (seat_impl->core_pointer),
                                                &x, &y);
