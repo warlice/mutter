@@ -166,22 +166,9 @@ test_case_dispatch (TestCase *test,
 {
   MetaBackend *backend = meta_context_get_backend (test->context);
   ClutterActor *stage = meta_backend_get_stage (backend);
-  MetaDisplay *display = meta_context_get_display (test->context);
-  MetaCompositor *compositor = meta_display_get_compositor (display);
-  MetaLaters *laters = meta_compositor_get_laters (compositor);
-
-  /* Wait until we've done any outstanding queued up work.
-   * Though we add this as BEFORE_REDRAW, the iteration that runs the
-   * BEFORE_REDRAW idles will proceed on and do the redraw, so we're
-   * waiting until after *all* frame processing.
-   */
-  meta_laters_add (laters, META_LATER_BEFORE_REDRAW,
-                   test_case_loop_quit,
-                   test,
-                   NULL);
 
   clutter_stage_schedule_update (CLUTTER_STAGE (stage));
-  g_main_loop_run (test->loop);
+  wait_for_signal_emission (CLUTTER_STAGE (stage), "after-update");
 
   return TRUE;
 }
@@ -698,8 +685,6 @@ test_case_add_strut (TestCase    *test,
       meta_workspace_set_builtin_struts (workspace, struts);
     }
 
-  wait_for_signal_emission (display, "workareas-changed");
-
   return TRUE;
 }
 
@@ -796,7 +781,7 @@ test_case_parse_signal (TestCase *test,
   *out_signal_instance = NULL;
   *out_signal_name = NULL;
 
-  if (argc < 3 || !g_str_equal (argv[1], "=>"))
+  if (argc >= 3 && !g_str_equal (argv[1], "=>"))
     BAD_COMMAND ("usage: [window-id]::signal => command");
 
   signal_start = strstr (argv[0], "::");
@@ -835,6 +820,12 @@ test_case_parse_signal (TestCase *test,
             meta_backend_get_monitor_manager (backend);
 
           instance_obj = G_OBJECT (monitor_manager);
+        }
+      else if (g_str_equal (signal_name, "workareas-changed"))
+        {
+          MetaDisplay *display = meta_context_get_display (test->context);
+
+          instance_obj = G_OBJECT (display);
         }
       else
         {
@@ -2086,6 +2077,20 @@ test_case_do (TestCase    *test,
           g_object_remove_weak_pointer (G_OBJECT (window_actor),
                                         (gpointer *) &window_actor);
         }
+    }
+  else if (strcmp (argv[0], "wait_for_signal") == 0)
+    {
+      g_autoptr (GObject) signal_instance = NULL;
+      g_autofree char *signal_name = NULL;
+
+      if (argc != 2)
+        BAD_COMMAND("usage: %s [window-id]::signal", argv[0]);
+
+      if (!test_case_parse_signal (test, argc - 1, argv + 1,
+                                   &signal_name, &signal_instance, error))
+        return FALSE;
+
+      wait_for_signal_emission (signal_instance, signal_name);
     }
   else if (argc > 2 && g_str_equal (argv[1], "=>"))
     {
