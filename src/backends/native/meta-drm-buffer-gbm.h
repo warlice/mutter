@@ -21,6 +21,7 @@
 
 #include <gbm.h>
 
+#include "backends/meta-egl.h"
 #include "backends/native/meta-backend-native-types.h"
 #include "backends/native/meta-drm-buffer-private.h"
 
@@ -42,3 +43,8 @@ MetaDrmBufferGbm * meta_drm_buffer_gbm_new_take (MetaDeviceFile      *device_fil
                                                  GError             **error);
 
 struct gbm_bo * meta_drm_buffer_gbm_get_bo (MetaDrmBufferGbm *buffer_gbm);
+
+EGLImageKHR meta_drm_buffer_gbm_get_native_blit_image (MetaEgl        *egl,
+                                                       EGLDisplay      egl_display,
+                                                       struct gbm_bo  *shared_bo,
+                                                       GError        **error);
