@@ -444,9 +444,9 @@ meta_virtual_input_device_native_notify_key (ClutterVirtualInputDevice *virtual_
 
 static gboolean
 pick_keycode_for_keyval_in_current_group_in_impl (ClutterVirtualInputDevice *virtual_device,
-						  guint                      keyval,
-						  guint                     *keycode_out,
-						  guint                     *level_out)
+						                                      guint                      keyval,
+						                                      guint                     *keycode_out,
+						                                      guint                     *level_out)
 {
   MetaVirtualInputDeviceNative *virtual_evdev =
     META_VIRTUAL_INPUT_DEVICE_NATIVE (virtual_device);
@@ -456,6 +456,7 @@ pick_keycode_for_keyval_in_current_group_in_impl (ClutterVirtualInputDevice *vir
   struct xkb_state  *state;
   guint keycode, layout;
   xkb_keycode_t min_keycode, max_keycode;
+  int max_num_levels, level;
 
   backend = clutter_get_default_backend ();
   keymap = clutter_seat_get_keymap (clutter_backend_get_default_seat (backend));
@@ -465,23 +466,41 @@ pick_keycode_for_keyval_in_current_group_in_impl (ClutterVirtualInputDevice *vir
   layout = xkb_state_serialize_layout (state, XKB_STATE_LAYOUT_EFFECTIVE);
   min_keycode = xkb_keymap_min_keycode (xkb_keymap);
   max_keycode = xkb_keymap_max_keycode (xkb_keymap);
-  for (keycode = min_keycode; keycode < max_keycode; keycode++)
+  max_num_levels = 1;
+  /*
+   * Iterate over the lower levels of the keymap first, in an attempt to try to
+   * pick lower level keycodes before higher level ones that may come later.
+   *
+   * The max_num_levels is determined dynamically by the highest encountered
+   * level count for any key we iterate over in the keymap.
+   */
+  for (level = 0; level < max_num_levels; level++)
     {
-      gint num_levels, level;
-      num_levels = xkb_keymap_num_levels_for_key (xkb_keymap, keycode, layout);
-      for (level = 0; level < num_levels; level++)
+      for (keycode = min_keycode; keycode < max_keycode; keycode++)
         {
-          const xkb_keysym_t *syms;
-          gint num_syms, sym;
-          num_syms = xkb_keymap_key_get_syms_by_level (xkb_keymap, keycode, layout, level, &syms);
-          for (sym = 0; sym < num_syms; sym++)
+          int num_levels;
+
+          num_levels = xkb_keymap_num_levels_for_key (xkb_keymap, keycode, layout);
+          max_num_levels = MAX (max_num_levels, num_levels);
+          if (level < num_levels)
             {
-              if (syms[sym] == keyval)
+              const xkb_keysym_t *syms;
+              int num_syms, sym;
+
+              num_syms = xkb_keymap_key_get_syms_by_level (xkb_keymap,
+                                                           keycode,
+                                                           layout,
+                                                           level,
+                                                           &syms);
+              for (sym = 0; sym < num_syms; sym++)
                 {
-                  *keycode_out = keycode;
-                  if (level_out)
-                    *level_out = level;
-                  return TRUE;
+                  if (syms[sym] == keyval)
+                    {
+                      *keycode_out = keycode;
+                      if (level_out)
+                        *level_out = level;
+                      return TRUE;
+                    }
                 }
             }
         }
