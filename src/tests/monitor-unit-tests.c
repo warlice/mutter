@@ -9955,13 +9955,13 @@ meta_test_monitor_calculate_mode_scale (void)
       .exp_nofrac = 1.0,
     },
     {
-       .name = "OnePlus 6",
-       .width = 1080,
-       .height = 2280,
-       .width_mm = 68, /* 19:9, 6.28" */
-       .height_mm = 144,
-       .exp = 2.5,
-       .exp_nofrac = 2.0,
+      .name = "OnePlus 6",
+      .width = 1080,
+      .height = 2280,
+      .width_mm = 68, /* 19:9, 6.28" */
+      .height_mm = 144,
+      .exp = 2.5,
+      .exp_nofrac = 2.0,
     },
     {
       .name = "Google Pixel 6a",
@@ -9979,7 +9979,7 @@ meta_test_monitor_calculate_mode_scale (void)
       .width_mm = 286, /* 16:10, 13.3" */
       .height_mm = 179,
       .exp = 1.75,
-      .exp_nofrac = 2.0,
+      .exp_nofrac = 1.0,
     },
     {
       .name = "Surface Laptop Studio",
@@ -10024,7 +10024,7 @@ meta_test_monitor_calculate_mode_scale (void)
       .width_mm = 509,
       .height_mm = 286,
       .exp = 1.75,
-      .exp_nofrac = 2.0,
+      .exp_nofrac = 1.0,
     },
     {
       .name = "Generic 27\" 4K",
@@ -10042,6 +10042,26 @@ meta_test_monitor_calculate_mode_scale (void)
       .width_mm = 708,
       .height_mm = 398,
       .exp = 1.25,
+      .exp_nofrac = 1.0,
+    },
+    {
+      .name = "Generic 25\" 4K",
+      .width = 3840,
+      .height = 2160,
+      .width_mm = 554,
+      .height_mm = 312,
+      /* Ideal scale is 1.60, should round to 1.5 and 1.0 */
+      .exp = 1.5,
+      .exp_nofrac = 1.0,
+    },
+    {
+      .name = "Generic 23.5\" 4K",
+      .width = 3840,
+      .height = 2160,
+      .width_mm = 522,
+      .height_mm = 294,
+      /* Ideal scale is 1.70, should round to 1.75 and 1.0 */
+      .exp = 1.75,
       .exp_nofrac = 1.0,
     },
   };
