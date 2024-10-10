@@ -989,18 +989,41 @@ copy_shared_framebuffer_gpu (CoglOnscreen                         *onscreen,
   if (blit_n_rectangles > 0)
     {
       int i;
-      size_t offset = 0;
+      int offset = 0;
 
+      /* Will tend to overallocate a bit if reduction happens below, but doesn't matter much since it's pretty small. */
       blit_rectangles = g_newa (MtkRectangle, blit_n_rectangles);
+
+      GHashTable* hash_table = g_hash_table_new (g_str_hash, g_str_equal);
 
       for (i = 0; i <= buffer_age; ++i)
         {
-          memcpy (blit_rectangles + offset,
-                  secondary_gpu_state->damage_rectangles[i].rectangles,
-                  secondary_gpu_state->damage_rectangles[i].n_rectangles * sizeof(MtkRectangle));
+          int j;
 
-          offset += secondary_gpu_state->damage_rectangles[i].n_rectangles;
+          for (j = 0; j < secondary_gpu_state->damage_rectangles[i].n_rectangles; ++j)
+            {
+              char hash_table_key[100];
+
+              g_snprintf (hash_table_key,
+                          100,
+                          "%i_%i_%i_%i",
+                          secondary_gpu_state->damage_rectangles[i].rectangles[j].x,
+                          secondary_gpu_state->damage_rectangles[i].rectangles[j].y,
+                          secondary_gpu_state->damage_rectangles[i].rectangles[j].width,
+                          secondary_gpu_state->damage_rectangles[i].rectangles[j].height);
+
+              if (g_hash_table_lookup_extended (hash_table, hash_table_key, NULL, NULL))
+                continue;
+
+              g_hash_table_insert (hash_table, hash_table_key, NULL);
+
+              memcpy (&blit_rectangles[offset++], &secondary_gpu_state->damage_rectangles[i].rectangles[j], sizeof(MtkRectangle));
+            }
         }
+
+      g_hash_table_destroy (hash_table);
+
+      blit_n_rectangles = offset;
     }
 
   if (!meta_renderer_native_gles3_blit_shared_bo (egl,
