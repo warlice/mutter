@@ -44,7 +44,6 @@ struct _MetaScreenCastVirtualStreamSrc
   MetaVirtualMonitor *virtual_monitor;
 
   gboolean cursor_bitmap_invalid;
-  gboolean hw_cursor_inhibited;
 
   struct {
     gboolean set;
@@ -52,23 +51,18 @@ struct _MetaScreenCastVirtualStreamSrc
     int y;
   } last_cursor_matadata;
 
-  MetaStageWatch *watch;
+  MetaStageWatch *paint_watch;
+  MetaStageWatch *skipped_watch;
 
   gulong position_invalidated_handler_id;
   gulong cursor_changed_handler_id;
-  gulong prepare_frame_handler_id;
 
   gulong monitors_changed_handler_id;
 };
 
-static void
-hw_cursor_inhibitor_iface_init (MetaHwCursorInhibitorInterface *iface);
-
-G_DEFINE_TYPE_WITH_CODE (MetaScreenCastVirtualStreamSrc,
-                         meta_screen_cast_virtual_stream_src,
-                         META_TYPE_SCREEN_CAST_STREAM_SRC,
-                         G_IMPLEMENT_INTERFACE (META_TYPE_HW_CURSOR_INHIBITOR,
-                                                hw_cursor_inhibitor_iface_init))
+G_DEFINE_FINAL_TYPE (MetaScreenCastVirtualStreamSrc,
+                     meta_screen_cast_virtual_stream_src,
+                     META_TYPE_SCREEN_CAST_STREAM_SRC)
 
 static gboolean
 meta_screen_cast_virtual_stream_src_get_specs (MetaScreenCastStreamSrc *src,
@@ -100,22 +94,13 @@ view_from_src (MetaScreenCastStreamSrc *src)
   MetaRenderer *renderer = meta_backend_get_renderer (backend_from_src (src));
   MetaRendererView *view = meta_renderer_get_view_for_crtc (renderer, crtc);
 
-  return CLUTTER_STAGE_VIEW (view);
+  return view ? CLUTTER_STAGE_VIEW (view) : NULL;
 }
 
 static ClutterStage *
 stage_from_src (MetaScreenCastStreamSrc *src)
 {
   return CLUTTER_STAGE (meta_backend_get_stage (backend_from_src (src)));
-}
-
-static gboolean
-is_redraw_queued (MetaScreenCastVirtualStreamSrc *virtual_src)
-{
-  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (virtual_src);
-
-  return clutter_stage_is_redraw_queued_on_view (stage_from_src (src),
-                                                 view_from_src (src));
 }
 
 ClutterStageView *
@@ -135,83 +120,25 @@ meta_screen_cast_virtual_stream_src_logical_monitor (MetaScreenCastVirtualStream
 }
 
 static void
-sync_cursor_state (MetaScreenCastVirtualStreamSrc *virtual_src)
-{
-  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (virtual_src);
-  MetaScreenCastPaintPhase paint_phase;
-  MetaScreenCastRecordFlag flags;
-
-  if (is_redraw_queued (virtual_src))
-    return;
-
-  if (meta_screen_cast_stream_src_pending_follow_up_frame (src))
-    return;
-
-  flags = META_SCREEN_CAST_RECORD_FLAG_CURSOR_ONLY;
-  paint_phase = META_SCREEN_CAST_PAINT_PHASE_DETACHED;
-  meta_screen_cast_stream_src_maybe_record_frame (src, flags,
-                                                  paint_phase,
-                                                  NULL);
-}
-
-static void
 pointer_position_invalidated (MetaCursorTracker       *cursor_tracker,
                               MetaScreenCastStreamSrc *src)
 {
-  ClutterStage *stage = stage_from_src (src);
-
-  clutter_stage_schedule_update (stage);
+  clutter_stage_view_schedule_update (view_from_src (src));
 }
 
 static void
 cursor_changed (MetaCursorTracker              *cursor_tracker,
                 MetaScreenCastVirtualStreamSrc *virtual_src)
 {
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (virtual_src);
+
   virtual_src->cursor_bitmap_invalid = TRUE;
-  sync_cursor_state (virtual_src);
+
+  clutter_stage_view_schedule_update (view_from_src (src));
 }
 
 static void
-on_prepare_frame (ClutterStage                   *stage,
-                  ClutterStageView               *stage_view,
-                  ClutterFrame                   *frame,
-                  MetaScreenCastVirtualStreamSrc *virtual_src)
-{
-  sync_cursor_state (virtual_src);
-}
-
-static void
-inhibit_hw_cursor (MetaScreenCastVirtualStreamSrc *virtual_src)
-{
-  MetaHwCursorInhibitor *inhibitor;
-  MetaBackend *backend;
-
-  g_return_if_fail (!virtual_src->hw_cursor_inhibited);
-
-  backend = backend_from_src (META_SCREEN_CAST_STREAM_SRC (virtual_src));
-  inhibitor = META_HW_CURSOR_INHIBITOR (virtual_src);
-  meta_backend_add_hw_cursor_inhibitor (backend, inhibitor);
-
-  virtual_src->hw_cursor_inhibited = TRUE;
-}
-
-static void
-uninhibit_hw_cursor (MetaScreenCastVirtualStreamSrc *virtual_src)
-{
-  MetaHwCursorInhibitor *inhibitor;
-  MetaBackend *backend;
-
-  g_return_if_fail (virtual_src->hw_cursor_inhibited);
-
-  backend = backend_from_src (META_SCREEN_CAST_STREAM_SRC (virtual_src));
-  inhibitor = META_HW_CURSOR_INHIBITOR (virtual_src);
-  meta_backend_remove_hw_cursor_inhibitor (backend, inhibitor);
-
-  virtual_src->hw_cursor_inhibited = FALSE;
-}
-
-static void
-actors_painted (MetaStage        *stage,
+on_after_paint (MetaStage        *stage,
                 ClutterStageView *view,
                 const MtkRegion  *redraw_clip,
                 ClutterFrame     *frame,
@@ -223,38 +150,66 @@ actors_painted (MetaStage        *stage,
 
   flags = META_SCREEN_CAST_RECORD_FLAG_NONE;
   paint_phase = META_SCREEN_CAST_PAINT_PHASE_PRE_SWAP_BUFFER;
-  meta_screen_cast_stream_src_maybe_record_frame (src, flags,
+
+  meta_screen_cast_stream_src_maybe_record_frame (src,
+                                                  flags,
                                                   paint_phase,
                                                   redraw_clip);
 }
 
 static void
-add_watch (MetaScreenCastVirtualStreamSrc *virtual_src)
+on_skipped_paint (MetaStage        *stage,
+                  ClutterStageView *view,
+                  const MtkRegion  *redraw_clip,
+                  ClutterFrame     *frame,
+                  gpointer          user_data)
+{
+  MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (user_data);
+  MetaScreenCastRecordFlag flags;
+  MetaScreenCastPaintPhase paint_phase;
+
+  flags = META_SCREEN_CAST_RECORD_FLAG_CURSOR_ONLY;
+  paint_phase = META_SCREEN_CAST_PAINT_PHASE_DETACHED;
+
+  meta_screen_cast_stream_src_maybe_record_frame (src,
+                                                  flags,
+                                                  paint_phase,
+                                                  redraw_clip);
+}
+
+static void
+setup_view (MetaScreenCastVirtualStreamSrc *virtual_src,
+            ClutterStageView               *view)
 {
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (virtual_src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaStage *meta_stage = META_STAGE (stage_from_src (src));
 
-  g_return_if_fail (!virtual_src->watch);
+  g_return_if_fail (!virtual_src->paint_watch &&
+                    !virtual_src->skipped_watch);
 
   switch (meta_screen_cast_stream_get_cursor_mode (stream))
     {
     case META_SCREEN_CAST_CURSOR_MODE_METADATA:
     case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
-      virtual_src->watch = meta_stage_watch_view (meta_stage,
-                                                  view_from_src (src),
-                                                  META_STAGE_WATCH_AFTER_ACTOR_PAINT,
-                                                  actors_painted,
-                                                  virtual_src);
+      meta_stage_view_inhibit_cursor_overlay (META_STAGE_VIEW (view));
       break;
     case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
-      virtual_src->watch = meta_stage_watch_view (meta_stage,
-                                                  view_from_src (src),
-                                                  META_STAGE_WATCH_AFTER_PAINT,
-                                                  actors_painted,
-                                                  virtual_src);
       break;
     }
+
+  virtual_src->paint_watch =
+    meta_stage_watch_view (meta_stage,
+                           view,
+                           META_STAGE_WATCH_AFTER_PAINT,
+                           on_after_paint,
+                           virtual_src);
+  virtual_src->skipped_watch =
+    meta_stage_watch_view (meta_stage,
+                           view,
+                           META_STAGE_WATCH_SKIPPED_PAINT,
+                           on_skipped_paint,
+                           virtual_src);
 }
 
 static void
@@ -264,29 +219,32 @@ on_monitors_changed (MetaMonitorManager             *monitor_manager,
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (virtual_src);
   MetaStage *stage = META_STAGE (stage_from_src (src));
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
+  ClutterStageView *view;
 
-  meta_stage_remove_watch (stage, virtual_src->watch);
-  virtual_src->watch = NULL;
-  add_watch (virtual_src);
+  meta_stage_remove_watch (stage, virtual_src->paint_watch);
+  virtual_src->paint_watch = NULL;
+  meta_stage_remove_watch (stage, virtual_src->skipped_watch);
+  virtual_src->skipped_watch = NULL;
+
+  view = view_from_src (src);
+  setup_view (virtual_src, view);
 
   meta_eis_viewport_notify_changed (META_EIS_VIEWPORT (stream));
 }
 
 static void
-init_record_callbacks (MetaScreenCastVirtualStreamSrc *virtual_src)
+setup_cursor_handling (MetaScreenCastVirtualStreamSrc *virtual_src)
 {
   MetaScreenCastStreamSrc *src = META_SCREEN_CAST_STREAM_SRC (virtual_src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaBackend *backend = backend_from_src (src);
-  MetaMonitorManager *monitor_manager =
-    meta_backend_get_monitor_manager (backend);
   MetaCursorTracker *cursor_tracker =
     meta_backend_get_cursor_tracker (backend);
-  ClutterStage *stage = stage_from_src (src);
 
   switch (meta_screen_cast_stream_get_cursor_mode (stream))
     {
     case META_SCREEN_CAST_CURSOR_MODE_METADATA:
+      meta_cursor_tracker_track_position (cursor_tracker);
       virtual_src->position_invalidated_handler_id =
         g_signal_connect_after (cursor_tracker, "position-invalidated",
                                 G_CALLBACK (pointer_position_invalidated),
@@ -295,27 +253,13 @@ init_record_callbacks (MetaScreenCastVirtualStreamSrc *virtual_src)
         g_signal_connect_after (cursor_tracker, "cursor-changed",
                                 G_CALLBACK (cursor_changed),
                                 virtual_src);
-      virtual_src->prepare_frame_handler_id =
-        g_signal_connect_after (stage, "prepare-frame",
-                                G_CALLBACK (on_prepare_frame),
-                                virtual_src);
-      G_GNUC_FALLTHROUGH;
+      break;
     case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
+      meta_cursor_tracker_track_position (cursor_tracker);
+      break;
     case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
-      add_watch (virtual_src);
       break;
     }
-
-  meta_screen_cast_stream_notify_is_configured (stream);
-
-  if (meta_screen_cast_stream_get_cursor_mode (stream) ==
-      META_SCREEN_CAST_CURSOR_MODE_EMBEDDED)
-    inhibit_hw_cursor (virtual_src);
-
-  virtual_src->monitors_changed_handler_id =
-    g_signal_connect (monitor_manager, "monitors-changed-internal",
-                      G_CALLBACK (on_monitors_changed),
-                      virtual_src);
 }
 
 static void
@@ -325,22 +269,25 @@ meta_screen_cast_virtual_stream_src_enable (MetaScreenCastStreamSrc *src)
     META_SCREEN_CAST_VIRTUAL_STREAM_SRC (src);
   MetaScreenCastStream *stream = meta_screen_cast_stream_src_get_stream (src);
   MetaBackend *backend = backend_from_src (src);
-  MetaCursorTracker *cursor_tracker = meta_backend_get_cursor_tracker (backend);
+  MetaMonitorManager *monitor_manager =
+    meta_backend_get_monitor_manager (backend);
+  ClutterStageView *view;
 
-  switch (meta_screen_cast_stream_get_cursor_mode (stream))
-    {
-    case META_SCREEN_CAST_CURSOR_MODE_METADATA:
-    case META_SCREEN_CAST_CURSOR_MODE_EMBEDDED:
-      meta_cursor_tracker_track_position (cursor_tracker);
-      break;
-    case META_SCREEN_CAST_CURSOR_MODE_HIDDEN:
-      break;
-    }
+  view = view_from_src (src);
+  if (view)
+    setup_view (virtual_src, view);
 
-  init_record_callbacks (virtual_src);
+  setup_cursor_handling (virtual_src);
+
+  meta_screen_cast_stream_notify_is_configured (stream);
+
+  virtual_src->monitors_changed_handler_id =
+    g_signal_connect (monitor_manager, "monitors-changed-internal",
+                      G_CALLBACK (on_monitors_changed),
+                      virtual_src);
+
   clutter_actor_queue_redraw_with_clip (CLUTTER_ACTOR (stage_from_src (src)),
                                         NULL);
-  clutter_stage_schedule_update (stage_from_src (src));
 }
 
 static void
@@ -355,22 +302,22 @@ meta_screen_cast_virtual_stream_src_disable (MetaScreenCastStreamSrc *src)
     meta_backend_get_monitor_manager (backend);
   ClutterStage *stage = stage_from_src (src);
 
-  if (virtual_src->hw_cursor_inhibited)
-    uninhibit_hw_cursor (virtual_src);
-
-  if (virtual_src->watch)
+  if (virtual_src->paint_watch)
     {
-      meta_stage_remove_watch (META_STAGE (stage_from_src (src)),
-                               virtual_src->watch);
-      virtual_src->watch = NULL;
+      meta_stage_remove_watch (META_STAGE (stage), virtual_src->paint_watch);
+      virtual_src->paint_watch = NULL;
+    }
+
+  if (virtual_src->skipped_watch)
+    {
+      meta_stage_remove_watch (META_STAGE (stage), virtual_src->skipped_watch);
+      virtual_src->skipped_watch = NULL;
     }
 
   g_clear_signal_handler (&virtual_src->position_invalidated_handler_id,
                           cursor_tracker);
   g_clear_signal_handler (&virtual_src->cursor_changed_handler_id,
                           cursor_tracker);
-  g_clear_signal_handler (&virtual_src->prepare_frame_handler_id,
-                          stage);
 
   g_clear_signal_handler (&virtual_src->monitors_changed_handler_id,
                           monitor_manager);
@@ -736,22 +683,6 @@ meta_screen_cast_virtual_stream_src_new (MetaScreenCastVirtualStream  *virtual_s
   return g_initable_new (META_TYPE_SCREEN_CAST_VIRTUAL_STREAM_SRC, NULL, error,
                          "stream", virtual_stream,
                          NULL);
-}
-
-static gboolean
-meta_screen_cast_virtual_stream_src_is_cursor_inhibited (MetaHwCursorInhibitor *inhibitor)
-{
-  MetaScreenCastVirtualStreamSrc *virtual_src =
-    META_SCREEN_CAST_VIRTUAL_STREAM_SRC (inhibitor);
-
-  return is_cursor_in_stream (virtual_src);
-}
-
-static void
-hw_cursor_inhibitor_iface_init (MetaHwCursorInhibitorInterface *iface)
-{
-  iface->is_cursor_inhibited =
-    meta_screen_cast_virtual_stream_src_is_cursor_inhibited;
 }
 
 static void

@@ -219,7 +219,7 @@ meta_stage_view_perform_fake_swap (MetaStageView *view,
 
   g_warn_if_fail (priv->notify_presented_handle_id == 0);
   priv->notify_presented_handle_id =
-    g_idle_add_full (G_PRIORITY_DEFAULT,
+    g_idle_add_full (G_PRIORITY_HIGH,
                      notify_presented_idle,
                      closure, g_free);
 }
