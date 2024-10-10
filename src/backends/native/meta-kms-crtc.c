@@ -603,8 +603,12 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
   int fd;
   drmVBlank vblank;
   int ret;
+  int64_t vblank_timestamp_us;
   int64_t next_presentation_us;
   int64_t next_deadline_us;
+  int64_t refresh_interval_us;
+  int64_t now_us;
+  int64_t delta_us;
 
   if (!crtc->current_state.is_drm_mode_valid)
     {
@@ -630,20 +634,26 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
       return FALSE;
     }
 
+  vblank_timestamp_us = s2us (vblank.reply.tval_sec) + vblank.reply.tval_usec;
+  now_us = g_get_monotonic_time ();
+
   if (crtc->current_state.vrr.enabled)
     {
       next_presentation_us = 0;
-      next_deadline_us =
-        (int64_t) (s2us (vblank.reply.tval_sec) + vblank.reply.tval_usec + 0.5 +
-                   G_USEC_PER_SEC / MINIMUM_REFRESH_RATE);
+
+      refresh_interval_us =
+        (int64_t) (0.5 + G_USEC_PER_SEC / MINIMUM_REFRESH_RATE);
+      next_deadline_us = vblank_timestamp_us + refresh_interval_us;
+
+      delta_us = now_us - next_deadline_us;
+      if (llabs (delta_us) > refresh_interval_us)
+        next_deadline_us = now_us + refresh_interval_us;
     }
   else
     {
       drmModeModeInfo *drm_mode;
-      int64_t refresh_interval_us;
       int64_t vblank_duration_us;
       int64_t deadline_evasion_us;
-      int64_t now_us;
 
       drm_mode = &crtc->current_state.drm_mode;
 
@@ -665,27 +675,41 @@ meta_kms_crtc_determine_deadline (MetaKmsCrtc  *crtc,
        */
 
       deadline_evasion_us = meta_kms_crtc_get_deadline_evasion (crtc);
-      maybe_update_deadline_evasion (crtc, next_presentation_us);
 
       vblank_duration_us = meta_calculate_drm_mode_vblank_duration_us (drm_mode);
       next_deadline_us = next_presentation_us - (vblank_duration_us +
                                                  deadline_evasion_us);
 
-      now_us = g_get_monotonic_time ();
-      if (now_us > next_deadline_us)
+      delta_us = now_us - next_deadline_us;
+
+      if (llabs (delta_us) > refresh_interval_us)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_DATA,
+                       "drmWaitVBlank returned timestamp %"G_GINT64_FORMAT
+                       ", which is %"G_GINT64_FORMAT "µs off the current "
+                       "timestamp %"G_GINT64_FORMAT,
+                       vblank_timestamp_us,
+                       (int64_t)llabs (delta_us),
+                       now_us);
+          return FALSE;
+        }
+
+      if (delta_us > 0)
         {
           if (meta_is_topic_enabled (META_DEBUG_KMS_DEADLINE))
             {
               meta_topic (META_DEBUG_KMS_DEADLINE,
                           "Missed deadline by %3"G_GINT64_FORMAT "µs, "
                           "skipping by %"G_GINT64_FORMAT "µs",
-                          now_us - next_deadline_us,
+                          delta_us,
                           refresh_interval_us);
             }
 
           next_presentation_us += refresh_interval_us;
           next_deadline_us += refresh_interval_us;
         }
+
+      maybe_update_deadline_evasion (crtc, next_presentation_us);
     }
 
   *out_next_presentation_us = next_presentation_us;
