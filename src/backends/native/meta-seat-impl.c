@@ -1684,11 +1684,12 @@ update_touch_mode (MetaSeatImpl *seat_impl)
   /* If tablet mode is enabled, go for it */
   else if (seat_impl->has_tablet_switch && seat_impl->tablet_mode_switch_state)
     touch_mode = TRUE;
-  /* If there is no tablet mode switch (eg. kiosk machines),
-   * assume touch-mode is mutually exclusive with pointers.
+  /* If there is no tablet mode switch (eg. kiosk machines
+   * and 2-in-1 laptops that do not report SW_TABLET_MODE),
+   * assume touch-mode.
    */
   else
-    touch_mode = !seat_impl->has_pointer;
+    touch_mode = TRUE;
 
   if (seat_impl->touch_mode != touch_mode)
     {
