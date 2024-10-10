@@ -72,6 +72,16 @@ MtkRegion *meta_frame_get_frame_bounds (MetaFrame *frame);
 gboolean meta_frame_handle_xevent (MetaFrame *frame,
                                    XEvent    *event);
 
+void meta_frame_launch_client_async (MetaX11Display      *x11_display,
+                                     const char          *display_name,
+                                     GCancellable        *cancellable,
+                                     GAsyncReadyCallback  callback,
+                                     gpointer             user_data);
+
+gboolean meta_frame_launch_client_finish (MetaX11Display  *x11_display,
+                                          GAsyncResult    *result,
+                                          GError         **error);
+
 GSubprocess * meta_frame_launch_client (MetaX11Display *x11_display,
                                         const char     *display_name);
 
