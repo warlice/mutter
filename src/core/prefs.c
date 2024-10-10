@@ -77,8 +77,8 @@ static GList *listeners = NULL;
 static GHashTable *settings_schemas;
 
 static ClutterModifierType mouse_button_mods = CLUTTER_MOD1_MASK;
-static MetaKeyCombo overlay_key_combo = { 0, 0, 0 };
-static MetaKeyCombo locate_pointer_key_combo = { 0, 0, 0 };
+static MetaKeyCombo overlay_key_combo[2] = { 0 };
+static MetaKeyCombo locate_pointer_key_combo[2] = { 0 };
 static GDesktopFocusMode focus_mode = G_DESKTOP_FOCUS_MODE_CLICK;
 static GDesktopFocusNewWindows focus_new_windows = G_DESKTOP_FOCUS_NEW_WINDOWS_SMART;
 static gboolean raise_on_click = TRUE;
@@ -1468,31 +1468,54 @@ button_layout_handler (GVariant *value,
 }
 
 static gboolean
+parse_special_key (const gchar *string_value,
+                   MetaKeyCombo combo[2])
+{
+  g_autofree gchar *string_value_l = NULL;
+  g_autofree gchar *string_value_r = NULL;
+
+  if (meta_parse_accelerator (string_value, &combo[0]))
+    return TRUE;
+
+  string_value_l = g_strconcat (string_value, "_L", NULL);
+  if (!meta_parse_accelerator (string_value_l, &combo[0]))
+    return FALSE;
+
+  string_value_r = g_strconcat (string_value, "_R", NULL);
+  if (!meta_parse_accelerator (string_value_r, &combo[1]))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
 overlay_key_handler (GVariant *value,
                      gpointer *result,
                      gpointer  data)
 {
-  MetaKeyCombo combo;
+  MetaKeyCombo combo[2] = { 0 };
   const gchar *string_value;
 
   *result = NULL; /* ignored */
   string_value = g_variant_get_string (value, NULL);
 
-  if (string_value && meta_parse_accelerator (string_value, &combo))
-    ;
-  else
+  if (!string_value || !parse_special_key (string_value, combo))
     {
       meta_topic (META_DEBUG_KEYBINDINGS,
                   "Failed to parse value for overlay-key");
       return FALSE;
     }
 
-  combo.modifiers = 0;
+  combo[0].modifiers = 0;
+  combo[1].modifiers = 0;
 
-  if (overlay_key_combo.keysym != combo.keysym ||
-      overlay_key_combo.keycode != combo.keycode)
+  if (overlay_key_combo[0].keysym != combo[0].keysym ||
+      overlay_key_combo[0].keycode != combo[0].keycode ||
+      overlay_key_combo[1].keysym != combo[1].keysym ||
+      overlay_key_combo[1].keycode != combo[1].keycode)
     {
-      overlay_key_combo = combo;
+      overlay_key_combo[0] = combo[0];
+      overlay_key_combo[1] = combo[1];
       queue_changed (META_PREF_KEYBINDINGS);
     }
 
@@ -1504,25 +1527,29 @@ locate_pointer_key_handler (GVariant *value,
                             gpointer *result,
                             gpointer  data)
 {
-  MetaKeyCombo combo;
+  MetaKeyCombo combo[2] = { 0 };
   const gchar *string_value;
 
   *result = NULL; /* ignored */
   string_value = g_variant_get_string (value, NULL);
 
-  if (!string_value || !meta_parse_accelerator (string_value, &combo))
+  if (!string_value || !parse_special_key (string_value, combo))
     {
       meta_topic (META_DEBUG_KEYBINDINGS,
                   "Failed to parse value for locate-pointer-key");
       return FALSE;
     }
 
-  combo.modifiers = 0;
+  combo[0].modifiers = 0;
+  combo[1].modifiers = 0;
 
-  if (locate_pointer_key_combo.keysym != combo.keysym ||
-      locate_pointer_key_combo.keycode != combo.keycode)
+  if (locate_pointer_key_combo[0].keysym != combo[0].keysym ||
+      locate_pointer_key_combo[0].keycode != combo[0].keycode ||
+      locate_pointer_key_combo[1].keysym != combo[1].keysym ||
+      locate_pointer_key_combo[1].keycode != combo[1].keycode)
     {
-      locate_pointer_key_combo = combo;
+      locate_pointer_key_combo[0] = combo[0];
+      locate_pointer_key_combo[1] = combo[1];
       queue_changed (META_PREF_KEYBINDINGS);
     }
 
@@ -1733,7 +1760,8 @@ init_bindings (void)
   pref = g_new0 (MetaKeyPref, 1);
   pref->name = g_strdup ("overlay-key");
   pref->action = META_KEYBINDING_ACTION_OVERLAY_KEY;
-  pref->combos = g_slist_prepend (pref->combos, &overlay_key_combo);
+  pref->combos = g_slist_prepend (pref->combos, &overlay_key_combo[0]);
+  pref->combos = g_slist_prepend (pref->combos, &overlay_key_combo[1]);
   pref->builtin = 1;
 
   g_hash_table_insert (key_bindings, g_strdup (pref->name), pref);
@@ -1741,7 +1769,8 @@ init_bindings (void)
   pref = g_new0 (MetaKeyPref, 1);
   pref->name = g_strdup ("locate-pointer-key");
   pref->action = META_KEYBINDING_ACTION_LOCATE_POINTER_KEY;
-  pref->combos = g_slist_prepend (pref->combos, &locate_pointer_key_combo);
+  pref->combos = g_slist_prepend (pref->combos, &locate_pointer_key_combo[0]);
+  pref->combos = g_slist_prepend (pref->combos, &locate_pointer_key_combo[1]);
   pref->builtin = 1;
 
   g_hash_table_insert (key_bindings, g_strdup (pref->name), pref);
@@ -2017,15 +2046,17 @@ meta_prefs_get_keybindings (void)
 }
 
 void
-meta_prefs_get_overlay_binding (MetaKeyCombo *combo)
+meta_prefs_get_overlay_binding (MetaKeyCombo combo[2])
 {
-  *combo = overlay_key_combo;
+  combo[0] = overlay_key_combo[0];
+  combo[1] = overlay_key_combo[1];
 }
 
 void
-meta_prefs_get_locate_pointer_binding (MetaKeyCombo *combo)
+meta_prefs_get_locate_pointer_binding (MetaKeyCombo combo[2])
 {
-  *combo = locate_pointer_key_combo;
+  combo[0] = locate_pointer_key_combo[0];
+  combo[1] = locate_pointer_key_combo[1];
 }
 
 gboolean
