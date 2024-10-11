@@ -28,6 +28,7 @@
 #include "meta/compositor.h"
 #include "meta/meta-close-dialog.h"
 #include "meta/meta-inhibit-shortcuts-dialog.h"
+#include "meta/meta-window-config.h"
 #include "meta/types.h"
 
 #define META_TYPE_PLUGIN (meta_plugin_get_type ())
@@ -252,6 +253,20 @@ struct _MetaPluginClass
    * on screen to draw user attention on the pointer location.
    */
   void (*locate_pointer) (MetaPlugin      *plugin);
+
+  /**
+   * MetaPluginClass::pre_configure_window:
+   * @plugin: a #MetaPlugin
+   * @window: a #MetaWindow
+   * @config: a MetaWindowConfig representing the configuration to be applied
+   *
+   * Virtual function called prior to configure a newly mapped window.
+   * This gives the opportunity to adjust the #MetaWindowConfig through a
+   * scripting mechanism.
+   */
+  void (*pre_configure_window) (MetaPlugin       *plugin,
+                                MetaWindow       *window,
+                                MetaWindowConfig *config);
 };
 
 /**

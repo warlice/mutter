@@ -99,3 +99,7 @@ MetaInhibitShortcutsDialog *
                                                        MetaWindow        *window);
 
 void meta_plugin_manager_locate_pointer (MetaPluginManager *mgr);
+
+void meta_plugin_manager_pre_configure_window (MetaPluginManager *plugin_mgr,
+                                               MetaWindow        *window,
+                                               MetaWindowConfig  *config);

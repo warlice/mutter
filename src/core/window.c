@@ -81,6 +81,7 @@
 #include "meta/meta-cursor-tracker.h"
 #include "meta/meta-enum-types.h"
 #include "meta/prefs.h"
+#include "meta/meta-window-config.h"
 
 #ifdef HAVE_X11_CLIENT
 #include "mtk/mtk-x11.h"
@@ -1082,6 +1083,7 @@ meta_window_constructed (GObject *object)
   window->input = TRUE;
   window->calc_placement = FALSE;
   window->have_focus_click_grab = FALSE;
+  window->needs_pre_configure = window->showing_for_first_time;
 
   window->unmaps_pending = 0;
   window->reparents_pending = 0;
@@ -3868,6 +3870,31 @@ meta_window_update_monitor (MetaWindow                   *window,
     g_signal_emit (window, window_signals[HIGHEST_SCALE_MONITOR_CHANGED], 0);
 }
 
+static MetaWindowConfig *
+meta_window_pre_configure (MetaWindow       *window,
+                           MtkRectangle     *rect)
+{
+  MetaPluginManager *plugin_mgr =
+    meta_compositor_get_plugin_manager (window->display->compositor);
+  MetaWindowConfig *window_config;
+
+  window_config = meta_window_config_new (rect, window->fullscreen);
+  meta_plugin_manager_pre_configure_window (plugin_mgr, window, window_config);
+  window->needs_pre_configure = FALSE;
+
+  return window_config;
+}
+
+static void
+meta_window_apply_window_config_state (MetaWindow       *window,
+                                       MetaWindowConfig *window_config)
+{
+   if (meta_window_config_get_is_fullscreen (window_config))
+     meta_window_make_fullscreen (window);
+   else
+     meta_window_unmake_fullscreen (window);
+}
+
 void
 meta_window_move_resize_internal (MetaWindow          *window,
                                   MetaMoveResizeFlags  flags,
@@ -3904,6 +3931,7 @@ meta_window_move_resize_internal (MetaWindow          *window,
   MetaMoveResizeResultFlags result = 0;
   gboolean moved_or_resized = FALSE;
   MetaWindowUpdateMonitorFlags update_monitor_flags;
+  g_autoptr (MetaWindowConfig) window_config = NULL;
 
   g_return_if_fail (!window->override_redirect);
 
@@ -3961,6 +3989,7 @@ meta_window_move_resize_internal (MetaWindow          *window,
       MtkRectangle old_rect;
 
       meta_window_get_frame_rect (window, &old_rect);
+
       meta_window_constrain (window,
                              flags,
                              place_flags,
@@ -3976,6 +4005,9 @@ meta_window_move_resize_internal (MetaWindow          *window,
       rel_x = window->placement.pending.rel_x;
       rel_y = window->placement.pending.rel_y;
     }
+
+  if (window->needs_pre_configure)
+    window_config = meta_window_pre_configure (window, &constrained_rect);
 
   /* If we did placement, then we need to save the position that the window
    * was placed at to make sure that meta_window_update_layout() places the
@@ -4068,6 +4100,10 @@ meta_window_move_resize_internal (MetaWindow          *window,
        result & META_MOVE_RESIZE_RESULT_RESIZED) &&
       (window->maximized_horizontally || window->maximized_vertically))
     meta_window_queue (window, META_QUEUE_MOVE_RESIZE);
+
+  /* Apply window config state last */
+  if (window_config)
+    meta_window_apply_window_config_state (window, window_config);
 }
 
 void

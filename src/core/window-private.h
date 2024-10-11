@@ -557,6 +557,9 @@ struct _MetaWindow
   guint is_alive : 1;
 
   guint in_workspace_change : 1;
+
+  /* Whether we called pre-configure already */
+  guint needs_pre_configure : 1;
 };
 
 struct _MetaWindowClass

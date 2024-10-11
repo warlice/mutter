@@ -445,3 +445,15 @@ meta_plugin_manager_locate_pointer (MetaPluginManager *plugin_mgr)
   if (klass->locate_pointer)
     klass->locate_pointer (plugin);
 }
+
+void
+meta_plugin_manager_pre_configure_window (MetaPluginManager *plugin_mgr,
+                                          MetaWindow        *window,
+                                          MetaWindowConfig  *config)
+{
+  MetaPlugin *plugin = plugin_mgr->plugin;
+  MetaPluginClass *klass = META_PLUGIN_GET_CLASS (plugin);
+
+  if (klass->pre_configure_window)
+    klass->pre_configure_window (plugin, window, config);
+}
