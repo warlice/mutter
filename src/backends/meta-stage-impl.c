@@ -790,6 +790,8 @@ meta_stage_impl_redraw_view (ClutterStageWindow *stage_window,
     {
       g_autoptr (GError) error = NULL;
 
+      clutter_frame_add_hint (frame, CLUTTER_FRAME_HINT_DIRECT_SCANOUT_ATTEMPTED);
+
       if (meta_stage_impl_scanout_view (stage_impl,
                                         stage_view,
                                         scanout,
