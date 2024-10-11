@@ -37,7 +37,7 @@
  *     and its possible pointer constraint (using #MetaPointerConstraint)
  * - Setting the cursor sprite (using #MetaCursorRenderer)
  * - Interacting with logind (using the appropriate D-Bus interface)
- * - Querying UPower (over D-Bus) to know when the lid is closed
+ * - Querying logind (over D-Bus) to know when the lid is closed
  * - Setup Remote Desktop / Screencasting (#MetaRemoteDesktop)
  * - Setup the #MetaEgl object
  *
@@ -177,8 +177,8 @@ struct _MetaBackendPrivate
   MetaPointerConstraint *client_pointer_constraint;
   MetaDnd *dnd;
 
-  guint upower_watch_id;
-  GDBusProxy *upower_proxy;
+  guint logind_watch_id;
+  GDBusProxy *logind_proxy;
   gboolean lid_is_closed;
   gboolean on_battery;
 
@@ -238,16 +238,16 @@ meta_backend_dispose (GObject *object)
       priv->sleep_signal_id = 0;
     }
 
-  if (priv->upower_watch_id)
+  if (priv->logind_watch_id)
     {
-      g_bus_unwatch_name (priv->upower_watch_id);
-      priv->upower_watch_id = 0;
+      g_bus_unwatch_name (priv->logind_watch_id);
+      priv->logind_watch_id = 0;
     }
 
   g_cancellable_cancel (priv->cancellable);
   g_clear_object (&priv->cancellable);
   g_clear_object (&priv->system_bus);
-  g_clear_object (&priv->upower_proxy);
+  g_clear_object (&priv->logind_proxy);
 
   g_clear_handle_id (&priv->device_update_idle_id, g_source_remove);
 
@@ -704,7 +704,7 @@ meta_backend_is_headless (MetaBackend *backend)
 }
 
 static void
-upower_properties_changed (GDBusProxy *proxy,
+logind_properties_changed (GDBusProxy *proxy,
                            GVariant   *changed_properties,
                            GStrv       invalidated_properties,
                            gpointer    user_data)
@@ -715,7 +715,7 @@ upower_properties_changed (GDBusProxy *proxy,
   gboolean reset_idle_time = FALSE;
 
   v = g_variant_lookup_value (changed_properties,
-                              "LidIsClosed",
+                              "LidClosed",
                               G_VARIANT_TYPE_BOOLEAN);
   if (v)
     {
@@ -736,7 +736,7 @@ upower_properties_changed (GDBusProxy *proxy,
     }
 
   v = g_variant_lookup_value (changed_properties,
-                              "OnBattery",
+                              "OnExternalPower",
                               G_VARIANT_TYPE_BOOLEAN);
   if (v)
     {
@@ -757,7 +757,7 @@ upower_properties_changed (GDBusProxy *proxy,
 }
 
 static void
-upower_ready_cb (GObject      *source_object,
+logind_ready_cb (GObject      *source_object,
                  GAsyncResult *res,
                  gpointer      user_data)
 {
@@ -771,7 +771,7 @@ upower_ready_cb (GObject      *source_object,
   if (!proxy)
     {
       if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        g_warning ("Failed to create UPower proxy: %s", error->message);
+        g_warning ("Failed to create logind proxy: %s", error->message);
       g_error_free (error);
       return;
     }
@@ -779,11 +779,11 @@ upower_ready_cb (GObject      *source_object,
   backend = META_BACKEND (user_data);
   priv = meta_backend_get_instance_private (backend);
 
-  priv->upower_proxy = proxy;
+  priv->logind_proxy = proxy;
   g_signal_connect (proxy, "g-properties-changed",
-                    G_CALLBACK (upower_properties_changed), backend);
+                    G_CALLBACK (logind_properties_changed), backend);
 
-  v = g_dbus_proxy_get_cached_property (proxy, "LidIsClosed");
+  v = g_dbus_proxy_get_cached_property (proxy, "LidClosed");
   if (v)
     {
       priv->lid_is_closed = g_variant_get_boolean (v);
@@ -796,7 +796,7 @@ upower_ready_cb (GObject      *source_object,
         }
     }
 
-  v = g_dbus_proxy_get_cached_property (proxy, "OnBattery");
+  v = g_dbus_proxy_get_cached_property (proxy, "OnExternalPower");
   if (v)
     {
       priv->on_battery = g_variant_get_boolean (v);
@@ -805,7 +805,7 @@ upower_ready_cb (GObject      *source_object,
 }
 
 static void
-upower_appeared (GDBusConnection *connection,
+logind_appeared (GDBusConnection *connection,
                  const gchar     *name,
                  const gchar     *name_owner,
                  gpointer         user_data)
@@ -816,23 +816,23 @@ upower_appeared (GDBusConnection *connection,
   g_dbus_proxy_new (connection,
                     G_DBUS_PROXY_FLAGS_NONE,
                     NULL,
-                    "org.freedesktop.UPower",
-                    "/org/freedesktop/UPower",
-                    "org.freedesktop.UPower",
+                    "org.freedesktop.login1",
+                    "/org/freedesktop/login1",
+                    "org.freedesktop.login1.Manager",
                     priv->cancellable,
-                    upower_ready_cb,
+                    logind_ready_cb,
                     backend);
 }
 
 static void
-upower_vanished (GDBusConnection *connection,
+logind_vanished (GDBusConnection *connection,
                  const gchar     *name,
                  gpointer         user_data)
 {
   MetaBackend *backend = META_BACKEND (user_data);
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
 
-  g_clear_object (&priv->upower_proxy);
+  g_clear_object (&priv->logind_proxy);
 }
 
 static void
@@ -858,11 +858,11 @@ meta_backend_constructed (GObject *object)
 
   if (backend_class->is_lid_closed == meta_backend_real_is_lid_closed)
     {
-      priv->upower_watch_id = g_bus_watch_name (G_BUS_TYPE_SYSTEM,
-                                                "org.freedesktop.UPower",
+      priv->logind_watch_id = g_bus_watch_name (G_BUS_TYPE_SYSTEM,
+                                                "org.freedesktop.login1",
                                                 G_BUS_NAME_WATCHER_FLAGS_NONE,
-                                                upower_appeared,
-                                                upower_vanished,
+                                                logind_appeared,
+                                                logind_vanished,
                                                 backend,
                                                 NULL);
     }
