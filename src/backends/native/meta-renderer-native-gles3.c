@@ -196,11 +196,13 @@ ensure_shader_program (ContextData *context_data,
     "attribute vec2 position;\n"
     "attribute vec2 texcoord;\n"
     "varying vec2 v_texcoord;\n"
+    "uniform float framebuffer_width;\n"
+    "uniform float framebuffer_height;\n"
     "\n"
     "void main()\n"
     "{\n"
-    "  gl_Position = vec4(position, 0.0, 1.0);\n"
-    "  v_texcoord = texcoord;\n"
+    "  gl_Position = vec4(position.x / framebuffer_width * 2.0 - 1.0, position.y / framebuffer_height * 2.0 - 1.0, 0.0, 1.0);\n"
+    "  v_texcoord = vec2(texcoord.x / framebuffer_width, texcoord.y / framebuffer_height);\n"
     "}\n";
 
   static const char fragment_shader_source[] =
@@ -215,16 +217,8 @@ ensure_shader_program (ContextData *context_data,
     "  gl_FragColor = texture2D(s_texture, v_texcoord);\n"
     "}\n";
 
-  static const GLfloat box[] =
-  { /* position    texcoord */
-    -1.0f, +1.0f, 0.0f, 0.0f,
-    +1.0f, +1.0f, 1.0f, 0.0f,
-    +1.0f, -1.0f, 1.0f, 1.0f,
-    -1.0f, -1.0f, 0.0f, 1.0f,
-  };
   GLint linked;
   GLuint vertex_shader, fragment_shader;
-  GLint position_attrib, texcoord_attrib;
   GLuint shader_program;
 
   if (context_data->shader_program)
@@ -254,23 +248,15 @@ ensure_shader_program (ContextData *context_data,
     }
 
   GLBAS (gles3, glUseProgram, (shader_program));
-
-  position_attrib = glGetAttribLocation (shader_program, "position");
-  GLBAS (gles3, glEnableVertexAttribArray, (position_attrib));
-  GLBAS (gles3, glVertexAttribPointer,
-         (position_attrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof (GLfloat), box));
-
-  texcoord_attrib = glGetAttribLocation (shader_program, "texcoord");
-  GLBAS (gles3, glEnableVertexAttribArray, (texcoord_attrib));
-  GLBAS (gles3, glVertexAttribPointer,
-         (texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof (GLfloat), box + 2));
 }
 
 static void
-blit_egl_image (MetaGles3   *gles3,
-                EGLImageKHR  egl_image,
-                int          width,
-                int          height)
+blit_egl_image (MetaGles3          *gles3,
+                EGLImageKHR         egl_image,
+                int                 width,
+                int                 height,
+                const MtkRectangle *rectangles,
+                int                 n_rectangles)
 {
   GLuint texture;
   GLuint framebuffer;
@@ -301,28 +287,151 @@ blit_egl_image (MetaGles3   *gles3,
                                          GL_TEXTURE_2D, texture, 0));
 
   GLBAS (gles3, glBindFramebuffer, (GL_READ_FRAMEBUFFER, framebuffer));
-  GLBAS (gles3, glBlitFramebuffer, (0, height, width, 0,
-                                    0, 0, width, height,
-                                    GL_COLOR_BUFFER_BIT,
-                                    GL_NEAREST));
+
+  if (n_rectangles > 0)
+    {
+      int i;
+
+      for (i = 0; i < n_rectangles; ++i)
+        {
+          GLint x1 = rectangles[i].x;
+          GLint y1 = height - rectangles[i].y - rectangles[i].height;
+          GLint src_y1 = rectangles[i].y;
+          GLint x2 = x1 + rectangles[i].width;
+          GLint y2 = y1 + rectangles[i].height;
+          GLint src_y2 = src_y1 + rectangles[i].height;
+
+          GLBAS (gles3, glBlitFramebuffer, (x1, src_y2, x2, src_y1,
+                                            x1, height - rectangles[i].y - rectangles[i].height, x2, y2,
+                                            GL_COLOR_BUFFER_BIT,
+                                            GL_NEAREST));
+        }
+    }
+  else
+    GLBAS (gles3, glBlitFramebuffer, (0, height, width, 0,
+                                      0, 0, width, height,
+                                      GL_COLOR_BUFFER_BIT,
+                                      GL_NEAREST));
+
 
   GLBAS (gles3, glDeleteTextures, (1, &texture));
   GLBAS (gles3, glDeleteFramebuffers, (1, &framebuffer));
 }
 
 static void
-paint_egl_image (ContextData *context_data,
-                 MetaGles3   *gles3,
-                 EGLImageKHR  egl_image,
-                 int          width,
-                 int          height)
+paint_egl_image (ContextData        *context_data,
+                 MetaGles3          *gles3,
+                 EGLImageKHR         egl_image,
+                 int                 width,
+                 int                 height,
+                 const MtkRectangle *rectangles,
+                 int                 n_rectangles)
 {
+  static const uint triangle_count_per_rectangle = 2;
+  static const uint vertex_per_triangle = 3;
+  static const uint values_per_vertex = 4;
+
+  const MtkRectangle full_damage_rectangle = {0, 0, width, height};
+
+  int i;
   GLuint texture;
+  GLint *vertices = NULL;
+  GLuint vertex_buffer_object;
+  GLuint vertex_array_object;
+  GLint position_attrib, texcoord_attrib;
+  GLint framebuffer_width_uniform, framebuffer_height_uniform;
+  GLuint components_per_rectangle = triangle_count_per_rectangle * vertex_per_triangle * values_per_vertex;
+  GLuint size_per_rectangle = components_per_rectangle * sizeof(GLint);
+  GLuint vertices_size;
+
+  if (n_rectangles == 0)
+    {
+      n_rectangles = 1;
+      rectangles = &full_damage_rectangle;
+    }
+
+  vertices_size = n_rectangles * size_per_rectangle;
+
+  vertices = g_alloca (vertices_size);
+
+  for (i = 0; i < n_rectangles; ++i)
+    {
+      const MtkRectangle *rectangle = &rectangles[i];
+      GLint *rectangle_vertices = &vertices[i * components_per_rectangle];
+
+      int reversed_rect_y = height - rectangles[i].y - rectangles[i].height;
+
+      GLint x1 = rectangle->x;
+      GLint y1 = reversed_rect_y;
+      GLint x2 = rectangle->x + rectangle->width;
+      GLint y2 = reversed_rect_y + rectangle->height;
+
+      GLint u1 = rectangle->x;
+      GLint v1 = rectangle->y;
+      GLint u2 = rectangle->x + rectangle->width;
+      GLint v2 = rectangle->y + rectangle->height;
+
+      rectangle_vertices[0] = x1;
+      rectangle_vertices[1] = y2;
+      rectangle_vertices[2] = u1;
+      rectangle_vertices[3] = v1;
+
+      rectangle_vertices[4] = x2;
+      rectangle_vertices[5] = y2;
+      rectangle_vertices[6] = u2;
+      rectangle_vertices[7] = v1;
+
+      rectangle_vertices[8] = x1;
+      rectangle_vertices[9] = y1;
+      rectangle_vertices[10] = u1;
+      rectangle_vertices[11] = v2;
+
+      rectangle_vertices[12] = x1;
+      rectangle_vertices[13] = y1;
+      rectangle_vertices[14] = u1;
+      rectangle_vertices[15] = v2;
+
+      rectangle_vertices[16] = x2;
+      rectangle_vertices[17] = y2;
+      rectangle_vertices[18] = u2;
+      rectangle_vertices[19] = v1;
+
+      rectangle_vertices[20] = x2;
+      rectangle_vertices[21] = y1;
+      rectangle_vertices[22] = u2;
+      rectangle_vertices[23] = v2;
+    }
 
   meta_gles3_clear_error (gles3);
   ensure_shader_program (context_data, gles3);
 
+  g_return_if_fail (context_data->shader_program);
+
   GLBAS (gles3, glViewport, (0, 0, width, height));
+
+  GLBAS (gles3, glGenVertexArrays, (1, &vertex_array_object));
+  GLBAS (gles3, glBindVertexArray, (vertex_array_object));
+
+  GLBAS (gles3, glGenBuffers, (1, &vertex_buffer_object));
+  GLBAS (gles3, glBindBuffer, (GL_ARRAY_BUFFER, vertex_buffer_object));
+  GLBAS (gles3, glBufferData,
+         (GL_ARRAY_BUFFER, vertices_size, vertices, GL_DYNAMIC_DRAW));
+
+  position_attrib = glGetAttribLocation (context_data->shader_program, "position");
+  GLBAS (gles3, glEnableVertexAttribArray, (position_attrib));
+  GLBAS (gles3, glVertexAttribPointer,
+         (position_attrib, 2, GL_INT, GL_FALSE, 4 * sizeof (GLint), NULL));
+
+  texcoord_attrib = glGetAttribLocation (context_data->shader_program, "texcoord");
+  GLBAS (gles3, glEnableVertexAttribArray, (texcoord_attrib));
+  GLBAS (gles3, glVertexAttribPointer,
+         (texcoord_attrib, 2, GL_INT, GL_FALSE, 4 * sizeof (GLint), (void*)(sizeof(GLint) * 2)));
+
+  framebuffer_width_uniform = glGetUniformLocation (context_data->shader_program, "framebuffer_width");
+  GLBAS (gles3, glUniform1f, (framebuffer_width_uniform, width));
+
+  framebuffer_height_uniform = glGetUniformLocation (context_data->shader_program, "framebuffer_height");
+  GLBAS (gles3, glUniform1f, (framebuffer_height_uniform, height));
 
   GLBAS (gles3, glActiveTexture, (GL_TEXTURE0));
   GLBAS (gles3, glGenTextures, (1, &texture));
@@ -342,19 +451,23 @@ paint_egl_image (ContextData *context_data,
                                   GL_TEXTURE_WRAP_T,
                                   GL_CLAMP_TO_EDGE));
 
-  GLBAS (gles3, glDrawArrays, (GL_TRIANGLE_FAN, 0, 4));
+  GLBAS (gles3, glDrawArrays, (GL_TRIANGLES, 0, triangle_count_per_rectangle * vertex_per_triangle * n_rectangles));
 
   GLBAS (gles3, glDeleteTextures, (1, &texture));
+  GLBAS (gles3, glDeleteBuffers, (1, &vertex_buffer_object));
+  GLBAS (gles3, glDeleteVertexArrays, (1, &vertex_array_object));
 }
 
 gboolean
-meta_renderer_native_gles3_blit_shared_bo (MetaEgl        *egl,
-                                           MetaGles3      *gles3,
-                                           EGLDisplay      egl_display,
-                                           EGLContext      egl_context,
-                                           EGLSurface      egl_surface,
-                                           struct gbm_bo  *shared_bo,
-                                           GError        **error)
+meta_renderer_native_gles3_blit_shared_bo (MetaEgl             *egl,
+                                           MetaGles3           *gles3,
+                                           EGLDisplay           egl_display,
+                                           EGLContext           egl_context,
+                                           EGLSurface           egl_surface,
+                                           struct gbm_bo       *shared_bo,
+                                           const MtkRectangle  *rectangles,
+                                           int                  n_rectangles,
+                                           GError             **error)
 {
   int shared_bo_fd;
   unsigned int width;
@@ -435,9 +548,9 @@ meta_renderer_native_gles3_blit_shared_bo (MetaEgl        *egl,
     return FALSE;
 
   if (can_blit)
-    blit_egl_image (gles3, egl_image, width, height);
+    blit_egl_image (gles3, egl_image, width, height, rectangles, n_rectangles);
   else
-    paint_egl_image (context_data, gles3, egl_image, width, height);
+    paint_egl_image (context_data, gles3, egl_image, width, height, rectangles, n_rectangles);
 
   meta_egl_destroy_image (egl, egl_display, egl_image, NULL);
 
