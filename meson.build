@@ -1,6 +1,6 @@
 project('mutter', 'c',
   version: '47.0',
-  meson_version: '>= 1.3.0',
+  meson_version: '>= 1.5.0',
   license: 'GPLv2+'
 )
 
@@ -219,6 +219,7 @@ if not have_gl and not have_gles2
 endif
 
 if have_wayland
+  wl_mod = import('unstable-wayland')
   wayland_server_dep = dependency('wayland-server', version: wayland_server_req)
   wayland_client_dep = dependency('wayland-client', version: wayland_server_req)
   wayland_cursor_dep = dependency('wayland-cursor')
