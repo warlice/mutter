@@ -52,6 +52,8 @@
 #include "cogl/cogl.h"
 #include "common/meta-cogl-drm-formats.h"
 #include "common/meta-drm-format-helpers.h"
+#include "meta/prefs.h"
+
 
 typedef enum _MetaSharedFramebufferImportStatus
 {
@@ -1785,6 +1787,7 @@ meta_onscreen_native_prepare_frame (CoglOnscreen *onscreen,
   MetaKmsDevice *kms_device = meta_kms_crtc_get_device (kms_crtc);;
   MetaFrameNative *frame_native = meta_frame_native_from_frame (frame);
   int64_t target_frame_counter = cogl_onscreen_get_frame_counter (onscreen);
+  int sharpness_strength;
 
   if (onscreen_native->property.gamma_lut.invalidated)
     {
@@ -1850,6 +1853,15 @@ meta_onscreen_native_prepare_frame (CoglOnscreen *onscreen,
       onscreen_native->property.hdr_metadata.invalidated = FALSE;
       onscreen_native->property.hdr_metadata.target_frame_counter =
         target_frame_counter;
+    }
+
+  sharpness_strength = meta_prefs_get_adaptive_sharpness_strength ();
+  if (sharpness_strength >= 0)
+    {
+      MetaKmsUpdate *kms_update;
+
+      kms_update = meta_frame_native_ensure_kms_update (frame_native, kms_device);
+      meta_kms_update_set_adaptive_sharpness (kms_update, kms_crtc, sharpness_strength);
     }
 }
 

@@ -480,6 +480,11 @@ init_properties (MetaKmsCrtc       *crtc,
           .name = "VRR_ENABLED",
           .type = DRM_MODE_PROP_RANGE,
         },
+      [META_KMS_CRTC_PROP_SHARPNESS_FILTER] =
+        {
+          .name = "SHARPNESS_STRENGTH",
+          .type = DRM_MODE_PROP_RANGE,
+        },
     }
   };
 }

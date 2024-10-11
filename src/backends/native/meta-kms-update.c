@@ -526,6 +526,22 @@ meta_kms_update_set_vrr (MetaKmsUpdate *update,
   update_latch_crtc (update, crtc);
 }
 
+void
+meta_kms_update_set_adaptive_sharpness (MetaKmsUpdate *update,
+                                        MetaKmsCrtc   *crtc,
+                                        int            sharpness_strength)
+{
+  MetaKmsCrtcUpdate *crtc_update;
+
+  g_assert (meta_kms_crtc_get_device (crtc) == update->device);
+
+  crtc_update = ensure_crtc_update (update, crtc);
+  crtc_update->adaptive_sharpness.has_update = TRUE;
+  crtc_update->adaptive_sharpness.strength = sharpness_strength;
+
+  update_latch_crtc (update, crtc);
+}
+
 static MetaKmsCrtcColorUpdate *
 ensure_color_update (MetaKmsUpdate *update,
                      MetaKmsCrtc   *crtc)
