@@ -808,10 +808,9 @@ get_button_index (int button)
 }
 
 static void
-emulate_button_press (MetaInputDeviceNative *device_evdev)
+emulate_button_press (MetaInputDeviceNative *device_evdev, int btn)
 {
   ClutterInputDevice *device = CLUTTER_INPUT_DEVICE (device_evdev);
-  int btn = device_evdev->mousekeys_btn;
 
   if (device_evdev->mousekeys_btn_states[get_button_index (btn)])
     return;
@@ -823,10 +822,9 @@ emulate_button_press (MetaInputDeviceNative *device_evdev)
 }
 
 static void
-emulate_button_release (MetaInputDeviceNative *device_evdev)
+emulate_button_release (MetaInputDeviceNative *device_evdev, int btn)
 {
   ClutterInputDevice *device = CLUTTER_INPUT_DEVICE (device_evdev);
-  int btn = device_evdev->mousekeys_btn;
 
   if (device_evdev->mousekeys_btn_states[get_button_index (btn)] == CLUTTER_BUTTON_STATE_RELEASED)
     return;
@@ -838,10 +836,10 @@ emulate_button_release (MetaInputDeviceNative *device_evdev)
 }
 
 static void
-emulate_button_click (MetaInputDeviceNative *device)
+emulate_button_click (MetaInputDeviceNative *device, int btn)
 {
-  emulate_button_press (device);
-  emulate_button_release (device);
+  emulate_button_press (device, btn);
+  emulate_button_release (device, btn);
 }
 
 #define MOUSEKEYS_CURVE (1.0 + (((double) 50.0) * 0.001))
@@ -970,19 +968,19 @@ disable_mousekeys (MetaInputDeviceNative *device_evdev)
   if (device_evdev->mousekeys_btn_states[get_button_index (CLUTTER_BUTTON_PRIMARY)])
     {
       device_evdev->mousekeys_btn = CLUTTER_BUTTON_PRIMARY;
-      emulate_button_release (device_evdev);
+      emulate_button_release (device_evdev, device_evdev->mousekeys_btn);
     }
 
   if (device_evdev->mousekeys_btn_states[get_button_index (CLUTTER_BUTTON_MIDDLE)])
     {
       device_evdev->mousekeys_btn = CLUTTER_BUTTON_MIDDLE;
-      emulate_button_release (device_evdev);
+      emulate_button_release (device_evdev, device_evdev->mousekeys_btn);
     }
 
   if (device_evdev->mousekeys_btn_states[get_button_index (CLUTTER_BUTTON_SECONDARY)])
     {
       device_evdev->mousekeys_btn = CLUTTER_BUTTON_SECONDARY;
-      emulate_button_release (device_evdev);
+      emulate_button_release (device_evdev, device_evdev->mousekeys_btn);
     }
 
   if (device->accessibility_virtual_device)
@@ -1020,6 +1018,9 @@ trigger_mousekeys_move (gpointer data)
   /* Pointer motion */
   switch (device->last_mousekeys_key)
     {
+    case XKB_KEY_Pointer_Up:
+    case XKB_KEY_Pointer_UpLeft:
+    case XKB_KEY_Pointer_UpRight:
     case XKB_KEY_KP_Home:
     case XKB_KEY_KP_7:
     case XKB_KEY_KP_Up:
@@ -1028,6 +1029,9 @@ trigger_mousekeys_move (gpointer data)
     case XKB_KEY_KP_9:
        dy = -1;
        break;
+    case XKB_KEY_Pointer_Down:
+    case XKB_KEY_Pointer_DownLeft:
+    case XKB_KEY_Pointer_DownRight:
     case XKB_KEY_KP_End:
     case XKB_KEY_KP_1:
     case XKB_KEY_KP_Down:
@@ -1042,6 +1046,9 @@ trigger_mousekeys_move (gpointer data)
 
   switch (device->last_mousekeys_key)
     {
+    case XKB_KEY_Pointer_Left:
+    case XKB_KEY_Pointer_UpLeft:
+    case XKB_KEY_Pointer_DownLeft:
     case XKB_KEY_KP_Home:
     case XKB_KEY_KP_7:
     case XKB_KEY_KP_Left:
@@ -1050,6 +1057,9 @@ trigger_mousekeys_move (gpointer data)
     case XKB_KEY_KP_1:
        dx = -1;
        break;
+    case XKB_KEY_Pointer_Right:
+    case XKB_KEY_Pointer_UpRight:
+    case XKB_KEY_Pointer_DownRight:
     case XKB_KEY_KP_Page_Up:
     case XKB_KEY_KP_9:
     case XKB_KEY_KP_Right:
@@ -1095,10 +1105,38 @@ static gboolean
 handle_mousekeys_press (ClutterEvent          *event,
                         MetaInputDeviceNative *device)
 {
+  int btn;
+
   if (!(clutter_event_get_flags (event) & CLUTTER_EVENT_FLAG_SYNTHETIC))
     stop_mousekeys_move (device);
 
-  /* Do not handle mousekeys if NumLock is ON */
+  /* Keysyms that tell us to move the pointer always work */
+  switch (clutter_event_get_key_symbol (event))
+    {
+    case XKB_KEY_Pointer_Button1:
+      emulate_button_click (device, CLUTTER_BUTTON_PRIMARY);
+      return TRUE;
+    case XKB_KEY_Pointer_Button2:
+      emulate_button_click (device, CLUTTER_BUTTON_MIDDLE);
+      return TRUE;
+    case XKB_KEY_Pointer_Button3:
+      emulate_button_click (device, CLUTTER_BUTTON_SECONDARY);
+      return TRUE;
+    case XKB_KEY_Pointer_Left:
+    case XKB_KEY_Pointer_Right:
+    case XKB_KEY_Pointer_Down:
+    case XKB_KEY_Pointer_DownLeft:
+    case XKB_KEY_Pointer_DownRight:
+    case XKB_KEY_Pointer_Up:
+    case XKB_KEY_Pointer_UpLeft:
+    case XKB_KEY_Pointer_UpRight:
+      start_mousekeys_move (event, device);
+      return TRUE;
+    default:
+      break;
+    }
+
+  /* But our NumLock-based mousekeys only works with NumLock off */
   if (is_numlock_active (device))
     return FALSE;
 
@@ -1118,24 +1156,26 @@ handle_mousekeys_press (ClutterEvent          *event,
       break;
     }
 
+  btn = device->mousekeys_btn;
+
   /* Button events */
   switch (clutter_event_get_key_symbol (event))
     {
     case XKB_KEY_KP_Begin:
     case XKB_KEY_KP_5:
-      emulate_button_click (device);
+      emulate_button_click (device, btn);
       return TRUE;
     case XKB_KEY_KP_Insert:
     case XKB_KEY_KP_0:
-      emulate_button_press (device);
+      emulate_button_press (device, btn);
       return TRUE;
     case XKB_KEY_KP_Decimal:
     case XKB_KEY_KP_Delete:
-      emulate_button_release (device);
+      emulate_button_release (device, btn);
       return TRUE;
     case XKB_KEY_KP_Add:
-      emulate_button_click (device);
-      emulate_button_click (device);
+      emulate_button_click (device, btn);
+      emulate_button_click (device, btn);
       return TRUE;
     default:
       break;
@@ -1173,12 +1213,33 @@ static gboolean
 handle_mousekeys_release (ClutterEvent          *event,
                           MetaInputDeviceNative *device)
 {
-  /* Do not handle mousekeys if NumLock is ON */
+  /* Keysyms that tell us to move the pointer always work */
+  switch (clutter_event_get_key_symbol (event))
+    {
+    case XKB_KEY_Pointer_Down:
+    case XKB_KEY_Pointer_DownLeft:
+    case XKB_KEY_Pointer_DownRight:
+    case XKB_KEY_Pointer_Up:
+    case XKB_KEY_Pointer_UpLeft:
+    case XKB_KEY_Pointer_UpRight:
+      stop_mousekeys_move (device);
+      return TRUE;
+    default:
+      break;
+    }
+
+  /* But our NumLock-based mousekeys only works with NumLock off */
   if (is_numlock_active (device))
     return FALSE;
 
   switch (clutter_event_get_key_symbol (event))
     {
+    case XKB_KEY_Pointer_Down:
+    case XKB_KEY_Pointer_DownLeft:
+    case XKB_KEY_Pointer_DownRight:
+    case XKB_KEY_Pointer_Up:
+    case XKB_KEY_Pointer_UpLeft:
+    case XKB_KEY_Pointer_UpRight:
     case XKB_KEY_KP_0:
     case XKB_KEY_KP_1:
     case XKB_KEY_KP_2:
